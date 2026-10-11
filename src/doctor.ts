@@ -1,7 +1,24 @@
 import { unreachable } from "./assert";
 import type { CodedError } from "./coded-error";
-import { type HooksPathState, hooksPathState, installedGates, type PlannedFile, plannedFiles } from "./gates";
-import { HOOKS_DIR, INSTALL_GATES, REINSTALL } from "./gates-contract";
+import {
+  type HooksPathState,
+  hooksPathState,
+  installedGates,
+  type PlannedFile,
+  type PreCommitState,
+  plannedFiles,
+  preCommitState,
+} from "./gates";
+import {
+  type GateName,
+  HOOKS_DIR,
+  INSTALL_GATES,
+  noCommentsGate,
+  PRE_COMMIT,
+  REINSTALL,
+} from "./gates-contract";
+import { LANGUAGE_NAMES, type Language } from "./no-comments-languages";
+import { trackedPerLanguage } from "./no-comments-tracked";
 import { type PrepareState, prepareState } from "./package-manifest";
 
 type Health = {
@@ -44,6 +61,62 @@ function fileHealth({ target: name, state }: PlannedFile): Health {
     default:
       return unreachable(state);
   }
+}
+
+function plannedHealth(planned: PlannedFile, preCommit: PreCommitState): Health {
+  if (planned.target === PRE_COMMIT.target && preCommit.kind === "occupied")
+    return refusedHealth(planned.target, preCommit.refusal);
+  return fileHealth(planned);
+}
+
+function missingHealth(missing: readonly Language[], tracked: ReadonlyMap<Language, number>): Health[] {
+  if (missing.length === 0) return [];
+  const detail = missing
+    .map(
+      (language) =>
+        `tracks ${tracked.get(language)} files ${language} reads but ${noCommentsGate(language)} is not installed`,
+    )
+    .join("; ");
+  return [
+    {
+      name: "no-comments languages",
+      state: "warn",
+      detail,
+      fix: `agent-gates install ${missing.map(noCommentsGate).join(" ")}`,
+    },
+  ];
+}
+
+function unusedHealth(language: Language): Health {
+  return {
+    name: noCommentsGate(language),
+    state: "warn",
+    detail: `installed, but the project tracks no file ${language} reads`,
+    fix: `delete ${HOOKS_DIR}/no-comments/${language}.cjs`,
+  };
+}
+
+function languagesHealth(root: string, gates: readonly GateName[]): Health[] {
+  const installed = LANGUAGE_NAMES.filter((language) => gates.includes(noCommentsGate(language)));
+  if (installed.length === 0) return [];
+  const tracked = trackedPerLanguage(root);
+  const tracks = (language: Language) => (tracked.get(language) ?? 0) > 0;
+  const checks = [
+    ...missingHealth(
+      LANGUAGE_NAMES.filter((language) => !installed.includes(language) && tracks(language)),
+      tracked,
+    ),
+    ...installed.filter((language) => !tracks(language)).map(unusedHealth),
+  ];
+  if (checks.length > 0) return checks;
+  return [
+    {
+      name: "no-comments languages",
+      state: "ok",
+      detail: `${installed.join(", ")}, as the tracked files need`,
+      fix: null,
+    },
+  ];
 }
 
 function hooksPathHealth(hooksPath: HooksPathState): Health {
@@ -105,11 +178,13 @@ function judged(root: string): Health[] {
         fix: INSTALL_GATES,
       },
     ];
+  const preCommit = preCommitState(root, gates);
   return [
     { name: "gates", state: "ok", detail: gates.join(", "), fix: null },
-    ...plannedFiles(root, gates).map(fileHealth),
+    ...plannedFiles(root, gates).map((planned) => plannedHealth(planned, preCommit)),
     hooksPathHealth(hooksPathState(root)),
     prepareHealth(prepareState(root)),
+    ...languagesHealth(root, gates),
   ];
 }
 

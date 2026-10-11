@@ -1,9 +1,10 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { SOURCE_DIR } from "./gates";
 
-const HOOK = resolve(import.meta.dir, "..", "gates", "commit-msg");
+const HOOK = join(SOURCE_DIR, "commit-msg");
 const repo = mkdtempSync(join(tmpdir(), "agent-gates-commit-msg-"));
 Bun.spawnSync(["git", "init", "-q", repo]);
 

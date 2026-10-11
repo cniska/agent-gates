@@ -1,0 +1,398 @@
+import { afterEach, describe, expect, test } from "bun:test";
+import { execFileSync, spawnSync } from "node:child_process";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { CodedError } from "./coded-error";
+import { gatesDoctor } from "./doctor";
+import { bundled, GATE_BUNDLES } from "./gate-bundles";
+import { installGates, SOURCE_DIR } from "./gates";
+import { comments } from "./no-comments-javascript";
+import { LANGUAGE_NAMES, LANGUAGES, languageOf } from "./no-comments-languages";
+
+const NO_COMMIT = "0000000000000000000000000000000000000000";
+const IDENTITY = ["-c", "user.name=T", "-c", "user.email=t@example.com"];
+const repos: string[] = [];
+
+function repo(files: Record<string, string> = {}): string {
+  const dir = mkdtempSync(join(tmpdir(), "agent-gates-no-comments-"));
+  repos.push(dir);
+  execFileSync("git", ["init", "-q", dir]);
+  write(dir, files);
+  return dir;
+}
+
+function write(dir: string, files: Record<string, string>): void {
+  for (const [path, text] of Object.entries(files)) {
+    mkdirSync(dirname(join(dir, path)), { recursive: true });
+    writeFileSync(join(dir, path), text);
+  }
+}
+
+function gated(files: Record<string, string> = {}): string {
+  const dir = repo(files);
+  installGates(dir, ["no-comments-javascript"]);
+  return dir;
+}
+
+function git(dir: string, args: readonly string[]): string {
+  return execFileSync("git", ["-C", dir, ...IDENTITY, ...args], { encoding: "utf8" }).trim();
+}
+
+function commit(dir: string, args: readonly string[] = ["-A"]) {
+  execFileSync("git", ["-C", dir, "add", ...args]);
+  const run = spawnSync("git", ["-C", dir, ...IDENTITY, "commit", "-q", "-m", "feat: change"], {
+    encoding: "utf8",
+  });
+  return { status: run.status, stderr: run.stderr };
+}
+
+function commitPaths(dir: string, paths: readonly string[]) {
+  const run = spawnSync(
+    "git",
+    ["-C", dir, ...IDENTITY, "commit", "-q", "-m", "feat: change", "--", ...paths],
+    {
+      encoding: "utf8",
+    },
+  );
+  return { status: run.status, stderr: run.stderr };
+}
+
+function scan(dir: string, args: readonly string[]) {
+  const run = spawnSync("node", [join(dir, ".githooks/no-comments/scan.cjs"), ...args], {
+    cwd: dir,
+    encoding: "utf8",
+  });
+  return { status: run.status, stderr: run.stderr };
+}
+
+function refusalOf(run: () => unknown): string | null {
+  try {
+    run();
+    return null;
+  } catch (error) {
+    if (!(error instanceof CodedError && error.kind === "refusal")) throw error;
+    return error.code;
+  }
+}
+
+afterEach(() => {
+  for (const dir of repos.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
+
+describe("the language table", () => {
+  test("routes each extension and interpreter to one language at most", () => {
+    for (const key of ["extensions", "interpreters"] as const) {
+      const claimed = LANGUAGE_NAMES.flatMap((language) => LANGUAGES[language][key]);
+      expect([key, claimed.length]).toEqual([key, new Set(claimed).size]);
+    }
+  });
+
+  test("routes by extension, and by the shebang when there is none", () => {
+    expect(languageOf("src/a.tsx", "")).toBe("javascript");
+    expect(languageOf("types/a.d.ts", "#!/bin/sh")).toBe("javascript");
+    expect(languageOf("README.md", "#!/usr/bin/env node")).toBeNull();
+    expect(languageOf("bin/tool", "#!/usr/bin/env node")).toBe("javascript");
+    expect(languageOf("bin/tool", "#!/usr/bin/env -S bun --silent")).toBe("javascript");
+    expect(languageOf("bin/tool", "#!/usr/local/bin/deno run")).toBe("javascript");
+    expect(languageOf("bin/tool", "#!/bin/sh")).toBeNull();
+    expect(languageOf(".eslintrc", "")).toBeNull();
+  });
+});
+
+describe("the javascript adapter", () => {
+  test("refuses each comment, naming its line and first line", async () => {
+    const text = "const a = 1; // why\n/* a\n   block */\nconst b = <T,>(x: T) => x;\n/** doc */\n";
+    expect(await comments("a.ts", text)).toEqual([
+      { line: 1, body: "// why" },
+      { line: 2, body: "/* a" },
+      { line: 5, body: "/** doc */" },
+    ]);
+    expect(await comments("a.tsx", "const a = <div>{/* note */}</div>;\n")).toEqual([
+      { line: 1, body: "/* note */" },
+    ]);
+  });
+
+  test("keeps the comments a tool reads", async () => {
+    const kept = [
+      "// @ts-expect-error",
+      "// eslint-disable-next-line no-console",
+      "// biome-ignore lint: x",
+      "// prettier-ignore",
+      "/* #__PURE__ */",
+      "/* @__PURE__ */",
+      '/// <reference types="bun" />',
+      "/*! license */",
+      "/** @vitest-environment jsdom */",
+    ];
+    expect(await comments("a.ts", `#!/usr/bin/env node\n${kept.join("\nf();\n")}\n`)).toEqual([]);
+  });
+
+  test("keeps JSDoc types only where plain JavaScript needs them", async () => {
+    const typed =
+      "/** @type {number} */\nlet a;\n/**\n * @param {string} x\n * @param y\n */\nfunction f(x, y) {}\n";
+    expect(await comments("a.js", typed)).toEqual([]);
+    expect(
+      await comments("a.mjs", "/**\n * @param x the input\n * Adds one.\n */\nfunction f(x) {}\n"),
+    ).toEqual([{ line: 1, body: "/**" }]);
+    expect(await comments("a.ts", typed)).toEqual([
+      { line: 1, body: "/** @type {number} */" },
+      { line: 3, body: "/**" },
+    ]);
+    expect(await comments("bin/tool", `#!/usr/bin/env node\n${typed}const b = <div />;\n`)).toEqual([]);
+    expect(await comments("bin/tool", `#!/usr/bin/env bun\n${typed}const b: number = 1;\n`)).toEqual([
+      { line: 2, body: "/** @type {number} */" },
+      { line: 4, body: "/**" },
+    ]);
+  });
+
+  test("returns null for a file that does not parse", async () => {
+    expect(await comments("a.ts", "const = ;\n")).toBeNull();
+    expect(await comments("a.js", "const a: number = 1;\n")).toBeNull();
+  });
+});
+
+describe("the bundles", () => {
+  test("are the committed gate files, rebuilt from src", async () => {
+    const built = await bundled();
+    expect(Object.keys(built)).toEqual(GATE_BUNDLES.map(({ source }) => source));
+    for (const [source, text] of Object.entries(built)) {
+      expect([source, readFileSync(join(SOURCE_DIR, source), "utf8") === text]).toEqual([source, true]);
+    }
+  });
+});
+
+describe("the pre-commit hook", () => {
+  test("refuses each comment the commit stages, and lets a clean commit through", () => {
+    const dir = gated({ "src/a.ts": "export const a = 1;\n" });
+    expect(commit(dir)).toEqual({ status: 0, stderr: "" });
+    write(dir, { "src/a.ts": "export const a = 1; // why\n", "src/b.js": "/* b */\nexport {};\n" });
+    expect(commit(dir)).toEqual({
+      status: 1,
+      stderr: [
+        "no-comments: src/a.ts:1  // why",
+        "no-comments: src/b.js:1  /* b */",
+        "  Remove each comment; a why belongs in a name, a test or the docs.",
+        "",
+      ].join("\n"),
+    });
+    expect(git(dir, ["rev-list", "--count", "HEAD"])).toBe("1");
+  });
+
+  test("judges a file whole, not only the lines the commit changes", () => {
+    const dir = repo({ "a.ts": "// old\nexport const a = 1;\n" });
+    expect(commit(dir).status).toBe(0);
+    installGates(dir, ["no-comments-javascript"]);
+    expect(commit(dir).status).toBe(0);
+    write(dir, { "a.ts": "// old\nexport const a = 2;\n" });
+    expect(commit(dir).stderr).toStartWith("no-comments: a.ts:1  // old\n");
+  });
+
+  test("keeps an agent-gate marker in any language, and only the whole marker", () => {
+    const dir = gated({ "a.ts": "// agent-gate:no-comments:1\nexport {};\n" });
+    expect(commit(dir)).toEqual({ status: 0, stderr: "" });
+    write(dir, { "a.ts": "// agent-gate:no-comments:1 and more\nexport {};\n" });
+    expect(commit(dir).stderr).toStartWith("no-comments: a.ts:1  // agent-gate:no-comments:1 and more\n");
+    write(dir, { "a.ts": "export {}; // agent-gate:no-comments:1\n" });
+    expect(commit(dir).stderr).toStartWith("no-comments: a.ts:1  // agent-gate:no-comments:1\n");
+  });
+
+  test("refuses a file that does not parse", () => {
+    const dir = gated({ "a.ts": "const = ;\n" });
+    expect(commit(dir)).toEqual({ status: 1, stderr: "no-comments: a.ts does not parse; fix its syntax\n" });
+  });
+
+  test("reads the staged content, and the index git commit <paths> builds", () => {
+    const dir = gated({ "a.ts": "export const a = 1;\n" });
+    expect(commit(dir).status).toBe(0);
+    write(dir, { "a.ts": "export const a = 2; // why\n" });
+    execFileSync("git", ["-C", dir, "add", "a.ts"]);
+    write(dir, { "a.ts": "export const a = 2;\n" });
+    expect(commitPaths(dir, []).status).toBe(1);
+    expect(commitPaths(dir, ["a.ts"])).toEqual({ status: 0, stderr: "" });
+    write(dir, { "a.ts": "export const a = 3; // why\n" });
+    expect(commitPaths(dir, ["a.ts"])).toEqual({
+      status: 1,
+      stderr:
+        "no-comments: a.ts:1  // why\n  Remove each comment; a why belongs in a name, a test or the docs.\n",
+    });
+  });
+
+  test("skips generated, vendored, binary and non-regular files", () => {
+    const dir = gated({
+      ".gitattributes": "vendor/** linguist-vendored\nsrc/gen.ts linguist-generated\n",
+      "vendor/v.js": "// vendored\n",
+      "src/gen.ts": "// made by a tool\n",
+      "src/header.ts": "// Code GENERATED by a tool\nexport {};\n",
+      "src/auto.ts": "// This file is Auto-Generated.\nexport {};\n",
+      "src/data.js": "\0// binary\n",
+      "README.md": "# Comments here are prose\n",
+    });
+    symlinkSync("// a link target", join(dir, "src/link.ts"));
+    expect(commit(dir)).toEqual({ status: 0, stderr: "" });
+    write(dir, { "src/lower.ts": "// generated by hand\nexport {};\n" });
+    expect(commit(dir).stderr).toStartWith("no-comments: src/lower.ts:1");
+  });
+
+  test("loads an adapter only for a file it reads, and leaves a language alone without one", () => {
+    const dir = gated();
+    writeFileSync(join(dir, ".githooks/no-comments/javascript.cjs"), "throw new Error('loaded');\n");
+    write(dir, { "notes.md": "# notes\n" });
+    expect(commit(dir, ["notes.md"])).toEqual({ status: 0, stderr: "" });
+    write(dir, { "a.ts": "// why\n" });
+    expect(commit(dir, ["a.ts"])).toEqual({ status: 1, stderr: "no-comments: Error: loaded\n" });
+    rmSync(join(dir, ".githooks/no-comments/javascript.cjs"));
+    expect(commit(dir, ["a.ts"])).toEqual({ status: 0, stderr: "" });
+  });
+
+  test("lets a merge commit through", () => {
+    const dir = gated({ "a.ts": "export {};\n" });
+    expect(commit(dir).status).toBe(0);
+    git(dir, ["checkout", "-q", "-b", "side"]);
+    write(dir, { "b.ts": "export {};\n" });
+    expect(commit(dir).status).toBe(0);
+    git(dir, ["checkout", "-q", "-"]);
+    write(dir, { "c.ts": "export {};\n" });
+    expect(commit(dir).status).toBe(0);
+    git(dir, ["merge", "-q", "--no-commit", "side"]);
+    write(dir, { "b.ts": "// resolved\nexport {};\n" });
+    expect(commit(dir)).toEqual({ status: 0, stderr: "" });
+  });
+
+  test("refuses when node is not on PATH", () => {
+    const dir = gated();
+    const bin = mkdtempSync(join(tmpdir(), "agent-gates-bin-"));
+    repos.push(bin);
+    symlinkSync(execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim(), join(bin, "git"));
+    const run = spawnSync("/bin/sh", [".githooks/pre-commit.d/no-comments"], {
+      cwd: dir,
+      env: { PATH: bin },
+      encoding: "utf8",
+    });
+    expect([run.status, run.stderr]).toEqual([
+      1,
+      "no-comments: node is not on PATH, so the commit's comments cannot be judged; install Node.js\n",
+    ]);
+  });
+});
+
+describe("the pre-commit dispatcher", () => {
+  test("runs each executable step in order and stops at the first that fails", () => {
+    const dir = gated();
+    write(dir, {
+      ".githooks/pre-commit.d/a-first": "#!/bin/sh\necho first >> steps\n",
+      ".githooks/pre-commit.d/b-skipped": "#!/bin/sh\necho skipped >> steps\n",
+      ".githooks/pre-commit.d/c-fails": "#!/bin/sh\necho fails >> steps\nexit 3\n",
+      ".githooks/pre-commit.d/d-never": "#!/bin/sh\necho never >> steps\n",
+    });
+    for (const step of ["a-first", "c-fails", "d-never"])
+      chmodSync(join(dir, ".githooks/pre-commit.d", step), 0o755);
+    const run = spawnSync(join(dir, ".githooks/pre-commit"), { cwd: dir, encoding: "utf8" });
+    expect(run.status).toBe(3);
+    expect(readFileSync(join(dir, "steps"), "utf8")).toBe("first\nfails\n");
+  });
+});
+
+describe("the no-comments workflow", () => {
+  function judgeStep(): string {
+    const text = readFileSync(join(SOURCE_DIR, "no-comments.yml"), "utf8");
+    const run = /^ {8}run: (.+)$/m.exec(text)?.[1];
+    if (run === undefined) throw new Error("no-comments.yml runs no command");
+    return run;
+  }
+
+  function judged(dir: string, base: string, head: string) {
+    const run = spawnSync("bash", ["-e", "-c", judgeStep()], {
+      cwd: dir,
+      env: { ...process.env, BASE_SHA: base, HEAD_SHA: head },
+      encoding: "utf8",
+    });
+    return { status: run.status, stderr: run.stderr };
+  }
+
+  test("judges the files changed since the merge base of the pushed base", () => {
+    const dir = gated({ "a.ts": "// old\n" });
+    git(dir, ["add", "-A"]);
+    git(dir, ["-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "feat: start"]);
+    const base = git(dir, ["rev-parse", "HEAD"]);
+    write(dir, { "b.ts": "// new\n" });
+    git(dir, ["add", "-A"]);
+    git(dir, ["-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "feat: more"]);
+    const head = git(dir, ["rev-parse", "HEAD"]);
+    expect(judged(dir, base, head)).toEqual({
+      status: 1,
+      stderr:
+        "no-comments: b.ts:1  // new\n  Remove each comment; a why belongs in a name, a test or the docs.\n",
+    });
+    expect(judged(dir, head, head)).toEqual({ status: 0, stderr: "" });
+  });
+
+  test("judges the head commit alone when the base names no commit, even a root commit", () => {
+    const dir = gated({ "a.ts": "// root\n" });
+    git(dir, ["add", "-A"]);
+    git(dir, ["-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "feat: start"]);
+    expect(judged(dir, NO_COMMIT, "HEAD").stderr).toStartWith("no-comments: a.ts:1  // root\n");
+    write(dir, { "b.ts": "export {};\n" });
+    git(dir, ["add", "-A"]);
+    git(dir, ["-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "feat: more"]);
+    expect(judged(dir, NO_COMMIT, "HEAD")).toEqual({ status: 0, stderr: "" });
+  });
+
+  test("refuses a call that names a base without a head", () => {
+    const dir = gated();
+    expect(scan(dir, ["HEAD"])).toEqual({ status: 2, stderr: "usage: node scan.cjs [<base> <head>]\n" });
+  });
+});
+
+describe("install and doctor", () => {
+  test("refuses a project's own pre-commit hook, and writes nothing", () => {
+    const dir = repo({ ".githooks/pre-commit": "#!/bin/sh\nmake check\n" });
+    expect(refusalOf(() => installGates(dir, ["no-comments-javascript"]))).toBe("pre_commit_occupied");
+    expect(existsSync(join(dir, ".githooks/no-comments"))).toBe(false);
+    expect(readFileSync(join(dir, ".githooks/pre-commit"), "utf8")).toBe("#!/bin/sh\nmake check\n");
+    expect(installGates(dir, ["commit-subject"]).gates).toEqual(["commit-subject"]);
+  });
+
+  test("doctor fails a project's own pre-commit hook with the move as the fix", () => {
+    const dir = gated({ "a.ts": "export {};\n" });
+    writeFileSync(join(dir, ".githooks/pre-commit"), "#!/bin/sh\nmake check\n");
+    const report = gatesDoctor(dir);
+    expect(report.failing).toBe(1);
+    expect(report.checks.find(({ name }) => name === ".githooks/pre-commit")).toEqual({
+      name: ".githooks/pre-commit",
+      state: "fail",
+      detail: `${dir} has its own .githooks/pre-commit, which the gates that run before a commit would replace`,
+      fix: `stop and hand this error to the owner: ${dir}'s .githooks/pre-commit must move to .githooks/pre-commit.d/<name> before the gates install`,
+    });
+  });
+
+  test("doctor matches the installed languages against the tracked files", () => {
+    const dir = gated({ "a.ts": "export {};\n", "bin/tool": "#!/usr/bin/env node\n" });
+    git(dir, ["add", "-A"]);
+    expect(gatesDoctor(dir).checks.at(-1)).toEqual({
+      name: "no-comments languages",
+      state: "ok",
+      detail: "javascript, as the tracked files need",
+      fix: null,
+    });
+    git(dir, ["rm", "-q", "-f", "a.ts", "bin/tool"]);
+    write(dir, { ".gitattributes": "gen.ts linguist-generated\n", "gen.ts": "export {};\n" });
+    git(dir, ["add", "-A"]);
+    expect(gatesDoctor(dir).checks.at(-1)).toEqual({
+      name: "no-comments-javascript",
+      state: "warn",
+      detail: "installed, but the project tracks no file javascript reads",
+      fix: "delete .githooks/no-comments/javascript.cjs",
+    });
+    expect(gatesDoctor(repo({ "a.ts": "export {};\n" })).checks.map(({ name }) => name)).toEqual(["gates"]);
+  });
+});

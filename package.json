@@ -13,9 +13,11 @@
     "typecheck": "bunx tsc --noEmit",
     "test": "bun test",
     "check": "bun run lint && bun run typecheck && bun test",
+    "gates:bundle": "bun src/gate-bundles.ts",
     "prepare": "! git rev-parse --git-dir >/dev/null 2>&1 || git config core.hooksPath .githooks"
   },
   "devDependencies": {
+    "@babel/parser": "^7.29.9",
     "@biomejs/biome": "^2.5.14",
     "@types/bun": "^1.4.2",
     "typescript": "^7.0.2"

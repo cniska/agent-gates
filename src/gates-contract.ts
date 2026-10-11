@@ -1,19 +1,32 @@
 import { refuser } from "./coded-error";
+import { LANGUAGE_NAMES, type Language } from "./no-comments-languages";
 
-export const GATE_NAMES = ["commit-subject"] as const;
+export type NoCommentsGate = `no-comments-${Language}`;
 
-export type GateName = (typeof GATE_NAMES)[number];
+export function noCommentsGate(language: Language): NoCommentsGate {
+  return `no-comments-${language}`;
+}
+
+export type GateName = "commit-subject" | NoCommentsGate;
+
+export const GATE_NAMES: readonly GateName[] = ["commit-subject", ...LANGUAGE_NAMES.map(noCommentsGate)];
 
 export function isGateName(name: string): name is GateName {
   return GATE_NAMES.some((gate) => gate === name);
 }
 
-const SHARED_PART = "githooks";
+const SHARED_PARTS = ["githooks", "no-comments"] as const;
 
-export type Part = GateName | typeof SHARED_PART;
+type SharedPart = (typeof SHARED_PARTS)[number];
+
+export type Part = GateName | SharedPart;
+
+export function isSharedPart(name: string): name is SharedPart {
+  return SHARED_PARTS.some((part) => part === name);
+}
 
 export function isPart(name: string): name is Part {
-  return name === SHARED_PART || isGateName(name);
+  return isSharedPart(name) || isGateName(name);
 }
 
 export const HOOKS_DIR = ".githooks";
@@ -27,15 +40,75 @@ export type FileState = "installed" | "missing" | "behind" | "changed" | "ahead"
 type GateVersion = { readonly version: number; readonly sha256: string };
 
 export type GateFile = {
+  readonly part: Part;
   readonly source: string;
   readonly target: string;
   readonly executable: boolean;
   readonly versions: readonly [GateVersion, ...GateVersion[]];
 };
 
+const GITATTRIBUTES: GateFile = {
+  part: "githooks",
+  source: "gitattributes",
+  target: `${HOOKS_DIR}/.gitattributes`,
+  executable: false,
+  versions: [
+    { version: 1, sha256: "ad36a0eb187fe7a496ae5268c924ae0c1d70451796700a133f1731d49d1d4a0c" },
+    { version: 2, sha256: "4765ab668d4acf13110366595f389b0a2b09424903378faa02786f96ac64369b" },
+  ],
+};
+
+export const PRE_COMMIT: GateFile = {
+  part: "githooks",
+  source: "pre-commit",
+  target: `${HOOKS_DIR}/pre-commit`,
+  executable: true,
+  versions: [{ version: 1, sha256: "d5b3794f1b2c884f4ff3a9407059e436a01c5c190e7bc1cf44f581930653920f" }],
+};
+
+const NO_COMMENTS_SHARED: readonly GateFile[] = [
+  {
+    part: "no-comments",
+    source: "no-comments/pre-commit",
+    target: `${HOOKS_DIR}/pre-commit.d/no-comments`,
+    executable: true,
+    versions: [{ version: 1, sha256: "138a8e75142f58bc1a09418964b8a9cbd7944fc516920d307e58e00dd2a5290c" }],
+  },
+  {
+    part: "no-comments",
+    source: "no-comments/scan.cjs",
+    target: `${HOOKS_DIR}/no-comments/scan.cjs`,
+    executable: false,
+    versions: [{ version: 1, sha256: "6c7e734fa6c585451a823e4dcf8b85fe990e811e315d05f757ae5a52635eaefc" }],
+  },
+  {
+    part: "no-comments",
+    source: "no-comments.yml",
+    target: ".github/workflows/no-comments.yml",
+    executable: false,
+    versions: [{ version: 1, sha256: "40c64a59e2409c91c2d07df092eeb9384811a991784e2f3300b8aa43e6c78dd9" }],
+  },
+];
+
+function noCommentsFiles(language: Language, versions: GateFile["versions"]): readonly GateFile[] {
+  return [
+    GITATTRIBUTES,
+    PRE_COMMIT,
+    ...NO_COMMENTS_SHARED,
+    {
+      part: noCommentsGate(language),
+      source: `no-comments/${language}.cjs`,
+      target: `${HOOKS_DIR}/no-comments/${language}.cjs`,
+      executable: false,
+      versions,
+    },
+  ];
+}
+
 export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
   "commit-subject": [
     {
+      part: "commit-subject",
       source: "commit-msg",
       target: `${HOOKS_DIR}/commit-msg`,
       executable: true,
@@ -45,6 +118,7 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
       ],
     },
     {
+      part: "commit-subject",
       source: "commits.yml",
       target: ".github/workflows/commits.yml",
       executable: false,
@@ -53,16 +127,11 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
         { version: 2, sha256: "f5863ec0ebb55f68779bd8f5693406178e5adbfb1dfbe09db12550286487656f" },
       ],
     },
-    {
-      source: "gitattributes",
-      target: `${HOOKS_DIR}/.gitattributes`,
-      executable: false,
-      versions: [
-        { version: 1, sha256: "ad36a0eb187fe7a496ae5268c924ae0c1d70451796700a133f1731d49d1d4a0c" },
-        { version: 2, sha256: "4765ab668d4acf13110366595f389b0a2b09424903378faa02786f96ac64369b" },
-      ],
-    },
+    GITATTRIBUTES,
   ],
+  "no-comments-javascript": noCommentsFiles("javascript", [
+    { version: 1, sha256: "fb0f19610a50648d653df231f19803b3843dfe0f24909621067c842563cf3696" },
+  ]),
 };
 
 export const INSTALL_GATES = `agent-gates install <gate>..., choosing from ${GATE_NAMES.join(", ")}`;
@@ -72,6 +141,7 @@ export const REINSTALL = "agent-gates install";
 export const refuseGates = refuser<{
   readonly no_gates_chosen: { readonly root: string };
   readonly hooks_path_occupied: { readonly root: string; readonly hooksPath: string };
+  readonly pre_commit_occupied: { readonly root: string };
   readonly write_failed: { readonly path: string; readonly detail: string };
 }>({
   no_gates_chosen: {
@@ -84,6 +154,12 @@ export const refuseGates = refuser<{
       `${root} runs its git hooks from ${hooksPath}, so the gates in ${HOOKS_DIR} would never run`,
     resolve: ({ root }) =>
       `stop and hand this error to the owner: ${root}'s hooks must move to ${HOOKS_DIR} before the gates install`,
+  },
+  pre_commit_occupied: {
+    message: ({ root }) =>
+      `${root} has its own ${HOOKS_DIR}/pre-commit, which the gates that run before a commit would replace`,
+    resolve: ({ root }) =>
+      `stop and hand this error to the owner: ${root}'s ${HOOKS_DIR}/pre-commit must move to ${HOOKS_DIR}/pre-commit.d/<name> before the gates install`,
   },
   write_failed: {
     message: ({ path, detail }) => `${path} could not be written: ${detail}`,

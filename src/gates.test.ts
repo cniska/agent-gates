@@ -16,10 +16,9 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { CodedError } from "./coded-error";
 import { gatesDoctor } from "./doctor";
-import { installGates } from "./gates";
-import { GATES } from "./gates-contract";
+import { installGates, markerOf, SOURCE_DIR } from "./gates";
+import { GATES, isSharedPart } from "./gates-contract";
 
-const SOURCES = resolve(import.meta.dir, "..", "gates");
 const GITATTRIBUTES_V1 = "# agent-gate:githooks:1\n* linguist-generated\n";
 const WIRED_PREPARE = "! git rev-parse --git-dir >/dev/null 2>&1 || git config core.hooksPath .githooks";
 const repos: string[] = [];
@@ -85,23 +84,39 @@ describe("the gate registry", () => {
   const files = Object.values(GATES).flat();
 
   test("holds every source in gates/, each once per target", () => {
-    expect(new Set(files.map(({ source }) => source))).toEqual(new Set(readdirSync(SOURCES)));
+    const sources = readdirSync(SOURCE_DIR, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => join(entry.parentPath, entry.name).slice(SOURCE_DIR.length + 1));
+    expect(new Set(files.map(({ source }) => source))).toEqual(new Set(sources));
     for (const file of files) {
       expect(files.filter(({ target }) => target === file.target).every((same) => same === file)).toBe(true);
     }
   });
 
+  test("marks each file with the part it belongs to, a shared part when several gates hold it", () => {
+    for (const { source, part } of files) {
+      const text = readFileSync(join(SOURCE_DIR, source), "utf8");
+      expect([source, markerOf(text)?.part]).toEqual([source, part]);
+      const holders = Object.entries(GATES)
+        .filter(([, held]) => held.some((file) => file.source === source))
+        .map(([gate]) => gate);
+      const shared = isSharedPart(part);
+      expect([source, shared ? true : holders]).toEqual([source, shared ? true : [part]]);
+    }
+  });
+
   test("keeps every version a source was released at, the current bytes last", () => {
     for (const { source, versions } of files) {
-      const text = readFileSync(join(SOURCES, source), "utf8");
-      const marker = text.match(/^# agent-gate:[a-z-]+:(\d+)$/m)?.[1];
+      const text = readFileSync(join(SOURCE_DIR, source), "utf8");
       expect([source, versions.map(({ version }) => version)]).toEqual([
         source,
         versions.map((_, index) => index + 1),
       ]);
-      expect([source, versions.at(-1)]).toEqual([
+      const current = versions.at(-1);
+      expect([source, current?.version, current?.sha256]).toEqual([
         source,
-        { version: Number(marker), sha256: createHash("sha256").update(text).digest("hex") },
+        markerOf(text)?.version,
+        createHash("sha256").update(text).digest("hex"),
       ]);
     }
   });
@@ -116,8 +131,14 @@ describe("this repo", () => {
       ".githooks/commit-msg",
       ".github/workflows/commits.yml",
       ".githooks/.gitattributes",
+      ".githooks/pre-commit",
+      ".githooks/pre-commit.d/no-comments",
+      ".githooks/no-comments/scan.cjs",
+      ".github/workflows/no-comments.yml",
+      ".githooks/no-comments/javascript.cjs",
       "hooksPath",
       "prepare",
+      "no-comments languages",
     ]);
   });
 });
@@ -344,7 +365,7 @@ describe("doctor", () => {
           name: "gates",
           state: "warn",
           detail: "no gate is installed",
-          fix: "agent-gates install <gate>..., choosing from commit-subject",
+          fix: "agent-gates install <gate>..., choosing from commit-subject, no-comments-javascript",
         },
       ],
       failing: 0,

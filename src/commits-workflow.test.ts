@@ -2,9 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { SOURCE_DIR } from "./gates";
 
-const SOURCES = resolve(import.meta.dir, "..", "gates");
 const NO_COMMIT = "0000000000000000000000000000000000000000";
 const repos: string[] = [];
 
@@ -12,7 +12,7 @@ function field(value: unknown, key: string): unknown {
   return typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined;
 }
 
-const workflow: unknown = Bun.YAML.parse(readFileSync(join(SOURCES, "commits.yml"), "utf8"));
+const workflow: unknown = Bun.YAML.parse(readFileSync(join(SOURCE_DIR, "commits.yml"), "utf8"));
 const steps = field(field(field(workflow, "jobs"), "commits"), "steps");
 
 function script(id: string): string {
@@ -35,7 +35,7 @@ function repo(): string {
   repos.push(dir);
   execFileSync("git", ["init", "-q", dir]);
   mkdirSync(join(dir, ".githooks"));
-  copyFileSync(join(SOURCES, "commit-msg"), join(dir, ".githooks/commit-msg"));
+  copyFileSync(join(SOURCE_DIR, "commit-msg"), join(dir, ".githooks/commit-msg"));
   return dir;
 }
 

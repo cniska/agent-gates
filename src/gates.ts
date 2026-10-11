@@ -4,6 +4,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { unreachable } from "./assert";
 import type { CodedError } from "./coded-error";
 import { copyAside } from "./file-backup";
+import { firstMarkerLine } from "./gate-marker";
 import {
   type FileState,
   GATE_NAMES,
@@ -13,14 +14,13 @@ import {
   HOOKS_DIR,
   isPart,
   type Part,
+  PRE_COMMIT,
   refuseGates,
 } from "./gates-contract";
 import { configValue, setConfig } from "./git";
 import { type PrepareState, prepareState } from "./package-manifest";
 
-const SOURCE_DIR = resolve(import.meta.dir, "..", "gates");
-
-const MARKER = /^# agent-gate:([a-z-]+):(\d+)$/m;
+export const SOURCE_DIR = resolve(import.meta.dir, "..", "gates");
 
 const EXECUTE_BITS = 0o111;
 
@@ -42,6 +42,10 @@ export type PlannedFile = {
   readonly source: string;
 };
 
+export type PreCommitState =
+  | { readonly kind: "free" }
+  | { readonly kind: "occupied"; readonly refusal: CodedError };
+
 export type HooksPathState =
   | { readonly kind: "wired" }
   | { readonly kind: "unset" }
@@ -59,12 +63,10 @@ type GatesInstalled = {
   readonly prepare: Exclude<PrepareState["kind"], "occupied" | "unparseable">;
 };
 
-function markerOf(text: string): Marker | null {
-  const found = MARKER.exec(text);
-  const part = found?.[1];
-  const version = found?.[2];
-  if (part === undefined || version === undefined || !isPart(part)) return null;
-  return { part, version: Number(version) };
+export function markerOf(text: string): Marker | null {
+  const found = firstMarkerLine(text);
+  if (found === null || !isPart(found.part)) return null;
+  return { part: found.part, version: found.version };
 }
 
 function sha256(text: string): string {
@@ -111,6 +113,13 @@ export function hooksPathState(root: string): HooksPathState {
   if (hooksPath === null) return { kind: "unset" };
   if (resolve(root, hooksPath) === join(root, HOOKS_DIR)) return { kind: "wired" };
   return { kind: "occupied", refusal: refuseGates("hooks_path_occupied", { root, hooksPath }) };
+}
+
+export function preCommitState(root: string, gates: readonly GateName[]): PreCommitState {
+  if (!gates.some((gate) => GATES[gate].includes(PRE_COMMIT))) return { kind: "free" };
+  const found = foundAt(join(root, PRE_COMMIT.target));
+  if (found === null || markerOf(found.text) !== null) return { kind: "free" };
+  return { kind: "occupied", refusal: refuseGates("pre_commit_occupied", { root }) };
 }
 
 function actionFor(state: FileState): Action {
@@ -161,6 +170,8 @@ export function installGates(root: string, named: readonly GateName[]): GatesIns
   if (gates.length === 0) throw refuseGates("no_gates_chosen", { root });
   const hooksPath = hooksPathState(root);
   if (hooksPath.kind === "occupied") throw hooksPath.refusal;
+  const preCommit = preCommitState(root, gates);
+  if (preCommit.kind === "occupied") throw preCommit.refusal;
   const prepare = prepareState(root);
   if (prepare.kind === "occupied" || prepare.kind === "unparseable") throw prepare.refusal;
   const files = plannedFiles(root, gates).map((planned) => ({

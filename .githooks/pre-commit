@@ -1,3 +1,8 @@
 #!/bin/sh
-unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_AUTHOR_DATE
-exec bun run check
+# agent-gate:githooks:1
+set -eu
+
+for step in "$(dirname "$0")"/pre-commit.d/*; do
+  [ -f "$step" ] && [ -x "$step" ] || continue
+  "$step" || exit $?
+done

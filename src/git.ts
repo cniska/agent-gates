@@ -4,7 +4,7 @@ import { refuser } from "./coded-error";
 type GitRun = {
   readonly status: number | null;
   readonly signal: string | null;
-  readonly out: string;
+  readonly out: Buffer;
   readonly err: string;
 };
 
@@ -34,15 +34,18 @@ const refuseGit = refuser<{
   },
 });
 
-function git(repo: string, args: readonly string[]): GitRun {
-  const run = spawnSync("git", ["-C", repo, ...args], { stdio: ["ignore", "pipe", "pipe"] });
+function git(repo: string, args: readonly string[], input: string | null = null): GitRun {
+  const run = spawnSync("git", ["-C", repo, ...args], {
+    input: input ?? undefined,
+    stdio: [input === null ? "ignore" : "pipe", "pipe", "pipe"],
+    maxBuffer: Number.POSITIVE_INFINITY,
+  });
   if (run.error) throw refuseGit("git_unavailable", { detail: run.error.message });
-  return {
-    status: run.status,
-    signal: run.signal,
-    out: run.stdout.toString().trim(),
-    err: run.stderr.toString().trim(),
-  };
+  return { status: run.status, signal: run.signal, out: run.stdout, err: run.stderr.toString().trim() };
+}
+
+function trimmed(run: GitRun): string {
+  return run.out.toString().trim();
 }
 
 function failed(repo: string, args: readonly string[], run: GitRun) {
@@ -58,7 +61,7 @@ function failed(repo: string, args: readonly string[], run: GitRun) {
 export function checkoutRoot(cwd: string): string {
   const run = git(cwd, ["rev-parse", "--show-toplevel"]);
   if (run.status !== 0) throw refuseGit("not_a_checkout", { cwd });
-  return run.out;
+  return trimmed(run);
 }
 
 export function configValue(repo: string, key: string): string | null {
@@ -66,11 +69,27 @@ export function configValue(repo: string, key: string): string | null {
   const run = git(repo, args);
   if (run.status === 1) return null;
   if (run.status !== 0) throw failed(repo, args, run);
-  return run.out;
+  return trimmed(run);
 }
 
 export function setConfig(repo: string, key: string, value: string): void {
   const args = ["config", key, value];
   const run = git(repo, args);
   if (run.status !== 0) throw failed(repo, args, run);
+}
+
+export function gitOutput(repo: string, args: readonly string[], input: string | null = null): Buffer {
+  const run = git(repo, args, input);
+  if (run.status !== 0) throw failed(repo, args, run);
+  return run.out;
+}
+
+export function nulFields(output: Buffer): string[] {
+  const fields = output.toString().split("\0");
+  if (fields.at(-1) === "") fields.pop();
+  return fields;
+}
+
+export function namesCommit(repo: string, rev: string): boolean {
+  return git(repo, ["cat-file", "-e", `${rev}^{commit}`]).status === 0;
 }
