@@ -28,6 +28,7 @@ agent-gates doctor
 | `no-comments-dart` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment in a Dart file the commit changes, other than one the analyzer reads |
 | `no-comments-sql` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment in a PostgreSQL file the commit changes, other than one a tool reads |
 | `no-comments-shell` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment in a shell script the commit changes, other than the shebang and a `shellcheck` directive |
+| `no-comments-rust` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment in a Rust file the commit changes, doc comments and `#[doc = …]` attributes included |
 
 ### Installed files
 
@@ -75,12 +76,14 @@ A comment a tool reads stays:
 | Dart | `ignore:`, `ignore_for_file:`, `coverage:`, `@dart=` |
 | SQL | drizzle's `--> statement-breakpoint` |
 | Shell | the first-line shebang, `shellcheck` directives |
+| Rust | none; a first-line shebang is not a comment, and an attribute without doc text, such as `#[doc(hidden)]`, is code |
 | Every language | the `agent-gate` markers |
 
-How SQL and shell are read:
+How SQL, shell and Rust are read:
 
 - **SQL** is read as PostgreSQL, with its dollar quotes and `E''` strings. A dollar-quoted body that reads as SQL is judged as code, so a `--` in a dollar-quoted text literal is refused. A body that does not read as SQL is left alone as text.
 - **Shell** is read by a lexer, not a parser. A `#` starts a comment only where a word starts, and never inside quotes, parameter and arithmetic expansions, the regex after `=~`, or heredoc bodies. Only an unclosed quote, substitution or heredoc is refused as not parsing.
+- **Rust** is read by a lexer that finds the comments rustc's own lexer finds, with raw strings, byte and C strings, char literals, lifetimes and raw identifiers. An attribute that carries doc text is refused as one comment, from its `#` to its closing `]`: one with `doc = …` anywhere inside it, so `#[doc = …]`, `#![doc = …]` and `#[cfg_attr(docsrs, doc = …)]` alike. `#[doc(hidden)]`, `#[doc(alias = …)]` and `#[cfg(doc)]` carry none. A `#[doc = $doc]` that a `macro_rules!` forwards is refused too, so a macro that generates docs is refused with them. Only an unclosed literal or block comment is refused as not parsing.
 
 To remove a language, delete its `.githooks/no-comments/<language>.cjs`.
 

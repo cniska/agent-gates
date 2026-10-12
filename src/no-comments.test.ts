@@ -8,6 +8,7 @@ import { installGates, SOURCE_DIR } from "./gates";
 import { comments as dartComments } from "./no-comments-dart";
 import { comments } from "./no-comments-javascript";
 import { LANGUAGE_NAMES, LANGUAGES, languageOf } from "./no-comments-languages";
+import { comments as rustComments } from "./no-comments-rust";
 import { comments as shellComments } from "./no-comments-shell";
 import { comments as sqlComments } from "./no-comments-sql";
 import {
@@ -73,6 +74,7 @@ describe("the language table", () => {
     expect(languageOf("lib/a.dart", "")).toBe("dart");
     expect(languageOf("bin/tool", "#!/usr/bin/env dart")).toBe("dart");
     expect(languageOf("db/001.sql", "")).toBe("sql");
+    expect(languageOf("src/main.rs", "")).toBe("rust");
     expect(languageOf("scripts/a.sh", "")).toBe("shell");
     expect(languageOf("scripts/a.bash", "")).toBe("shell");
     for (const shebang of ["#!/bin/sh", "#!/usr/bin/env bash", "#!/bin/dash", "#!/bin/zsh -f"])
@@ -414,6 +416,161 @@ describe("the shell adapter", () => {
   });
 });
 
+describe("the rust adapter", () => {
+  test("refuses each comment, doc comments and nested blocks too", async () => {
+    const text = [
+      "//! Crate docs.",
+      "/// Item docs.",
+      "fn f() {} // trailing",
+      "/* outer /* inner */ still outer */",
+      "/** block docs */",
+      "/*! inner block docs */",
+      "/* a",
+      "   block */",
+      "//// four slashes",
+    ].join("\n");
+    expect(await rustComments("a.rs", text)).toEqual([
+      { line: 1, body: "//! Crate docs." },
+      { line: 2, body: "/// Item docs." },
+      { line: 3, body: "// trailing" },
+      { line: 4, body: "/* outer /* inner */ still outer */" },
+      { line: 5, body: "/** block docs */" },
+      { line: 6, body: "/*! inner block docs */" },
+      { line: 7, body: "/* a" },
+      { line: 9, body: "//// four slashes" },
+    ]);
+  });
+
+  test("reads no comment inside a literal, and finds the one after it", async () => {
+    const lines = [
+      'let a = "http://x /* y */"; // 1',
+      'let b = "a\\" // still the string"; // 2',
+      'let c = r##"a "# // still raw"##; // 3',
+      'let d = b"// bytes"; let e = br#"// raw bytes"#; // 4',
+      'let f = c"// c string"; let g = cr#"/* raw c */"#; // 5',
+      "let h = ['\"', '\\'', '/', '\\u{1F600}', '\\x41', '😀']; // 6",
+      "let i = b'\"'; let j = b'\\''; // 7",
+      "fn k<'a>(x: &'a str) -> &'static str { x } // 8",
+      "'outer: loop { break 'outer; } // 9",
+      "let r#type = r#match; fn l<'r#fn>() {} // 10",
+      'let m = "line one',
+      "// still the string",
+      '"; // 13',
+      'let n = "suffixed"usize; let o = x"y" ; // 14',
+      'let 😀r"\\" = 1; // in the string rustc reads after an emoji identifier"',
+      `let 😀${String.fromCodePoint(0x200d)}r"\\" = 1; // still the string past a zero-width joiner"`,
+    ];
+    expect(await rustComments("a.rs", lines.join("\n"))).toEqual([
+      { line: 1, body: "// 1" },
+      { line: 2, body: "// 2" },
+      { line: 3, body: "// 3" },
+      { line: 4, body: "// 4" },
+      { line: 5, body: "// 5" },
+      { line: 6, body: "// 6" },
+      { line: 7, body: "// 7" },
+      { line: 8, body: "// 8" },
+      { line: 9, body: "// 9" },
+      { line: 10, body: "// 10" },
+      { line: 13, body: "// 13" },
+      { line: 14, body: "// 14" },
+    ]);
+  });
+
+  test("refuses a doc attribute that carries doc text, and keeps every other attribute", async () => {
+    const lines = [
+      '#![doc = "Crate docs."]',
+      '#[doc = include_str!("../README.md")]',
+      "#[doc(hidden)]",
+      '#[doc(alias = "x")]',
+      "#[doc(inline)]",
+      "#[derive(Debug)]",
+      "#[cfg_attr(test, derive(Clone))]",
+      '# [ doc = "spaced" ]',
+      '#[doc = "a ] in a string"] fn f() {}',
+      "#[doc = concat!(",
+      '    "spans [lines]",',
+      ")]",
+      'let doc = "#[doc = x]";',
+    ];
+    expect(await rustComments("a.rs", lines.join("\n"))).toEqual([
+      { line: 1, body: '#![doc = "Crate docs."]' },
+      { line: 2, body: '#[doc = include_str!("../README.md")]' },
+      { line: 8, body: '# [ doc = "spaced" ]' },
+      { line: 9, body: '#[doc = "a ] in a string"]' },
+      { line: 10, body: "#[doc = concat!(" },
+    ]);
+  });
+
+  test("refuses doc text anywhere in an attribute, and only there", async () => {
+    const lines = [
+      '#[cfg_attr(docsrs, doc = "text")]',
+      '#![cfg_attr(feature = "x", doc = include_str!("x.md"))]',
+      "#[cfg(doc)]",
+      '#[cfg_attr(docsrs, doc(cfg(feature = "x")))]',
+      "#[cfg_attr(test, assert(doc == 1))]",
+      "#[cases(doc => 1)]",
+      "let doc = 1;",
+      "fn f(doc: u8) { if doc == 1 {} }",
+    ];
+    expect(await rustComments("a.rs", lines.join("\n"))).toEqual([
+      { line: 1, body: '#[cfg_attr(docsrs, doc = "text")]' },
+      { line: 2, body: '#![cfg_attr(feature = "x", doc = include_str!("x.md"))]' },
+    ]);
+  });
+
+  test("refuses a doc attribute once, with the comments inside it", async () => {
+    expect(await rustComments("a.rs", '#[doc = "x" /* y */]\n')).toEqual([
+      { line: 1, body: '#[doc = "x" /* y */]' },
+    ]);
+    expect(await rustComments("a.rs", '#[doc = concat!(\n  // n\n  "x")]\n')).toEqual([
+      { line: 1, body: "#[doc = concat!(" },
+    ]);
+    expect(await rustComments("a.rs", "#[derive(Debug /* y */)]\n")).toEqual([{ line: 1, body: "/* y */" }]);
+    expect(await rustComments("a.rs", '#[doc /* y */ = "x"]\n')).toEqual([
+      { line: 1, body: '#[doc /* y */ = "x"]' },
+    ]);
+    expect(await rustComments("a.rs", '# /* y */ [doc = "x"]\n')).toEqual([
+      { line: 1, body: '# /* y */ [doc = "x"]' },
+    ]);
+    expect(await rustComments("a.rs", "# /* y */ [derive(Debug)]\n")).toEqual([{ line: 1, body: "/* y */" }]);
+    expect(await rustComments("a.rs", '#[x(#[doc = "y"] /* z */)]\n')).toEqual([
+      { line: 1, body: '#[x(#[doc = "y"] /* z */)]' },
+    ]);
+  });
+
+  test("refuses the doc attribute a macro forwards", async () => {
+    const text = "macro_rules! m {\n    ($(#[doc = $doc:expr])*) => {};\n}\n";
+    expect(await rustComments("a.rs", text)).toEqual([{ line: 2, body: "#[doc = $doc:expr]" }]);
+  });
+
+  test("skips a first-line shebang, and reads #![ there as an inner attribute", async () => {
+    expect(await rustComments("a.rs", "#!/usr/bin/env run-cargo-script // x\nfn main() {}\n")).toEqual([]);
+    expect(await rustComments("a.rs", '#! [doc = "x"]\n')).toEqual([{ line: 1, body: '#! [doc = "x"]' }]);
+    expect(await rustComments("a.rs", "#![allow(dead_code)] // x\n")).toEqual([{ line: 1, body: "// x" }]);
+    expect(await rustComments("a.rs", "fn main() {}\n#!/bin/sh // x\n")).toEqual([{ line: 2, body: "// x" }]);
+    expect(await rustComments("a.rs", "#! /* a */ // b\n[allow(dead_code)]\n")).toEqual([
+      { line: 1, body: "/* a */" },
+      { line: 1, body: "// b" },
+    ]);
+    expect(await rustComments("a.rs", "#! /// doc\n[allow(dead_code)]\n")).toEqual([]);
+  });
+
+  test("returns null for a file whose literal or comment never closes", async () => {
+    for (const open of [
+      'let a = "open;\n',
+      'let a = r#"open"";\n',
+      'let a = br"open;\n',
+      'let a = c"open;\n',
+      "let a = ' ;\n",
+      "let a = '\\u{1F600};\n",
+      "let a = b'x;\n",
+      "let a = r#;\n",
+      "/* open /* nested */\n",
+    ])
+      expect([open, await rustComments("a.rs", open)]).toEqual([open, null]);
+  });
+});
+
 describe("the bundles", () => {
   test("leave the language table out of every adapter, so a new language changes only the scanner", async () => {
     for (const [source, text] of Object.entries(await bundled()))
@@ -466,9 +623,10 @@ describe("the pre-commit hook", () => {
 
   test("judges each language with the adapter installed for it", () => {
     const dir = repo();
-    installGates(dir, ["no-comments-dart", "no-comments-sql", "no-comments-shell"]);
+    installGates(dir, ["no-comments-dart", "no-comments-sql", "no-comments-shell", "no-comments-rust"]);
     writeFiles(dir, {
       "lib/a.dart": "void f() {} // why\n",
+      "src/a.rs": '#[doc = "why"]\nfn f() {}\n',
       "db/a.sql": "select 1; -- why\n",
       "bin/tool": "#!/bin/sh\n# why\n",
       "a.ts": "// why\n",
@@ -479,6 +637,7 @@ describe("the pre-commit hook", () => {
         "no-comments: bin/tool:2  # why",
         "no-comments: db/a.sql:1  -- why",
         "no-comments: lib/a.dart:1  // why",
+        'no-comments: src/a.rs:1  #[doc = "why"]',
         "  Remove each comment; a why belongs in a name, a test or the docs.",
         "",
       ].join("\n"),
