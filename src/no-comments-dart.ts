@@ -1,3 +1,4 @@
+import { bracketsOf } from "./no-comments-brackets";
 import type { CommentsOf } from "./no-comments-languages";
 import { SHEBANG_PREFIX } from "./no-comments-route";
 import {
@@ -60,9 +61,9 @@ function commentSpans(text: string): Lexed {
 
   function code(closesInterpolation: boolean): Stopped | null {
     const start = at;
-    let depth = 0;
+    const brackets = bracketsOf(["(", "[", "{"]);
     while (at < text.length) {
-      const char = text[at];
+      const char = text[at] ?? "";
       const next = text[at + 1];
       let stopped: Stopped | null = null;
       if (char === "/" && next === "/") lineComment();
@@ -71,17 +72,16 @@ function commentSpans(text: string): Lexed {
       else if (char === "r" && (next === "'" || next === '"') && !IDENTIFIER_CHAR.test(text[at - 1] ?? "")) {
         at++;
         stopped = string(true);
-      } else if (char === "{") {
-        depth++;
+      } else if (closesInterpolation && char === "}" && brackets.isEmpty()) {
         at++;
-      } else if (char === "}") {
+        return null;
+      } else if (brackets.has(char)) {
+        stopped = brackets.take(at, char);
         at++;
-        if (closesInterpolation && depth === 0) return null;
-        depth--;
       } else at++;
       if (stopped !== null) return stopped;
     }
-    return closesInterpolation ? unterminated(start, "interpolation") : null;
+    return brackets.unclosed() ?? (closesInterpolation ? unterminated(start, "interpolation") : null);
   }
 
   return code(false) ?? { kind: "lexed", spans };

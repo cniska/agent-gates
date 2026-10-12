@@ -91,6 +91,7 @@ export const SCANNER_FILE: GateFile = {
     { version: 9, sha256: "f1c9e9a8b294f0b52d906017f8429d94ec5e52a3c85d78c50b961fed7f472be0" },
     { version: 10, sha256: "87e1b9d76afd4f6f4db2ffeec90f845f743da50637eac543a2f53a7fb6264579" },
     { version: 11, sha256: "4591425d50723eadc16700697cb2ec4b06ba207dfe2b2cdfa693b4aa4e0ced62" },
+    { version: 12, sha256: "b2a49bda7916ad313518d2f7871ccecd5773698e0df42259501d4d3b354d3064" },
   ],
 };
 
@@ -138,6 +139,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 1, sha256: "25cc760fcd6ef317da0c52457e79e84926f4b87f81e67630b40dfd666f0feb2a" },
     { version: 2, sha256: "92df54b913391968c95d2ac104444ca357925045e79031e6f6351aa9e8e83ba3" },
     { version: 3, sha256: "54036326e9dabcaa7d6c1f30b5d82d7c84c9c4873d152a1687445bbd9ec47017" },
+    { version: 4, sha256: "964486eb57d78a359633f9b34839455b736d553b8ee8ae31e3b716ee05997fde" },
   ]),
   sql: adapterFile("sql", [
     { version: 1, sha256: "261cd8dc159c4222234bd5bc2796723b803ecf0cf448a7d417471faea8c3ef13" },
@@ -146,15 +148,18 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 4, sha256: "c3035a336ca5f556ab3a5eb188463e79fe1cf3afd2ff168fb9f3320c6d6cc077" },
     { version: 5, sha256: "7804a1cdf0715495ad67b08312e11849169ad90d0d89fd428b53d46e5fea8bfb" },
     { version: 6, sha256: "711bdf71c18631a5205f043567e1b7c7f3c276fa999b90a5372cf0d2df3c09b9" },
+    { version: 7, sha256: "132693681e45619b1e4c2f259d0d8052100c7b27ae42d23f7b39418706dd297f" },
   ]),
   shell: adapterFile("shell", [
     { version: 1, sha256: "89a9bdde90915a96d5110890ac7dd715a098676cf44976c0bc2301b4012ab1b2" },
     { version: 2, sha256: "5476432be3f3aa04c3166c32991414f6438d399730b5f0d3bcebe73ee63e4b80" },
     { version: 3, sha256: "440f348f033528b6281b9af016eb0b4f2902b812dd8e60e34fd20eb6c43c1989" },
+    { version: 4, sha256: "e052ffc1dcafa3aaf4cda173aaaba1d79ffb75ddaa80bbf94aec5ea31e20b73c" },
   ]),
   rust: adapterFile("rust", [
     { version: 1, sha256: "f7d0dd77af2f515cca76525640e20f72984a24e995031360b190b31478634daa" },
     { version: 2, sha256: "9e73f2d918880da44d3e7980a8fb9b07a58f325bc59a9374faaceba1373c4176" },
+    { version: 3, sha256: "1d30c5169f78c97c3fbe2e652df2a0325a0b1cf3f2fcd86ff7c86f20e0e22157" },
   ]),
 };
 

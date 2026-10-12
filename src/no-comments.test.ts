@@ -217,6 +217,16 @@ describe("the dart adapter", () => {
       unparsed(2, "Unterminated interpolation"),
     );
   });
+
+  test("refuses unbalanced brackets, naming where one opens unclosed or closes unopened", () => {
+    expect(dartComments("a.dart", "void f() {\n  g([1, (2)], {'a': 1});\n}\n")).toEqual(read([]));
+    expect(dartComments("a.dart", `final s = '\${[1].map((x) => '\${x}')}';\n`)).toEqual(read([]));
+    expect(dartComments("a.dart", "void f() {\n  g(1;\n}\n")).toEqual(unparsed(3, 'Unexpected "}"'));
+    expect(dartComments("a.dart", "void f() {\n  g(1);\n")).toEqual(unparsed(1, "Unterminated brace"));
+    expect(dartComments("a.dart", "final a = [1, 2;\n")).toEqual(unparsed(1, "Unterminated bracket"));
+    expect(dartComments("a.dart", "final a = 1);\n")).toEqual(unparsed(1, 'Unexpected ")"'));
+    expect(dartComments("a.dart", `final s = '\${(1}';\n`)).toEqual(unparsed(1, 'Unexpected "}"'));
+  });
 });
 
 describe("the sql adapter", () => {
@@ -296,6 +306,20 @@ describe("the sql adapter", () => {
     );
     expect(sqlComments("a.sql", "select $a$\n$b$ $a$\n$b$;\n")).toEqual(
       unparsed(3, "Unterminated dollar quote"),
+    );
+  });
+
+  test("refuses unbalanced brackets and a $ that starts no dollar quote or parameter", () => {
+    expect(sqlComments("a.sql", "select (a[1]) from t where b in ('(', ']');\n")).toEqual(read([]));
+    expect(sqlComments("a.sql", "select 1;\nselect count(*;\n")).toEqual(
+      unparsed(2, "Unterminated parenthesis"),
+    );
+    expect(sqlComments("a.sql", "select a[1;\n")).toEqual(unparsed(1, "Unterminated bracket"));
+    expect(sqlComments("a.sql", "select 1);\n")).toEqual(unparsed(1, 'Unexpected ")"'));
+    expect(sqlComments("a.sql", "select (a];\n")).toEqual(unparsed(1, 'Unexpected "]"'));
+    expect(sqlComments("a.sql", "select 1;\nselect $ from t;\n")).toEqual(unparsed(2, 'Unexpected "$"'));
+    expect(sqlComments("a.sql", "do $$ print(( $$;\n-- after\n")).toEqual(
+      read([{ line: 2, text: "-- after" }]),
     );
   });
 });

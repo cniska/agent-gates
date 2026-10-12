@@ -1,3 +1,4 @@
+import { bracketsOf } from "./no-comments-brackets";
 import type { CommentsOf } from "./no-comments-languages";
 import {
   type Lexed,
@@ -6,6 +7,7 @@ import {
   refusedComments,
   type Span,
   type Stopped,
+  unexpected,
   unterminated,
 } from "./no-comments-spans";
 
@@ -14,6 +16,8 @@ const POSTGRES_LETTER = "A-Za-z\\u0080-\\uffff_";
 const IDENTIFIER_CHAR = new RegExp(`[${POSTGRES_LETTER}0-9$]`);
 
 const DOLLAR_TAG = new RegExp(`\\$(?:[${POSTGRES_LETTER}][${POSTGRES_LETTER}0-9]*)?\\$`, "y");
+
+const DIGIT = /^[0-9]$/;
 
 const ESCAPE_STRING_PREFIX = /^[Ee]$/;
 
@@ -39,7 +43,7 @@ function commentSpans(text: string): Lexed {
   function dollarQuoted(start: number, to: number): number | Stopped {
     DOLLAR_TAG.lastIndex = start;
     const tag = DOLLAR_TAG.exec(text)?.[0];
-    if (tag === undefined) return start + 1;
+    if (tag === undefined) return DIGIT.test(text[start + 1] ?? "") ? start + 1 : unexpected(start, "$");
     const close = text.indexOf(tag, start + tag.length);
     if (close < 0 || close + tag.length > to) return unterminated(start, "dollar quote");
     const before = spans.length;
@@ -74,13 +78,15 @@ function commentSpans(text: string): Lexed {
   }
 
   function code(from: number, to: number): Stopped | null {
+    const brackets = bracketsOf(["(", "["]);
     let at = from;
     while (at < to) {
-      const next = token(at, to);
+      const char = text[at] ?? "";
+      const next = brackets.has(char) ? (brackets.take(at, char) ?? at + 1) : token(at, to);
       if (typeof next !== "number") return next;
       at = next;
     }
-    return null;
+    return brackets.unclosed();
   }
 
   return code(0, text.length) ?? { kind: "lexed", spans };

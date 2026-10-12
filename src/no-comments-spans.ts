@@ -21,6 +21,10 @@ export function unterminated(at: number, construct: string): Stopped {
   return { kind: "stopped", at, reason: `Unterminated ${construct}` };
 }
 
+export function unexpected(at: number, token: string): Stopped {
+  return { kind: "stopped", at, reason: `Unexpected "${token}"` };
+}
+
 export function nestedBlockEnd(text: string, start: number, to: number): number | null {
   let depth = 0;
   let at = start;

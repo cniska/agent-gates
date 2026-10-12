@@ -82,9 +82,10 @@ A comment a tool reads stays:
 | Rust | none; a first-line shebang is not a comment, and an attribute without doc text, such as `#[doc(hidden)]`, is code |
 | Every language | a gate marker on a line of its own, this tool's `agent-gate:<part>:<version>` or another's `<tool>-gate:[<part>:]<version>` |
 
-How SQL, shell and Rust are read:
+How SQL, Dart, shell and Rust are read:
 
-- **SQL** is read as PostgreSQL, with its dollar quotes and `E''` strings. A dollar-quoted body that reads as SQL is judged as code, so a `--` in a dollar-quoted text literal is refused. A body that does not read as SQL is left alone as text.
+- **SQL** is read as PostgreSQL, with its dollar quotes and `E''` strings. A dollar-quoted body that reads as SQL is judged as code, so a `--` in a dollar-quoted text literal is refused. A body that does not read as SQL is left alone as text. An unclosed quote, comment or dollar quote, an unbalanced parenthesis or bracket, and a `$` that starts neither a dollar quote nor a positional parameter are refused as not parsing.
+- **Dart** is read by a lexer that refuses an unclosed string, comment or interpolation and an unbalanced parenthesis, bracket or brace as not parsing.
 - **Shell** is read by a lexer, not a parser. A `#` starts a comment only where a word starts, and never inside quotes, parameter and arithmetic expansions, the regex after `=~`, or heredoc bodies. Only an unclosed quote, expansion, substitution, backquote or heredoc is refused as not parsing, at the line where it opens.
 - **Rust** is read by a lexer that finds the comments rustc's own lexer finds, with raw strings, byte and C strings, char literals, lifetimes and raw identifiers. An attribute that carries doc text is refused as one comment, from its `#` to its closing `]`: one with `doc = …` anywhere inside it, so `#[doc = …]`, `#![doc = …]` and `#[cfg_attr(docsrs, doc = …)]` alike. `#[doc(hidden)]`, `#[doc(alias = …)]` and `#[cfg(doc)]` carry none. A `#[doc = $doc]` that a `macro_rules!` forwards is refused too, so a macro that generates docs is refused with them. Only an unclosed literal, char literal or block comment is refused as not parsing, at the line where it opens.
 
