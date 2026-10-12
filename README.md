@@ -12,13 +12,56 @@ Commit gates a project owns: git hooks that refuse a bad commit locally, and the
 | `no-comments-sql` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment in a PostgreSQL file the commit changes, other than one a tool reads |
 | `no-comments-shell` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment in a shell script the commit changes, other than the shebang and a `shellcheck` directive |
 
-Each installed file carries `# agent-gate:<part>:<version>` (`//` in a `.cjs`); the installed gates are read back from those markers, so there is no config file. The files are committed with the project, so its contributors and CI are gated without agent-gates. Installing wires `core.hooksPath` to `.githooks` in this clone, adds the same as `package.json`'s `prepare` script where there is one, so a fresh clone wires itself on install, and marks `.githooks/` `linguist-generated`. A project without `package.json` asks its contributors to run `git config core.hooksPath .githooks` once; CI judges every push either way.
+### Installed files
 
-`commits.yml` judges every commit a push or pull request brings, so a gated repository merges pull requests by squashing with the pull request's title as the whole message; GitHub's default squash body, a revert's generated message and a `fixup!`, `squash!` or `amend!` commit are refused.
+- **No config file.** Each installed file carries `# agent-gate:<part>:<version>` (`//` in a `.cjs`), and the installed gates are read back from those markers.
+- **Committed with the project.** Its contributors and CI are gated without installing agent-gates.
+- **Wired on install.** Installing points `core.hooksPath` at `.githooks` in the current clone and marks `.githooks/` `linguist-generated`. Where the project has a `package.json`, it adds the same wiring to the `prepare` script, so a fresh clone wires itself on install.
+- **Without a `package.json`,** each contributor runs `git config core.hooksPath .githooks` once. CI judges every push either way.
 
-`.githooks/pre-commit` runs each executable in `.githooks/pre-commit.d/` in name order and stops at the first that fails, so a project runs its own check on commit by adding one there. Install refuses while `.githooks/pre-commit` is the project's own hook rather than this one.
+### Commit subjects
 
-The `no-comments-<language>` gates judge each file a commit changes as a whole, read from the index, and in CI each file the push changes, read at its head; a file that does not parse is refused. They need `node` on `PATH` and nothing installed in the project. They skip files git marks `linguist-generated` or `linguist-vendored`, binary files, symlinks, and files whose first 400 characters say `GENERATED` or `auto-generated`; a file with no extension is routed by its shebang. A comment a tool reads stays: `@ts-`, `eslint-`, `biome-ignore`, `prettier-ignore`, `#__PURE__`, `/// <reference`, `/*!`, `@vitest-environment`, the JSDoc `@type`, `@typedef` and all-`@param` blocks plain JavaScript types itself with, Dart's `ignore:`, `ignore_for_file:`, `coverage:` and `@dart=`, drizzle's `--> statement-breakpoint`, a shell script's first-line shebang and `shellcheck` directives, and the `agent-gate` markers. `.sql` files are read as PostgreSQL, with its dollar quotes and `E''` strings; a dollar-quoted body that reads as SQL is judged as code, so a `--` in a dollar-quoted text literal is refused, and one that does not is left alone as text. A shell script is read by a lexer, not a parser: a `#` starts a comment only where a word starts and outside quotes, parameter and arithmetic expansions, the regex after `=~` and heredoc bodies, and only an unclosed quote, substitution or heredoc is refused as not parsing. Code embedded in another language, such as shell in a workflow's `run:` or SQL in a string, and mixed files such as `.vue` are not judged. Removing a language is deleting its `.githooks/no-comments/<language>.cjs`.
+`commits.yml` judges every commit a push or pull request brings. A gated repository therefore merges pull requests by squashing, with the pull request's title as the whole message. The workflow refuses:
+
+- GitHub's default squash body
+- a revert's generated message
+- a `fixup!`, `squash!` or `amend!` commit
+
+### Pre-commit steps
+
+`.githooks/pre-commit` runs each executable in `.githooks/pre-commit.d/` in name order, and stops at the first that fails. A project runs its own check on commit by adding one there.
+
+### No comments
+
+The `no-comments-<language>` gates judge whole files:
+
+- On commit, each file the commit changes, read from the index.
+- In CI, each file the push changes, read at its head.
+- A file that does not parse is refused.
+
+They need `node` on `PATH` and nothing installed in the project. A file with no extension is routed by its shebang. They skip:
+
+- files git marks `linguist-generated` or `linguist-vendored`
+- binary files and symlinks
+- files whose first 400 characters say `GENERATED` or `auto-generated`
+- code embedded in another language, such as shell in a workflow's `run:` or SQL in a string, and mixed files such as `.vue`
+
+A comment a tool reads stays:
+
+| Language | Kept comments |
+| --- | --- |
+| JavaScript, TypeScript | `@ts-`, `eslint-`, `biome-ignore`, `prettier-ignore`, `#__PURE__`, `/// <reference`, `/*!`, `@vitest-environment`; in plain JavaScript, the JSDoc `@type`, `@typedef` and all-`@param` blocks it types itself with |
+| Dart | `ignore:`, `ignore_for_file:`, `coverage:`, `@dart=` |
+| SQL | drizzle's `--> statement-breakpoint` |
+| Shell | the first-line shebang, `shellcheck` directives |
+| Every language | the `agent-gate` markers |
+
+How SQL and shell are read:
+
+- **SQL** is read as PostgreSQL, with its dollar quotes and `E''` strings. A dollar-quoted body that reads as SQL is judged as code, so a `--` in a dollar-quoted text literal is refused. A body that does not read as SQL is left alone as text.
+- **Shell** is read by a lexer, not a parser. A `#` starts a comment only where a word starts, and never inside quotes, parameter and arithmetic expansions, the regex after `=~`, or heredoc bodies. Only an unclosed quote, substitution or heredoc is refused as not parsing.
+
+To remove a language, delete its `.githooks/no-comments/<language>.cjs`.
 
 ## Commands
 
@@ -29,12 +72,32 @@ Each command prints one JSON line.
 | `agent-gates install [<gate>...]` | Install the named gates, bring the installed ones up to date, and report each file's state before it acted |
 | `agent-gates doctor` | Judge each gate file, `core.hooksPath`, the `prepare` script and, with a `no-comments` gate installed, whether its languages match the tracked files, as `ok`, `warn` or `fail` with the fix; exit 1 when one fails |
 
-A gate file is `installed`, `missing`, `behind` (an earlier version's bytes), `changed`, `ahead` (a newer agent-gates wrote it) or `not-executable`. `install` writes a missing, behind or not-executable file, sets a changed one aside as `<file>.agent-gates-backup` before replacing it, leaves an ahead one alone, and refuses when `core.hooksPath` or `prepare` already hold something else, or `.githooks/pre-commit` is the project's own hook.
+Each gate file is in one of these states, and `install` acts on it:
+
+| State | Means | `install` |
+| --- | --- | --- |
+| `installed` | the current version | leaves it |
+| `missing` | not there | writes it |
+| `behind` | an earlier version's bytes | writes it |
+| `changed` | matches no version | sets it aside as `<file>.agent-gates-backup`, then writes it |
+| `ahead` | a newer agent-gates wrote it | leaves it alone |
+| `not-executable` | a hook git would skip | writes it |
+
+`install` refuses when `core.hooksPath` or `prepare` already hold something else, or when `.githooks/pre-commit` is the project's own hook rather than this one.
 
 ## Extending
 
-- **A language:** add its extensions and shebang interpreters to `LANGUAGES` in `src/no-comments-languages.ts`, and write `src/no-comments-<language>.ts` exporting `comments`, which returns the comments it refuses, or `null` for a file that does not parse. Then add its tests, its `GATES` entry and its README row, run `bun run gates:bundle`, and record the bundle's hash as [AGENTS.md](AGENTS.md) describes; `bun run check` fails until the entry, the bundle and the hash agree.
-- **Another SQL dialect:** `.sql` is read as PostgreSQL, which SQLite also passes but MySQL, BigQuery and Snowflake do not. Supporting them takes a table of lexer rules per dialect in the SQL adapter, chosen per path by a git attribute such as `agent-gates-sql=mysql`.
+To add a language:
+
+1. Add its extensions and shebang interpreters to `LANGUAGES` in `src/no-comments-languages.ts`.
+2. Write a lexer in `src/no-comments-<language>.ts` that exports `comments`, which returns the comments it refuses, or `null` for a file that does not parse.
+3. Check the lexer against the language's own tokenizer over real and deliberately broken files. It must find the same comments, and never refuse a file the tokenizer accepts.
+4. Add its tests, its `GATES` entry and its README row.
+5. Run `bun run gates:bundle`, and record the bundle's hash as [AGENTS.md](AGENTS.md) describes.
+
+`bun run check` fails until the entry, the bundle and the hash agree. JavaScript and TypeScript are the exception to step 2: they use Babel's parser, because their comments cannot be found without parsing.
+
+To support another SQL dialect: `.sql` is read as PostgreSQL, which SQLite also passes but MySQL, BigQuery and Snowflake do not. Supporting them takes a table of lexer rules per dialect in the SQL adapter, chosen per path by a git attribute such as `agent-gates-sql=mysql`.
 
 ## Setup
 
