@@ -10,6 +10,8 @@ const DOLLAR_TAG = new RegExp(`\\$(?:[${POSTGRES_LETTER}][${POSTGRES_LETTER}0-9]
 
 const ESCAPE_STRING_PREFIX = /^[Ee]$/;
 
+const DRIZZLE_STATEMENT_BREAKPOINT = "--> statement-breakpoint";
+
 function refusedSpans(text: string): Span[] | null {
   const spans: Span[] = [];
   const followsIdentifier = (index: number) => IDENTIFIER_CHAR.test(text[index - 1] ?? "");
@@ -40,7 +42,7 @@ function refusedSpans(text: string): Span[] | null {
 
   function lineComment(start: number, to: number): number {
     const end = Math.min(lineEnd(text, start), to);
-    spans.push({ start, end });
+    if (text.slice(start, end).trim() !== DRIZZLE_STATEMENT_BREAKPOINT) spans.push({ start, end });
     return end;
   }
 

@@ -259,6 +259,17 @@ describe("the sql adapter", () => {
     expect(await sqlComments("a.sql", "select a$b$c from t;")).toEqual([]);
   });
 
+  test("keeps drizzle's statement breakpoint, and only that exact comment", async () => {
+    const text = "create table a (id int);\n--> statement-breakpoint\ncreate table b (id int);\n";
+    expect(await sqlComments("a.sql", text)).toEqual([]);
+    expect(await sqlComments("a.sql", "--> statement-breakpoint and why\n-- statement-breakpoint\n")).toEqual(
+      [
+        { line: 1, body: "--> statement-breakpoint and why" },
+        { line: 2, body: "-- statement-breakpoint" },
+      ],
+    );
+  });
+
   test("reads letters beyond ASCII in identifiers and dollar quote tags as Postgres does", async () => {
     expect(await sqlComments("a.sql", "select $ä$Don't$ä$; -- c")).toEqual([{ line: 1, body: "-- c" }]);
     expect(await sqlComments("a.sql", "select ä$b$ from t; -- c")).toEqual([{ line: 1, body: "-- c" }]);
