@@ -1,6 +1,6 @@
 import type { CommentsOf } from "./no-comments-languages";
 import { lineEnd } from "./no-comments-route";
-import { commentsAt, nestedBlockEnd, type Span } from "./no-comments-spans";
+import { nestedBlockEnd, refusedComments, type Span } from "./no-comments-spans";
 
 const POSTGRES_LETTER = "A-Za-z\\u0080-\\uffff_";
 
@@ -12,7 +12,7 @@ const ESCAPE_STRING_PREFIX = /^[Ee]$/;
 
 const DRIZZLE_STATEMENT_BREAKPOINT = "--> statement-breakpoint";
 
-function refusedSpans(text: string): Span[] | null {
+function commentSpans(text: string): Span[] | null {
   const spans: Span[] = [];
   const followsIdentifier = (index: number) => IDENTIFIER_CHAR.test(text[index - 1] ?? "");
 
@@ -42,7 +42,7 @@ function refusedSpans(text: string): Span[] | null {
 
   function lineComment(start: number, to: number): number {
     const end = Math.min(lineEnd(text, start), to);
-    if (text.slice(start, end).trim() !== DRIZZLE_STATEMENT_BREAKPOINT) spans.push({ start, end });
+    spans.push({ start, end });
     return end;
   }
 
@@ -74,7 +74,8 @@ function refusedSpans(text: string): Span[] | null {
   return code(0, text.length) ? spans : null;
 }
 
-export const comments: CommentsOf = async (_path, text) => {
-  const spans = refusedSpans(text);
-  return spans === null ? null : commentsAt(text, spans);
-};
+function isKept(text: string, { start, end }: Span): boolean {
+  return text.slice(start, end).trim() === DRIZZLE_STATEMENT_BREAKPOINT;
+}
+
+export const comments: CommentsOf = refusedComments(commentSpans, isKept);

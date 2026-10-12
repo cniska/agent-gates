@@ -1,8 +1,6 @@
 import type { CommentsOf } from "./no-comments-languages";
-import { lineEnd } from "./no-comments-route";
-import { commentsAt, type Span } from "./no-comments-spans";
-
-const SHEBANG = "#!";
+import { lineEnd, SHEBANG_PREFIX } from "./no-comments-route";
+import { refusedComments, type Span } from "./no-comments-spans";
 
 const SHELLCHECK_DIRECTIVE = /^#\s*shellcheck\s/;
 
@@ -362,14 +360,7 @@ function commentSpans(text: string): Span[] | null {
 
 function isKept(text: string, { start, end }: Span): boolean {
   const body = text.slice(start, end);
-  return (start === 0 && body.startsWith(SHEBANG)) || SHELLCHECK_DIRECTIVE.test(body);
+  return (start === 0 && body.startsWith(SHEBANG_PREFIX)) || SHELLCHECK_DIRECTIVE.test(body);
 }
 
-export const comments: CommentsOf = async (_path, text) => {
-  const spans = commentSpans(text);
-  if (spans === null) return null;
-  return commentsAt(
-    text,
-    spans.filter((span) => !isKept(text, span)),
-  );
-};
+export const comments: CommentsOf = refusedComments(commentSpans, isKept);

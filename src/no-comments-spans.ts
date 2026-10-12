@@ -1,4 +1,4 @@
-import type { Comment } from "./no-comments-languages";
+import type { Comment, CommentsOf } from "./no-comments-languages";
 import { firstLine } from "./no-comments-route";
 
 export type Span = { readonly start: number; readonly end: number };
@@ -21,11 +21,25 @@ export function nestedBlockEnd(text: string, start: number, to: number): number 
   return null;
 }
 
-export function commentsAt(text: string, spans: readonly Span[]): Comment[] {
+function commentsAt(text: string, spans: readonly Span[]): Comment[] {
   let line = 1;
   let counted = 0;
   return spans.map(({ start, end }) => {
     for (; counted < start; counted++) if (text.charCodeAt(counted) === NEWLINE) line++;
     return { line, body: firstLine(text.slice(start, end)).trim() };
   });
+}
+
+export function refusedComments(
+  commentSpans: (text: string) => readonly Span[] | null,
+  isKept: (text: string, span: Span) => boolean,
+): CommentsOf {
+  return async (_path, text) => {
+    const spans = commentSpans(text);
+    if (spans === null) return null;
+    return commentsAt(
+      text,
+      spans.filter((span) => !isKept(text, span)),
+    );
+  };
 }

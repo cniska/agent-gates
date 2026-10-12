@@ -1,24 +1,23 @@
 import type { CommentsOf } from "./no-comments-languages";
-import { lineEnd } from "./no-comments-route";
-import { commentsAt, nestedBlockEnd, type Span } from "./no-comments-spans";
+import { lineEnd, SHEBANG_PREFIX } from "./no-comments-route";
+import { nestedBlockEnd, refusedComments, type Span } from "./no-comments-spans";
 
 const ANALYZER_DIRECTIVE = /^(?:ignore:|ignore_for_file:|coverage:|@dart\s*=)/;
+
+const LINE_COMMENT = "//";
 
 const DOC_SLASH_AND_SPACE = /^\/?\s*/;
 
 const IDENTIFIER_CHAR = /[A-Za-z0-9_$]/;
 
-const SCRIPT_TAG = "#!";
-
-function refusedSpans(text: string): Span[] | null {
+function commentSpans(text: string): Span[] | null {
   const spans: Span[] = [];
-  let at = text.startsWith(SCRIPT_TAG) ? lineEnd(text, 0) : 0;
+  let at = text.startsWith(SHEBANG_PREFIX) ? lineEnd(text, 0) : 0;
 
   function lineComment(): void {
     const start = at;
     at = lineEnd(text, at);
-    const body = text.slice(start + 2, at).replace(DOC_SLASH_AND_SPACE, "");
-    if (!ANALYZER_DIRECTIVE.test(body)) spans.push({ start, end: at });
+    spans.push({ start, end: at });
   }
 
   function blockComment(): boolean {
@@ -81,7 +80,10 @@ function refusedSpans(text: string): Span[] | null {
   return code(false) ? spans : null;
 }
 
-export const comments: CommentsOf = async (_path, text) => {
-  const spans = refusedSpans(text);
-  return spans === null ? null : commentsAt(text, spans);
-};
+function isKept(text: string, { start, end }: Span): boolean {
+  if (!text.startsWith(LINE_COMMENT, start)) return false;
+  const body = text.slice(start + LINE_COMMENT.length, end).replace(DOC_SLASH_AND_SPACE, "");
+  return ANALYZER_DIRECTIVE.test(body);
+}
+
+export const comments: CommentsOf = refusedComments(commentSpans, isKept);

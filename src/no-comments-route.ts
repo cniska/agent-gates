@@ -2,6 +2,8 @@ export type Route =
   | { readonly kind: "extension"; readonly extension: string }
   | { readonly kind: "first-line" };
 
+export const SHEBANG_PREFIX = "#!";
+
 const SHEBANG = /^#!\s*(?:\/usr\/bin\/env\s+(?:-\S+\s+)*)?(?:\S*\/)?([^\s/]+)/;
 
 export function routeOf(path: string): Route {
