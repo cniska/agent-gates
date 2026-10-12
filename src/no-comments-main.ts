@@ -9,11 +9,15 @@ import { type AdapterOf, findings, type Judged, judgedChange, verdict } from "./
 
 const SCANNER = "scan.cjs";
 
+const ALL = "--all";
+
+const FLAG_PREFIX = "-";
+
 const scanUsageError = usageErrors<{ readonly wrong_arguments: { readonly got: readonly string[] } }>({
   wrong_arguments: {
     message: ({ got }) =>
-      `scan.cjs takes no arguments or a base and a head, and got ${got.length}: ${got.join(" ")}`,
-    resolve: () => "node scan.cjs [<base> <head>]",
+      `scan.cjs takes no arguments, ${ALL}, or a base and a head, and got ${got.length}: ${got.join(" ")}`,
+    resolve: () => `node scan.cjs [${ALL} | <base> <head>]`,
   },
 });
 
@@ -66,8 +70,10 @@ function adaptersBeside(dir: string): AdapterOf {
 }
 
 function judgedOf(args: readonly string[]): Judged | null {
-  const [base, head] = args;
+  if (args.length === 1 && args[0] === ALL) return { kind: "all" };
+  if (args.some((arg) => arg.startsWith(FLAG_PREFIX))) return null;
   if (args.length === 0) return { kind: "staged" };
+  const [base, head] = args;
   if (args.length === 2 && base !== undefined && head !== undefined) return { kind: "pushed", base, head };
   return null;
 }

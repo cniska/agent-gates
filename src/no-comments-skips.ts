@@ -1,19 +1,8 @@
 import { gitOutput, nulFields } from "./git";
 
-export const HEAD_SPAN = 400;
-
-const GENERATED = /\bGENERATED\b/;
-
-const AUTO_GENERATED = /\bauto-generated\b/i;
-
 const ATTRIBUTES = ["linguist-generated", "linguist-vendored"];
 
 const FIELDS_PER_ATTRIBUTE = 3;
-
-export function marksGenerated(text: string): boolean {
-  const head = text.slice(0, HEAD_SPAN);
-  return GENERATED.test(head) || AUTO_GENERATED.test(head);
-}
 
 export function outsideTheCode(root: string, paths: readonly string[]): Set<string> {
   if (paths.length === 0) return new Set();

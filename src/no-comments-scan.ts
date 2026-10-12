@@ -2,12 +2,13 @@ import { invariant, unreachable } from "./assert";
 import { markerLine } from "./gate-marker";
 import { blobsOf, gitOutput, mergeBase, nulFields } from "./git";
 import { type CommentsOf, type Language, languageOf, type Reading } from "./no-comments-languages";
-import { marksGenerated, outsideTheCode } from "./no-comments-skips";
+import { outsideTheCode } from "./no-comments-skips";
 import { firstLine } from "./no-comments-spans";
 
 export type Judged =
   | { readonly kind: "staged" }
-  | { readonly kind: "pushed"; readonly base: string; readonly head: string };
+  | { readonly kind: "pushed"; readonly base: string; readonly head: string }
+  | { readonly kind: "all" };
 
 type Side = { readonly path: string; readonly blob: string };
 
@@ -57,6 +58,8 @@ function diffOf(root: string, judged: Judged): string[] {
       return ["diff", "--cached"];
     case "pushed":
       return ["diff", mergeBase(root, judged.base, judged.head) ?? emptyTree(root), judged.head];
+    case "all":
+      return ["diff", "--cached", emptyTree(root)];
     default:
       return unreachable(judged);
   }
@@ -102,7 +105,7 @@ function binaryPaths(fields: readonly string[]): Set<string> {
   return binary;
 }
 
-function filesOf(root: string, sides: readonly Side[]): JudgedFile[] {
+export function filesOf(root: string, sides: readonly Side[]): JudgedFile[] {
   const texts = blobsOf(
     root,
     sides.map(({ blob }) => blob),
@@ -114,7 +117,7 @@ function filesOf(root: string, sides: readonly Side[]): JudgedFile[] {
   });
 }
 
-export function judgedChange(root: string, judged: Judged): JudgedChange {
+export function changesInTheCode(root: string, judged: Judged): Change[] {
   const diff = diffOf(root, judged);
   const binary = binaryPaths(nulFields(gitOutput(root, [...diff, ...CHANGES, "--numstat"])));
   const textual = changesIn(nulFields(gitOutput(root, [...diff, ...CHANGES, "--raw", "--no-abbrev"]))).filter(
@@ -124,7 +127,11 @@ export function judgedChange(root: string, judged: Judged): JudgedChange {
     root,
     textual.map(({ head }) => head.path),
   );
-  const inTheCode = textual.filter(({ head }) => !outside.has(head.path));
+  return textual.filter(({ head }) => !outside.has(head.path));
+}
+
+export function judgedChange(root: string, judged: Judged): JudgedChange {
+  const inTheCode = changesInTheCode(root, judged);
   const bases = new Map(inTheCode.flatMap(({ base }) => (base === null ? [] : [[base.path, base]])));
   const files = filesOf(root, [...inTheCode.map(({ head }) => head), ...bases.values()]);
   const heads = inTheCode.map(({ base }, index) => {
@@ -132,10 +139,7 @@ export function judgedChange(root: string, judged: Judged): JudgedChange {
     invariant(file !== undefined, "each change's head is read");
     return { file, base: base === null ? null : { origin: base.origin, path: base.path } };
   });
-  return {
-    heads: heads.filter(({ file }) => !marksGenerated(file.text)),
-    bases: files.slice(inTheCode.length),
-  };
+  return { heads, bases: files.slice(inTheCode.length) };
 }
 
 function readingOf({ path, text }: JudgedFile, adapterOf: AdapterOf): Reading | null {

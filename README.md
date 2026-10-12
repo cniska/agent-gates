@@ -62,13 +62,12 @@ The `no-comments-<language>` gates refuse the comments a change adds:
 - A comment is added when its text, each line trimmed and its runs of whitespace collapsed, is not left in the comments the changed files held before the change. A comment the change moves, reindents or carries through a rename is not added, nor one a copy carries out of a source that drops it. One it edits by a word, splits, joins or duplicates is, a copy's included, and a file is first matched against its own earlier comments, so the duplicate is the one refused.
 - A file that does not parse is refused, with the line and the reason its parser gives, whatever it was before the change. A file that did not parse before the change brings no comments with it, so each of its comments is judged.
 
-The gates stop the comment count from growing; they do not drive it to zero. Comments already in the tree wait for a deliberate sweep.
+The gates stop the comment count from growing; they do not drive it to zero. Comments already in the tree wait for a deliberate sweep: `node .githooks/no-comments/scan.cjs --all` judges every comment of every tracked file, as the index holds it.
 
 They need `node` on `PATH` and nothing installed in the project. A file with no extension is routed by its shebang. They skip:
 
 - files git marks `linguist-generated` or `linguist-vendored`
 - binary files and symlinks
-- files whose first 400 characters say `GENERATED` or `auto-generated`
 - code embedded in another language, such as shell in a workflow's `run:` or SQL in a string, and mixed files such as `.vue`
 
 A comment a tool reads stays:
