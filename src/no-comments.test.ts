@@ -697,7 +697,11 @@ describe("the pre-commit hook", () => {
     writeFiles(dir, { "notes.md": "# notes\n" });
     expect(commit(dir, { add: ["notes.md"] })).toEqual({ status: 0, stderr: "" });
     writeFiles(dir, { "a.ts": "// why\n" });
-    expect(commit(dir, { add: ["a.ts"] })).toEqual({ status: 1, stderr: "no-comments: Error: loaded\n" });
+    const bug =
+      "no-comments: loaded; stop and hand this error to the owner as a bug in agent-gates; no command you run resolves it\n";
+    expect(commit(dir, { add: ["a.ts"] })).toEqual({ status: 1, stderr: bug });
+    const scan = spawnSync("node", [".githooks/no-comments/scan.cjs"], { cwd: dir, encoding: "utf8" });
+    expect([scan.status, scan.stderr]).toEqual([3, bug]);
     rmSync(join(dir, ".githooks/no-comments/javascript.cjs"));
     expect(commit(dir, { add: ["a.ts"] })).toEqual({ status: 0, stderr: "" });
   });
@@ -716,7 +720,7 @@ describe("the pre-commit hook", () => {
     expect(commit(dir)).toEqual({ status: 0, stderr: "" });
   });
 
-  test("refuses when node is not on PATH", () => {
+  test("exits 3 when node is not on PATH, since nothing was judged", () => {
     const dir = gated();
     const bin = scratchDir();
     symlinkSync(execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim(), join(bin, "git"));
@@ -726,7 +730,7 @@ describe("the pre-commit hook", () => {
       encoding: "utf8",
     });
     expect([run.status, run.stderr]).toEqual([
-      1,
+      3,
       "no-comments: node is not on PATH, so the commit's comments cannot be judged; install Node.js\n",
     ]);
   });
@@ -839,9 +843,13 @@ describe("the no-comments workflow", () => {
     });
   });
 
-  test("refuses a call that names a base without a head", () => {
+  test("exits 2 on a call that names a base without a head", () => {
     const dir = gated();
-    expect(scan(dir, ["HEAD"])).toEqual({ status: 2, stderr: "usage: node scan.cjs [<base> <head>]\n" });
+    expect(scan(dir, ["HEAD"])).toEqual({
+      status: 2,
+      stderr:
+        "no-comments: scan.cjs takes no arguments or a base and a head, and got 1: HEAD; node scan.cjs [<base> <head>]\n",
+    });
   });
 });
 

@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { refuser } from "./coded-error";
+import { faults, refusals } from "./coded-error";
 
 type GitRun = {
   readonly status: number | null;
@@ -8,8 +8,16 @@ type GitRun = {
   readonly err: string;
 };
 
-const refuseGit = refuser<{
+const gitRefusal = refusals<{
   readonly not_a_checkout: { readonly cwd: string };
+}>({
+  not_a_checkout: {
+    message: ({ cwd }) => `${cwd} is not inside a git checkout, so there is no project to gate`,
+    resolve: () => "cd into the project's checkout and run the command again",
+  },
+});
+
+const gitFault = faults<{
   readonly git_unavailable: { readonly detail: string };
   readonly git_failed: {
     readonly repo: string;
@@ -19,10 +27,6 @@ const refuseGit = refuser<{
     readonly detail: string;
   };
 }>({
-  not_a_checkout: {
-    message: ({ cwd }) => `${cwd} is not inside a git checkout, so there is no project to gate`,
-    resolve: () => "cd into the project's checkout and run the command again",
-  },
   git_unavailable: {
     message: ({ detail }) => `git could not run: ${detail}`,
     resolve: () => "stop and hand this error to the owner: git must be installed and on PATH",
@@ -40,7 +44,7 @@ function git(repo: string, args: readonly string[], input: string | null = null)
     stdio: [input === null ? "ignore" : "pipe", "pipe", "pipe"],
     maxBuffer: Number.POSITIVE_INFINITY,
   });
-  if (run.error) throw refuseGit("git_unavailable", { detail: run.error.message });
+  if (run.error) throw gitFault("git_unavailable", { detail: run.error.message });
   return { status: run.status, signal: run.signal, out: run.stdout, err: run.stderr.toString().trim() };
 }
 
@@ -49,7 +53,7 @@ function trimmed(run: GitRun): string {
 }
 
 function failed(repo: string, args: readonly string[], run: GitRun) {
-  return refuseGit("git_failed", {
+  return gitFault("git_failed", {
     repo,
     command: `git ${args.join(" ")}`,
     status: run.status,
@@ -60,7 +64,7 @@ function failed(repo: string, args: readonly string[], run: GitRun) {
 
 export function checkoutRoot(cwd: string): string {
   const run = git(cwd, ["rev-parse", "--show-toplevel"]);
-  if (run.status !== 0) throw refuseGit("not_a_checkout", { cwd });
+  if (run.status !== 0) throw gitRefusal("not_a_checkout", { cwd });
   return trimmed(run);
 }
 

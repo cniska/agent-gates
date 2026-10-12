@@ -1,7 +1,7 @@
 import type { Command } from "./cli-contract";
-import { refuser } from "./coded-error";
+import { usageErrors } from "./coded-error";
 
-export const refuseUsage = refuser<{
+export const usageError = usageErrors<{
   readonly unknown_command: { readonly name: string; readonly usage: string };
   readonly wrong_arity: {
     readonly command: string;
@@ -33,5 +33,5 @@ export function checkArity(
   { name, usage }: Pick<Command, "name" | "usage">,
 ): void {
   if (args.length < min || args.length > max)
-    throw refuseUsage("wrong_arity", { command: name, min, max, got: args, usage });
+    throw usageError("wrong_arity", { command: name, min, max, got: args, usage });
 }

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { unreachable } from "./assert";
-import { type CodedError, refuser } from "./coded-error";
+import { type Refusal, refusals } from "./coded-error";
 import { copyAside } from "./file-backup";
 import { firstMarkerLine } from "./gate-marker";
 import {
@@ -22,7 +22,7 @@ import { type PrepareState, prepareState } from "./package-manifest";
 
 export const SOURCE_DIR = resolve(import.meta.dir, "..", "gates");
 
-const refuseGates = refuser<{
+const gatesRefusal = refusals<{
   readonly no_gates_chosen: { readonly root: string };
   readonly hooks_path_occupied: { readonly root: string; readonly hooksPath: string };
   readonly pre_commit_occupied: { readonly root: string };
@@ -73,12 +73,12 @@ export type PlannedFile = {
 
 export type PreCommitState =
   | { readonly kind: "free" }
-  | { readonly kind: "occupied"; readonly refusal: CodedError };
+  | { readonly kind: "occupied"; readonly refusal: Refusal };
 
 export type HooksPathState =
   | { readonly kind: "wired" }
   | { readonly kind: "unset" }
-  | { readonly kind: "occupied"; readonly refusal: CodedError };
+  | { readonly kind: "occupied"; readonly refusal: Refusal };
 
 type InstalledFile = {
   readonly target: string;
@@ -141,14 +141,14 @@ export function hooksPathState(root: string): HooksPathState {
   const hooksPath = configValue(root, "core.hooksPath");
   if (hooksPath === null) return { kind: "unset" };
   if (resolve(root, hooksPath) === join(root, HOOKS_DIR)) return { kind: "wired" };
-  return { kind: "occupied", refusal: refuseGates("hooks_path_occupied", { root, hooksPath }) };
+  return { kind: "occupied", refusal: gatesRefusal("hooks_path_occupied", { root, hooksPath }) };
 }
 
 export function preCommitState(root: string, gates: readonly GateName[]): PreCommitState {
   if (!gates.some((gate) => GATES[gate].includes(PRE_COMMIT))) return { kind: "free" };
   const found = foundAt(join(root, PRE_COMMIT.target));
   if (found === null || markerOf(found.text) !== null) return { kind: "free" };
-  return { kind: "occupied", refusal: refuseGates("pre_commit_occupied", { root }) };
+  return { kind: "occupied", refusal: gatesRefusal("pre_commit_occupied", { root }) };
 }
 
 function actionFor(state: FileState): Action {
@@ -171,7 +171,7 @@ function writing<T>(path: string, write: () => T): T {
   try {
     return write();
   } catch (error) {
-    throw refuseGates("write_failed", { path, detail: String(error) });
+    throw gatesRefusal("write_failed", { path, detail: String(error) });
   }
 }
 
@@ -196,7 +196,7 @@ function applied(root: string, { file, path, source, state }: PlannedFile): stri
 export function installGates(root: string, named: readonly GateName[]): GatesInstalled {
   const installed = installedGates(root);
   const gates = GATE_NAMES.filter((gate) => named.includes(gate) || installed.includes(gate));
-  if (gates.length === 0) throw refuseGates("no_gates_chosen", { root });
+  if (gates.length === 0) throw gatesRefusal("no_gates_chosen", { root });
   const hooksPath = hooksPathState(root);
   if (hooksPath.kind === "occupied") throw hooksPath.refusal;
   const preCommit = preCommitState(root, gates);

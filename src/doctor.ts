@@ -1,5 +1,5 @@
 import { unreachable } from "./assert";
-import type { CodedError } from "./coded-error";
+import type { Refusal } from "./coded-error";
 import {
   type HooksPathState,
   hooksPathState,
@@ -31,7 +31,7 @@ type Health = {
 
 type DoctorReport = { readonly checks: readonly Health[]; readonly failing: number };
 
-function refusedHealth(name: string, error: CodedError): Health {
+function refusedHealth(name: string, error: Refusal): Health {
   return { name, state: "fail", detail: error.message, fix: error.resolve };
 }
 

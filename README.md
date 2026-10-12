@@ -89,7 +89,7 @@ To remove a language, delete its `.githooks/no-comments/<language>.cjs`.
 
 ## Commands
 
-Each command prints one JSON line.
+Each command prints one JSON line. An error goes to stderr with its `kind` and exits by it: 2 for `usage`, 1 for a `refusal` the caller can resolve, 3 for a `fault` that leaves nothing judged.
 
 | Command | Does |
 | --- | --- |

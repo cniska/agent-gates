@@ -78,6 +78,7 @@ export const SCANNER_FILE: GateFile = {
     { version: 5, sha256: "5481b108173a86206b2de03d8a4a72c3f14ca59eaa53722cdc52bda3f6666ce4" },
     { version: 6, sha256: "8fd5879e2857a5a372793b7c8decf0ca462ac76b151888d65162a2d6525813ef" },
     { version: 7, sha256: "fd45f4f0d2389327f95ae5b8b1bf35b01be32c60bc78db6990127a40df18aec3" },
+    { version: 8, sha256: "187bb31304854e2cadd9a5a7bef8082895a966a1ac33131e8c608c9636029ce8" },
   ],
 };
 
@@ -87,7 +88,10 @@ const NO_COMMENTS_SHARED: readonly GateFile[] = [
     source: "no-comments/pre-commit",
     target: `${HOOKS_DIR}/pre-commit.d/no-comments`,
     executable: true,
-    versions: [{ version: 1, sha256: "138a8e75142f58bc1a09418964b8a9cbd7944fc516920d307e58e00dd2a5290c" }],
+    versions: [
+      { version: 1, sha256: "138a8e75142f58bc1a09418964b8a9cbd7944fc516920d307e58e00dd2a5290c" },
+      { version: 2, sha256: "f182a3518696f42433f24c131376f0851cb976982af89cf52e4e11aaacf98d55" },
+    ],
   },
   SCANNER_FILE,
   {

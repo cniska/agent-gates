@@ -1,4 +1,4 @@
-import { checkArity, refuseUsage } from "./cli-args";
+import { checkArity, usageError } from "./cli-args";
 import type { Command } from "./cli-contract";
 import { installGates } from "./gates";
 import { GATE_NAMES, isGateName } from "./gates-contract";
@@ -11,7 +11,7 @@ export const installCommand: Command = {
   run(args) {
     checkArity(args, [0, GATE_NAMES.length], this);
     const unknown = args.filter((name) => !isGateName(name));
-    if (unknown.length > 0) throw refuseUsage("unknown_gate", { names: unknown, usage: this.usage });
+    if (unknown.length > 0) throw usageError("unknown_gate", { names: unknown, usage: this.usage });
     return { value: installGates(checkoutRoot(process.cwd()), args.filter(isGateName)), exitCode: 0 };
   },
 };

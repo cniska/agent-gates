@@ -1,6 +1,6 @@
-import { BUG, faulter } from "./coded-error";
+import { BUG, faults } from "./coded-error";
 
-const fault = faulter<{
+const fault = faults<{
   readonly unreachable: { readonly value: string };
   readonly invariant_failed: { readonly condition: string };
 }>({

@@ -2,14 +2,20 @@ import { existsSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { invariant } from "./assert";
-import { CodedError } from "./coded-error";
+import { EXIT_STATUS, recordOf, usageErrors } from "./coded-error";
 import { checkoutRoot } from "./git";
 import type { Comment, CommentsOf, Language } from "./no-comments-languages";
 import { type AdapterOf, findings, type Judged, judgedFiles, verdict } from "./no-comments-scan";
 
 const SCANNER = "scan.cjs";
 
-const USAGE = "usage: node scan.cjs [<base> <head>]";
+const scanUsageError = usageErrors<{ readonly wrong_arguments: { readonly got: readonly string[] } }>({
+  wrong_arguments: {
+    message: ({ got }) =>
+      `scan.cjs takes no arguments or a base and a head, and got ${got.length}: ${got.join(" ")}`,
+    resolve: () => "node scan.cjs [<base> <head>]",
+  },
+});
 
 function isComment(value: unknown): value is Comment {
   return (
@@ -56,17 +62,15 @@ function judgedOf(args: readonly string[]): Judged | null {
 async function main(): Promise<number> {
   const script = process.argv[1];
   invariant(script !== undefined, "node names the script it runs");
-  const judged = judgedOf(process.argv.slice(2));
-  if (judged === null) {
-    process.stderr.write(`${USAGE}\n`);
-    return 2;
-  }
+  const args = process.argv.slice(2);
+  const judged = judgedOf(args);
+  if (judged === null) throw scanUsageError("wrong_arguments", { got: args });
   const root = checkoutRoot(process.cwd());
   const lines = verdict(
     await findings(judgedFiles(root, judged), adaptersBeside(dirname(realpathSync(script)))),
   );
   for (const line of lines) process.stderr.write(`${line}\n`);
-  return lines.length === 0 ? 0 : 1;
+  return lines.length === 0 ? 0 : EXIT_STATUS.refusal;
 }
 
 main().then(
@@ -74,8 +78,8 @@ main().then(
     process.exitCode = code;
   },
   (error: unknown) => {
-    const detail = error instanceof CodedError ? `${error.message}; ${error.resolve}` : String(error);
-    process.stderr.write(`no-comments: ${detail}\n`);
-    process.exitCode = 1;
+    const { kind, message, resolve } = recordOf(error);
+    process.stderr.write(`no-comments: ${message}; ${resolve}\n`);
+    process.exitCode = EXIT_STATUS[kind];
   },
 );

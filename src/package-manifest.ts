@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { type CodedError, refuser } from "./coded-error";
+import { type Refusal, refusals } from "./coded-error";
 import { PAST_PREPARES, PREPARE } from "./gates-contract";
 
 const JSON_INDENT = /^([ \t]+)"/m;
@@ -13,7 +13,7 @@ type Parsed =
   | { readonly parsed: true; readonly value: unknown }
   | { readonly parsed: false; readonly detail: string };
 
-const refuseManifest = refuser<{
+const manifestRefusal = refusals<{
   readonly manifest_unparseable: { readonly path: string; readonly detail: string };
   readonly prepare_occupied: { readonly path: string; readonly prepare: string; readonly wanted: string };
 }>({
@@ -34,7 +34,7 @@ export type PrepareState =
   | { readonly kind: "absent" }
   | { readonly kind: "wired" }
   | { readonly kind: "missing" | "behind"; readonly path: string; readonly wired: string }
-  | { readonly kind: "occupied" | "unparseable"; readonly refusal: CodedError };
+  | { readonly kind: "occupied" | "unparseable"; readonly refusal: Refusal };
 
 function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -49,7 +49,7 @@ function parsedJson(text: string): Parsed {
 }
 
 function unparseable(path: string, detail: string): PrepareState {
-  return { kind: "unparseable", refusal: refuseManifest("manifest_unparseable", { path, detail }) };
+  return { kind: "unparseable", refusal: manifestRefusal("manifest_unparseable", { path, detail }) };
 }
 
 export function prepareState(root: string): PrepareState {
@@ -65,7 +65,7 @@ export function prepareState(root: string): PrepareState {
   const found = scripts.prepare;
   if (found === PREPARE) return { kind: "wired" };
   if (found !== undefined && !PAST_PREPARES.some((earlier) => earlier === found)) {
-    const refusal = refuseManifest("prepare_occupied", {
+    const refusal = manifestRefusal("prepare_occupied", {
       path,
       prepare: typeof found === "string" ? found : JSON.stringify(found),
       wanted: PREPARE,

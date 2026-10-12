@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
 import { resolve } from "node:path";
-import { removeScratchDirs, repo } from "./repo.test-support";
+import { removeScratchDirs, repo, scratchDir } from "./repo.test-support";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 const dir = repo();
@@ -35,15 +35,39 @@ describe("the cli", () => {
     cli("install");
   });
 
-  test("refuses an unknown gate on stderr with the usage, and writes nothing", () => {
+  test("exits 2 on an unknown command", () => {
+    const run = cli("uninstall");
+    expect([run.status, run.stdout, JSON.parse(run.stderr).error.kind]).toEqual([2, "", "usage"]);
+  });
+
+  test("exits 3 with a fault when git cannot run, so nothing was judged", () => {
+    const run = spawnSync(process.execPath, [CLI, "doctor"], {
+      cwd: dir,
+      encoding: "utf8",
+      env: { PATH: scratchDir() },
+    });
+    expect([run.status, run.stdout]).toEqual([3, ""]);
+    expect(JSON.parse(run.stderr)).toMatchObject({
+      command: "doctor",
+      ok: false,
+      error: {
+        kind: "fault",
+        code: "git_unavailable",
+        resolve: "stop and hand this error to the owner: git must be installed and on PATH",
+      },
+    });
+  });
+
+  test("exits 2 on an unknown gate, printing the usage on stderr and writing nothing", () => {
     const before = cli("doctor").stdout;
     const run = cli("install", "lint-free");
-    expect(run.status).toBe(1);
+    expect(run.status).toBe(2);
     expect(run.stdout).toBe("");
     expect(JSON.parse(run.stderr)).toEqual({
       command: "install",
       ok: false,
       error: {
+        kind: "usage",
         code: "unknown_gate",
         message: "agent-gates install has no gate named lint-free",
         meta: {
