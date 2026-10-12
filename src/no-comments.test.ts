@@ -895,12 +895,26 @@ describe("install and doctor", () => {
     writeFiles(dir, { ".gitattributes": "gen.ts linguist-generated\n", "gen.ts": "export {};\n" });
     git(dir, ["add", "-A"]);
     expect(gatesDoctor(dir).checks.at(-1)).toEqual({
-      name: "no-comments-javascript",
+      name: "no-comments languages",
       state: "warn",
-      detail: "installed, but the project tracks no file javascript reads",
+      detail: "no-comments-javascript is installed, but the project tracks no file javascript reads",
       fix: "delete .githooks/no-comments/javascript.cjs",
     });
     expect(gatesDoctor(repo({ "a.ts": "export {};\n" })).checks.map(({ name }) => name)).toEqual(["gates"]);
+  });
+
+  test("doctor reports missing and unused languages in one check, with one fix for both", () => {
+    const dir = gated({ "a.dart": "void f() {}\n" });
+    git(dir, ["add", "-A"]);
+    expect(gatesDoctor(dir).checks.filter(({ name }) => name.startsWith("no-comments"))).toEqual([
+      {
+        name: "no-comments languages",
+        state: "warn",
+        detail:
+          "dart reads 1 tracked file, but no-comments-dart is not installed; no-comments-javascript is installed, but the project tracks no file javascript reads",
+        fix: "agent-gates install no-comments-dart; delete .githooks/no-comments/javascript.cjs",
+      },
+    ]);
   });
 
   test("doctor names every tracked language whose gate is not installed, with one install for all", () => {

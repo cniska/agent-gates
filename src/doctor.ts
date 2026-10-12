@@ -58,32 +58,26 @@ function fileHealth(planned: PlannedFile): Health {
   }
 }
 
-function missingHealth(missing: readonly Language[], tracked: ReadonlyMap<Language, number>): Health[] {
-  if (missing.length === 0) return [];
-  const detail = missing
-    .map((language) => {
-      const count = tracked.get(language) ?? 0;
-      const files = count === 1 ? "file" : "files";
-      return `${language} reads ${count} tracked ${files}, but ${noCommentsGate(language)} is not installed`;
-    })
-    .join("; ");
-  return [
-    {
-      name: "no-comments languages",
-      state: "warn",
-      detail,
-      fix: `agent-gates install ${missing.map(noCommentsGate).join(" ")}`,
-    },
-  ];
+const LANGUAGES_CHECK = "no-comments languages";
+
+function missingDetail(language: Language, tracked: ReadonlyMap<Language, number>): string {
+  const count = tracked.get(language) ?? 0;
+  const files = count === 1 ? "file" : "files";
+  return `${language} reads ${count} tracked ${files}, but ${noCommentsGate(language)} is not installed`;
 }
 
-function unusedHealth(language: Language): Health {
-  return {
-    name: noCommentsGate(language),
-    state: "warn",
-    detail: `installed, but the project tracks no file ${language} reads`,
-    fix: `delete ${ADAPTER_FILES[language].target}`,
-  };
+function unusedDetail(language: Language): string {
+  return `${noCommentsGate(language)} is installed, but the project tracks no file ${language} reads`;
+}
+
+function languagesFix(missing: readonly Language[], unused: readonly Language[]): string {
+  const install =
+    missing.length === 0 ? [] : [`agent-gates install ${missing.map(noCommentsGate).join(" ")}`];
+  const remove =
+    unused.length === 0
+      ? []
+      : [`delete ${unused.map((language) => ADAPTER_FILES[language].target).join(" ")}`];
+  return [...install, ...remove].join("; ");
 }
 
 function languagesHealth(root: string, gates: readonly GateName[]): Health[] {
@@ -91,20 +85,26 @@ function languagesHealth(root: string, gates: readonly GateName[]): Health[] {
   if (installed.length === 0) return [];
   const tracked = trackedPerLanguage(root);
   const tracks = (language: Language) => (tracked.get(language) ?? 0) > 0;
-  const checks = [
-    ...missingHealth(
-      LANGUAGE_NAMES.filter((language) => !installed.includes(language) && tracks(language)),
-      tracked,
-    ),
-    ...installed.filter((language) => !tracks(language)).map(unusedHealth),
-  ];
-  if (checks.length > 0) return checks;
+  const missing = LANGUAGE_NAMES.filter((language) => !installed.includes(language) && tracks(language));
+  const unused = installed.filter((language) => !tracks(language));
+  if (missing.length === 0 && unused.length === 0)
+    return [
+      {
+        name: LANGUAGES_CHECK,
+        state: "ok",
+        detail: `${installed.join(", ")}, as the tracked files need`,
+        fix: null,
+      },
+    ];
   return [
     {
-      name: "no-comments languages",
-      state: "ok",
-      detail: `${installed.join(", ")}, as the tracked files need`,
-      fix: null,
+      name: LANGUAGES_CHECK,
+      state: "warn",
+      detail: [
+        ...missing.map((language) => missingDetail(language, tracked)),
+        ...unused.map(unusedDetail),
+      ].join("; "),
+      fix: languagesFix(missing, unused),
     },
   ];
 }
