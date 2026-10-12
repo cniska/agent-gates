@@ -7,6 +7,8 @@ type Dialect = { readonly syntax: ParserPlugin[]; readonly typedByJsdoc: boolean
 
 type Unparsed = Extract<Reading, { readonly kind: "unparsed" }>;
 
+type Rejected = { readonly kind: "rejected"; readonly offset: number; readonly unparsed: Unparsed };
+
 type Parsed = {
   readonly type: "CommentLine" | "CommentBlock";
   readonly value: string;
@@ -32,6 +34,10 @@ const LEADING_STARS = /^[\s*]*/;
 
 const BABEL_POSITION = /\.? \(\d+:\d+\)$/;
 
+const STAGE_THREE_DECORATORS: ParserPlugin[] = [["decorators", {}], "decoratorAutoAccessors"];
+
+const LEGACY_DECORATORS: ParserPlugin[] = ["decorators-legacy", "decoratorAutoAccessors"];
+
 function dialectOf(path: string, text: string): Dialect {
   const route = routeOf(path);
   if (route.kind === "first-line") {
@@ -46,18 +52,23 @@ function dialectOf(path: string, text: string): Dialect {
   return { syntax: ["typescript"], typedByJsdoc: false };
 }
 
-function unparsed(error: SyntaxError): Unparsed {
+function rejected(error: SyntaxError): Rejected {
+  const offset: unknown = Reflect.get(error, "pos");
   const loc: unknown = Reflect.get(error, "loc");
   const line: unknown = typeof loc === "object" && loc !== null ? Reflect.get(loc, "line") : null;
-  invariant(typeof line === "number", "Babel locates each syntax error");
-  return { kind: "unparsed", line, reason: error.message.replace(BABEL_POSITION, "") };
+  invariant(typeof offset === "number" && typeof line === "number", "Babel locates each syntax error");
+  return {
+    kind: "rejected",
+    offset,
+    unparsed: { kind: "unparsed", line, reason: error.message.replace(BABEL_POSITION, "") },
+  };
 }
 
-function parsed(text: string, dialect: Dialect): Parsed[] | Unparsed {
+function parsedWith(text: string, plugins: ParserPlugin[]): Parsed[] | Rejected {
   try {
     const file = parse(text, {
       sourceType: "unambiguous",
-      plugins: [...dialect.syntax, ["decorators", {}], "decoratorAutoAccessors"],
+      plugins,
       allowImportExportEverywhere: true,
       allowReturnOutsideFunction: true,
       allowAwaitOutsideFunction: true,
@@ -68,9 +79,17 @@ function parsed(text: string, dialect: Dialect): Parsed[] | Unparsed {
       loc ? [{ type, value, line: loc.start.line, source: text.slice(start, end) }] : [],
     );
   } catch (error) {
-    if (error instanceof SyntaxError) return unparsed(error);
+    if (error instanceof SyntaxError) return rejected(error);
     throw error;
   }
+}
+
+function parsed(text: string, dialect: Dialect): Parsed[] | Unparsed {
+  const stageThree = parsedWith(text, [...dialect.syntax, ...STAGE_THREE_DECORATORS]);
+  if (Array.isArray(stageThree)) return stageThree;
+  const legacy = parsedWith(text, [...dialect.syntax, ...LEGACY_DECORATORS]);
+  if (Array.isArray(legacy)) return legacy;
+  return legacy.offset > stageThree.offset ? legacy.unparsed : stageThree.unparsed;
 }
 
 function typesPlainJavaScript({ type, value }: Parsed): boolean {

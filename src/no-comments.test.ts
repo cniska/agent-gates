@@ -152,6 +152,21 @@ describe("the javascript adapter", () => {
       unparsed(2, "Unterminated template"),
     );
   });
+
+  test("reads either decorator dialect TypeScript accepts", () => {
+    expect(comments("a.ts", "export @dec class A {\n  @dec accessor x = 1; // stage 3\n}\n")).toEqual(
+      read([{ line: 2, text: "// stage 3" }]),
+    );
+    expect(
+      comments("a.ts", "@Controller() export class A {\n  m(@Body() body: unknown) {} // legacy\n}\n"),
+    ).toEqual(read([{ line: 2, text: "// legacy" }]));
+    expect(comments("a.ts", "export @dec class A {\n  m(@Body() body: unknown) {}\n}\n")).toEqual(
+      unparsed(2, "Decorators cannot be used to decorate parameters"),
+    );
+    expect(
+      comments("a.ts", "@Controller() export class A {\n  m(@Body() body: unknown) {}\n}\nconst = ;\n"),
+    ).toEqual(unparsed(4, "Unexpected token"));
+  });
 });
 
 describe("the dart adapter", () => {
