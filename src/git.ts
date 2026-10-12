@@ -90,6 +90,11 @@ export function nulFields(output: Buffer): string[] {
   return fields;
 }
 
-export function namesCommit(repo: string, rev: string): boolean {
-  return git(repo, ["cat-file", "-e", `${rev}^{commit}`]).status === 0;
+export function mergeBase(repo: string, base: string, head: string): string | null {
+  if (git(repo, ["cat-file", "-e", `${base}^{commit}`]).status !== 0) return null;
+  const args = ["merge-base", base, head];
+  const run = git(repo, args);
+  if (run.status === 1) return null;
+  if (run.status !== 0) throw failed(repo, args, run);
+  return trimmed(run);
 }

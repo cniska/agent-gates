@@ -742,15 +742,21 @@ describe("the pre-commit dispatcher", () => {
 describe("the no-comments workflow", () => {
   function judgeStep(): string {
     const text = readFileSync(join(SOURCE_DIR, "no-comments.yml"), "utf8");
-    const run = /^ {8}run: (.+)$/m.exec(text)?.[1];
+    const run = /^ {8}run: \|\n((?: {10}.*\n)+)/m.exec(text)?.[1];
     if (run === undefined) throw new Error("no-comments.yml runs no command");
     return run;
   }
 
-  function judged(dir: string, base: string, head: string) {
+  function judged(dir: string, push: { base: string; head: string; ref: string }) {
     const run = spawnSync("bash", ["-e", "-c", judgeStep()], {
       cwd: dir,
-      env: { ...process.env, BASE_SHA: base, HEAD_SHA: head },
+      env: {
+        ...process.env,
+        BASE_SHA: push.base,
+        HEAD_SHA: push.head,
+        PUSHED_REF: push.ref,
+        DEFAULT_BRANCH: "main",
+      },
       encoding: "utf8",
     });
     return { status: run.status, stderr: run.stderr };
@@ -761,21 +767,66 @@ describe("the no-comments workflow", () => {
     const base = commitPastHooks(dir, "feat: start");
     writeFiles(dir, { "b.ts": "// new\n" });
     const head = commitPastHooks(dir, "feat: more");
-    expect(judged(dir, base, head)).toEqual({
+    expect(judged(dir, { base, head, ref: "refs/heads/main" })).toEqual({
       status: 1,
       stderr:
         "no-comments: b.ts:1  // new\n  Remove each comment; a why belongs in a name, a test or the docs.\n",
     });
-    expect(judged(dir, head, head)).toEqual({ status: 0, stderr: "" });
+    expect(judged(dir, { base: head, head, ref: "refs/heads/main" })).toEqual({ status: 0, stderr: "" });
   });
 
-  test("judges the head commit alone when the base names no commit, even a root commit", () => {
+  test("judges a new branch from its merge base with the default branch, not its tip alone", () => {
+    const dir = gated({ "a.ts": "// on main\n" });
+    git(dir, ["update-ref", "refs/remotes/origin/main", commitPastHooks(dir, "feat: start")]);
+    writeFiles(dir, { "b.ts": "// early\n" });
+    commitPastHooks(dir, "feat: early");
+    writeFiles(dir, { "c.ts": "export {};\n" });
+    const head = commitPastHooks(dir, "feat: tip");
+    expect(judged(dir, { base: NO_COMMIT, head, ref: "refs/heads/topic" })).toEqual({
+      status: 1,
+      stderr:
+        "no-comments: b.ts:1  // early\n  Remove each comment; a why belongs in a name, a test or the docs.\n",
+    });
+  });
+
+  test("judges every file when the default branch is pushed for the first time", () => {
     const dir = gated({ "a.ts": "// root\n" });
     commitPastHooks(dir, "feat: start");
-    expect(judged(dir, NO_COMMIT, "HEAD").stderr).toStartWith("no-comments: a.ts:1  // root\n");
     writeFiles(dir, { "b.ts": "export {};\n" });
-    commitPastHooks(dir, "feat: more");
-    expect(judged(dir, NO_COMMIT, "HEAD")).toEqual({ status: 0, stderr: "" });
+    const head = commitPastHooks(dir, "feat: more");
+    git(dir, ["update-ref", "refs/remotes/origin/main", head]);
+    expect(judged(dir, { base: NO_COMMIT, head, ref: "refs/heads/main" })).toEqual({
+      status: 1,
+      stderr:
+        "no-comments: a.ts:1  // root\n  Remove each comment; a why belongs in a name, a test or the docs.\n",
+    });
+  });
+
+  test("judges every file when a new branch reaches a remote with no default branch", () => {
+    const dir = gated({ "a.ts": "// root\n" });
+    commitPastHooks(dir, "feat: start");
+    writeFiles(dir, { "b.ts": "export {};\n" });
+    const head = commitPastHooks(dir, "feat: more");
+    expect(judged(dir, { base: NO_COMMIT, head, ref: "refs/heads/topic" })).toEqual({
+      status: 1,
+      stderr:
+        "no-comments: a.ts:1  // root\n  Remove each comment; a why belongs in a name, a test or the docs.\n",
+    });
+  });
+
+  test("judges every file of a new branch that shares no history with the default branch", () => {
+    const dir = gated({ "a.ts": "export {};\n" });
+    git(dir, ["update-ref", "refs/remotes/origin/main", commitPastHooks(dir, "feat: start")]);
+    git(dir, ["checkout", "-q", "--orphan", "pages"]);
+    writeFiles(dir, { "b.ts": "// orphan\n" });
+    commitPastHooks(dir, "feat: orphan");
+    writeFiles(dir, { "c.ts": "export {};\n" });
+    const head = commitPastHooks(dir, "feat: tip");
+    expect(judged(dir, { base: NO_COMMIT, head, ref: "refs/heads/pages" })).toEqual({
+      status: 1,
+      stderr:
+        "no-comments: b.ts:1  // orphan\n  Remove each comment; a why belongs in a name, a test or the docs.\n",
+    });
   });
 
   test("refuses a call that names a base without a head", () => {

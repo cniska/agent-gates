@@ -1,6 +1,6 @@
 import { unreachable } from "./assert";
 import { markerLine } from "./gate-marker";
-import { gitOutput, namesCommit, nulFields } from "./git";
+import { gitOutput, mergeBase, nulFields } from "./git";
 import { type CommentsOf, type Language, languageOf } from "./no-comments-languages";
 import { firstLine } from "./no-comments-route";
 import { marksGenerated, outsideTheCode } from "./no-comments-skips";
@@ -27,14 +27,16 @@ const BINARY = "-\t-\t";
 
 const FIX = "  Remove each comment; a why belongs in a name, a test or the docs.";
 
+function emptyTree(root: string): string {
+  return gitOutput(root, ["hash-object", "-t", "tree", "--stdin"], "").toString().trim();
+}
+
 function diffOf(root: string, judged: Judged): string[] {
   switch (judged.kind) {
     case "staged":
       return ["diff", "--cached"];
     case "pushed":
-      return namesCommit(root, judged.base)
-        ? ["diff", "--merge-base", judged.base, judged.head]
-        : ["diff-tree", "--root", "-r", "--no-commit-id", judged.head];
+      return ["diff", mergeBase(root, judged.base, judged.head) ?? emptyTree(root), judged.head];
     default:
       return unreachable(judged);
   }

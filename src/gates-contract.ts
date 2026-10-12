@@ -86,6 +86,7 @@ const NO_COMMENTS_SHARED: readonly GateFile[] = [
       { version: 4, sha256: "b76f3404f9b7a17a0d9f12f3d61d475b4f0eceb2db80ec93b3aa305ebaa1f7c8" },
       { version: 5, sha256: "5481b108173a86206b2de03d8a4a72c3f14ca59eaa53722cdc52bda3f6666ce4" },
       { version: 6, sha256: "8fd5879e2857a5a372793b7c8decf0ca462ac76b151888d65162a2d6525813ef" },
+      { version: 7, sha256: "fd45f4f0d2389327f95ae5b8b1bf35b01be32c60bc78db6990127a40df18aec3" },
     ],
   },
   {
@@ -93,7 +94,10 @@ const NO_COMMENTS_SHARED: readonly GateFile[] = [
     source: "no-comments.yml",
     target: ".github/workflows/no-comments.yml",
     executable: false,
-    versions: [{ version: 1, sha256: "40c64a59e2409c91c2d07df092eeb9384811a991784e2f3300b8aa43e6c78dd9" }],
+    versions: [
+      { version: 1, sha256: "40c64a59e2409c91c2d07df092eeb9384811a991784e2f3300b8aa43e6c78dd9" },
+      { version: 2, sha256: "3b83b0cbd4e92e31034e16bbc5d80bd285d41c0612c6ad3fb81239ffc99eb9a1" },
+    ],
   },
 ];
 
