@@ -1,12 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { execFileSync, spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { SOURCE_DIR } from "./gates";
-
-const NO_COMMIT = "0000000000000000000000000000000000000000";
-const repos: string[] = [];
+import { commitPastHooks, NO_COMMIT, removeScratchDirs, repo } from "./repo.test-support";
 
 function field(value: unknown, key: string): unknown {
   return typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined;
@@ -30,32 +27,11 @@ const AUTOSQUASH = {
   "amend! ": "amend! feat: start\n\nfeat: start over",
 };
 
-function repo(): string {
-  const dir = mkdtempSync(join(tmpdir(), "agent-gates-workflow-"));
-  repos.push(dir);
-  execFileSync("git", ["init", "-q", dir]);
+function hookedRepo(): string {
+  const dir = repo();
   mkdirSync(join(dir, ".githooks"));
   copyFileSync(join(SOURCE_DIR, "commit-msg"), join(dir, ".githooks/commit-msg"));
   return dir;
-}
-
-function commit(dir: string, subject: string): string {
-  execFileSync("git", [
-    "-C",
-    dir,
-    "-c",
-    "core.hooksPath=/dev/null",
-    "-c",
-    "user.name=T",
-    "-c",
-    "user.email=t@example.com",
-    "commit",
-    "-q",
-    "--allow-empty",
-    "-m",
-    subject,
-  ]);
-  return execFileSync("git", ["-C", dir, "rev-parse", "HEAD"]).toString().trim();
 }
 
 function bash(dir: string, run: string, env: Record<string, string>) {
@@ -80,42 +56,40 @@ function judged(dir: string, range: string) {
   return bash(dir, JUDGE, { RANGE: range });
 }
 
-afterEach(() => {
-  for (const dir of repos.splice(0)) rmSync(dir, { recursive: true, force: true });
-});
+afterEach(removeScratchDirs);
 
 describe("the commits workflow", () => {
   test("judges every commit after the pushed base", () => {
-    const dir = repo();
-    const base = commit(dir, "feat: start");
-    commit(dir, "Add a bad subject");
-    const head = commit(dir, "fix: follow up");
+    const dir = hookedRepo();
+    const base = commitPastHooks(dir, "feat: start");
+    commitPastHooks(dir, "Add a bad subject");
+    const head = commitPastHooks(dir, "fix: follow up");
     const range = rangeOf(dir, base, head);
     expect(range).toBe(`${base}..${head}`);
     expect(judged(dir, range).stderr).toContain("got: Add a bad subject");
   });
 
   test("judges the head alone when the base names no commit, even a root commit", () => {
-    const dir = repo();
-    const root = commit(dir, "Start badly");
+    const dir = hookedRepo();
+    const root = commitPastHooks(dir, "Start badly");
     expect(rangeOf(dir, NO_COMMIT, root)).toBe(root);
     expect(judged(dir, root).stderr).toContain("got: Start badly");
-    const head = commit(dir, "feat: carry on");
+    const head = commitPastHooks(dir, "feat: carry on");
     expect(rangeOf(dir, NO_COMMIT, head)).toBe(`${head}^..${head}`);
     expect(judged(dir, `${head}^..${head}`)).toEqual({ status: 0, stderr: "" });
   });
 
   test("fails when the range names no commits, rather than judging nothing", () => {
-    const dir = repo();
-    commit(dir, "feat: start");
+    const dir = hookedRepo();
+    commitPastHooks(dir, "feat: start");
     expect(judged(dir, `${NO_COMMIT}..HEAD`).status).not.toBe(0);
   });
 
   test("refuses each autosquash commit left in the range that the hook lets through locally", () => {
     for (const [prefix, message] of Object.entries(AUTOSQUASH)) {
-      const dir = repo();
-      const base = commit(dir, "feat: start");
-      const head = commit(dir, message);
+      const dir = hookedRepo();
+      const base = commitPastHooks(dir, "feat: start");
+      const head = commitPastHooks(dir, message);
       writeFileSync(join(dir, "MESSAGE"), `${message}\n`);
       expect([prefix, bash(dir, "sh .githooks/commit-msg MESSAGE", {}).status]).toEqual([prefix, 0]);
       expect(judged(dir, `${base}..${head}`).stderr).toContain("is an autosquash commit left in the range");

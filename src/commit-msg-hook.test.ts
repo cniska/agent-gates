@@ -1,19 +1,18 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { SOURCE_DIR } from "./gates";
+import { removeScratchDirs, repo } from "./repo.test-support";
 
 const HOOK = join(SOURCE_DIR, "commit-msg");
-const repo = mkdtempSync(join(tmpdir(), "agent-gates-commit-msg-"));
-Bun.spawnSync(["git", "init", "-q", repo]);
+const dir = repo();
 
-afterAll(() => rmSync(repo, { recursive: true, force: true }));
+afterAll(removeScratchDirs);
 
 function judged(message: string) {
-  const file = join(repo, "MESSAGE");
+  const file = join(dir, "MESSAGE");
   writeFileSync(file, message);
-  const ran = Bun.spawnSync(["sh", HOOK, file], { cwd: repo, stderr: "pipe" });
+  const ran = Bun.spawnSync(["sh", HOOK, file], { cwd: dir, stderr: "pipe" });
   return { exitCode: ran.exitCode, stderr: ran.stderr.toString() };
 }
 

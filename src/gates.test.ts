@@ -1,38 +1,16 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { CodedError } from "./coded-error";
+import { join, resolve } from "node:path";
 import { gatesDoctor } from "./doctor";
 import { installGates, markerOf, SOURCE_DIR } from "./gates";
 import { GATES, isSharedPart } from "./gates-contract";
+import { commit, refusalOf, removeScratchDirs, repo, scratchDir } from "./repo.test-support";
 
 const GITATTRIBUTES_V1 = "# agent-gate:githooks:1\n* linguist-generated\n";
 const WIRED_PREPARE = "! git rev-parse --git-dir >/dev/null 2>&1 || git config core.hooksPath .githooks";
-const repos: string[] = [];
-
-function repo(files: Record<string, string> = {}): string {
-  const dir = mkdtempSync(join(tmpdir(), "agent-gates-"));
-  repos.push(dir);
-  execFileSync("git", ["init", "-q", dir]);
-  for (const [path, text] of Object.entries(files)) {
-    mkdirSync(dirname(join(dir, path)), { recursive: true });
-    writeFileSync(join(dir, path), text);
-  }
-  return dir;
-}
 
 function read(dir: string, path: string): string {
   return readFileSync(join(dir, path), "utf8");
@@ -56,29 +34,7 @@ function statesOf(installed: { readonly files: readonly { target: string; state:
   return Object.fromEntries(installed.files.map(({ target, state }) => [target, state]));
 }
 
-function refusalOf(run: () => unknown): string | null {
-  try {
-    run();
-    return null;
-  } catch (error) {
-    if (!(error instanceof CodedError && error.kind === "refusal")) throw error;
-    return error.code;
-  }
-}
-
-function commit(dir: string, subject: string): { status: number | null; stderr: string } {
-  execFileSync("git", ["-C", dir, "add", "-A"]);
-  const run = spawnSync(
-    "git",
-    ["-C", dir, "-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "-q", "-m", subject],
-    { encoding: "utf8" },
-  );
-  return { status: run.status, stderr: run.stderr };
-}
-
-afterEach(() => {
-  for (const dir of repos.splice(0)) rmSync(dir, { recursive: true, force: true });
-});
+afterEach(removeScratchDirs);
 
 describe("the gate registry", () => {
   const files = Object.values(GATES).flat();
@@ -181,12 +137,12 @@ describe("install", () => {
   test("the installed hook refuses a bad subject and lets a good one through", () => {
     const dir = repo();
     installGates(dir, ["commit-subject"]);
-    expect(commit(dir, "Add the gates")).toEqual({
+    expect(commit(dir, { subject: "Add the gates" })).toEqual({
       status: 1,
       stderr:
         "commit-msg: subject is not a Conventional Commit (type(scope): what changed).\n  got: Add the gates\n",
     });
-    expect(commit(dir, "feat: add the gates")).toEqual({ status: 0, stderr: "" });
+    expect(commit(dir, { subject: "feat: add the gates" })).toEqual({ status: 0, stderr: "" });
   });
 
   test("marks the hook code linguist-generated", () => {
@@ -240,8 +196,7 @@ describe("install", () => {
     const dir = repo();
     expect(spawnSync("sh", ["-c", WIRED_PREPARE], { cwd: dir }).status).toBe(0);
     expect(hooksPath(dir)).toBe(".githooks");
-    const loose = mkdtempSync(join(tmpdir(), "agent-gates-loose-"));
-    repos.push(loose);
+    const loose = scratchDir();
     expect(
       spawnSync("sh", ["-c", WIRED_PREPARE], {
         cwd: loose,

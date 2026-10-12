@@ -1,17 +1,15 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
+import { removeScratchDirs, repo } from "./repo.test-support";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
-const repo = mkdtempSync(join(tmpdir(), "agent-gates-cli-"));
-execFileSync("git", ["init", "-q", repo]);
+const dir = repo();
 
-afterAll(() => rmSync(repo, { recursive: true, force: true }));
+afterAll(removeScratchDirs);
 
 function cli(...args: string[]) {
-  const run = spawnSync(process.execPath, [CLI, ...args], { cwd: repo, encoding: "utf8" });
+  const run = spawnSync(process.execPath, [CLI, ...args], { cwd: dir, encoding: "utf8" });
   return { status: run.status, stdout: run.stdout, stderr: run.stderr };
 }
 
@@ -30,7 +28,7 @@ describe("the cli", () => {
 
   test("exits 1 when the doctor finds a failing check, still printing the report", () => {
     cli("install", "commit-subject");
-    execFileSync("git", ["-C", repo, "config", "--unset", "core.hooksPath"]);
+    execFileSync("git", ["-C", dir, "config", "--unset", "core.hooksPath"]);
     const run = cli("doctor");
     expect(run.status).toBe(1);
     expect(JSON.parse(run.stdout)).toMatchObject({ command: "doctor", ok: true, result: { failing: 1 } });
