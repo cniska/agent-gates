@@ -30,6 +30,8 @@ const KEEPS_COMMAND_POSITION = new Set([
 
 const REGEX_OPERATOR = "=~";
 
+const EXTENDED_GLOB_PREFIXES = new Set(["?", "*", "+", "@", "!"]);
+
 const LINE_CONTINUATION = "\\\n";
 
 const SPECIAL_PARAMETER = /^[#$?!@*\-0-9]$/;
@@ -146,7 +148,7 @@ function commentSpans(text: string): Lexed {
     return unterminated(start, "parameter expansion");
   }
 
-  function arithmetic(open: string, close: string): Stopped | null {
+  function balanced(open: string, close: string, construct: string): Stopped | null {
     const start = at;
     let depth = 0;
     while (at < text.length) {
@@ -166,7 +168,7 @@ function commentSpans(text: string): Lexed {
         if (stopped !== null) return stopped;
       }
     }
-    return unterminated(start, "arithmetic expansion");
+    return unterminated(start, construct);
   }
 
   function dollar(quoting: Quoting): Stopped | null {
@@ -174,7 +176,7 @@ function commentSpans(text: string): Lexed {
     if (next === "'" && quoting === "unquoted") return ansiQuoted();
     if (text.startsWith("$((", at)) {
       at += 3;
-      return arithmetic("(", "))");
+      return balanced("(", "))", "arithmetic expansion");
     }
     if (next === "(") {
       at += 2;
@@ -186,7 +188,7 @@ function commentSpans(text: string): Lexed {
     }
     if (next === "[") {
       at += 2;
-      return arithmetic("[", "]");
+      return balanced("[", "]", "arithmetic expansion");
     }
     at += SPECIAL_PARAMETER.test(next ?? "") ? 2 : 1;
     return null;
@@ -195,7 +197,11 @@ function commentSpans(text: string): Lexed {
   function word(): string | Stopped {
     const start = at;
     while (at < text.length && !WORD_ENDS.has(text[at] ?? "")) {
-      const stopped = quotedOrExpansion("unquoted");
+      let stopped: Stopped | null;
+      if (EXTENDED_GLOB_PREFIXES.has(text[at] ?? "") && text[at + 1] === "(") {
+        at += 2;
+        stopped = balanced("(", ")", "extended glob");
+      } else stopped = quotedOrExpansion("unquoted");
       if (stopped !== null) return stopped;
     }
     return text.slice(start, at);
@@ -303,7 +309,7 @@ function commentSpans(text: string): Lexed {
         at += 2;
         commandPosition = false;
         arithmeticNext = false;
-        return arithmetic("(", "))");
+        return balanced("(", "))", "arithmetic expansion");
       }
       at++;
       if (cases.at(-1) !== "pattern") {

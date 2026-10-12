@@ -427,6 +427,23 @@ describe("the shell adapter", () => {
     expect(shellComments("a.sh", "[[ $l =~ ^( #a)$ ]] #c\n")).toEqual(read([{ line: 1, text: "#c" }]));
   });
 
+  test("reads an extended glob as one word, its alternatives and nested groups included", () => {
+    expect(shellComments("a.sh", "ls @(a|#b)\n")).toEqual(read([]));
+    expect(shellComments("a.sh", "ls !(x|#y) ?(a) *(b) +(c|@(d|#e)) # real\n")).toEqual(
+      read([{ line: 1, text: "# real" }]),
+    );
+    expect(shellComments("a.sh", "ls @('#a'|\"#b\"|$(echo #c\n))\n")).toEqual(
+      read([{ line: 1, text: "#c" }]),
+    );
+    expect(shellComments("a.sh", "case $x in\n  @(a|#b)) echo ;;\nesac\n")).toEqual(read([]));
+    expect(shellComments("a.sh", "a+=(x) # c\necho $@(y) # d\n")).toEqual(
+      read([
+        { line: 1, text: "# c" },
+        { line: 2, text: "# d" },
+      ]),
+    );
+  });
+
   test("closes a substitution at its own parenthesis, not at a case pattern's", () => {
     expect(shellComments("a.sh", 'x="$(case a in b) echo " #c";; esac)"\n')).toEqual(read([]));
     expect(shellComments("a.sh", 'x="$(case a in b) echo esac;; c) echo " #c";; esac)"\n')).toEqual(read([]));
@@ -478,6 +495,7 @@ describe("the shell adapter", () => {
       ["echo `a\nb\n", "Unterminated backquote"],
       ["echo `echo $(a`\nb\n", "Unterminated substitution"],
       ["echo $[1\nb\n", "Unterminated arithmetic expansion"],
+      ["ls @(a\nb\n", "Unterminated extended glob"],
       ["cat <<EOF\nbody\n", "Unterminated heredoc"],
       ["cat <<EOF\nbody\n EOF\n", "Unterminated heredoc"],
     ] as const)
