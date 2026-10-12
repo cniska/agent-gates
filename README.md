@@ -30,6 +30,11 @@ Each command prints one JSON line.
 
 A gate file is `installed`, `missing`, `behind` (an earlier version's bytes), `changed`, `ahead` (a newer agent-gates wrote it) or `not-executable`. `install` writes a missing, behind or not-executable file, sets a changed one aside as `<file>.agent-gates-backup` before replacing it, leaves an ahead one alone, and refuses when `core.hooksPath` or `prepare` already hold something else, or `.githooks/pre-commit` is the project's own hook.
 
+## Extending
+
+- **A language:** add its extensions and shebang interpreters to `LANGUAGES` in `src/no-comments-languages.ts`, and write `src/no-comments-<language>.ts` exporting `comments`, which returns the comments it refuses, or `null` for a file that does not parse. Then add its tests, its `GATES` entry and its README row, run `bun run gates:bundle`, and record the bundle's hash as [AGENTS.md](AGENTS.md) describes; `bun run check` fails until the entry, the bundle and the hash agree.
+- **Another SQL dialect:** `.sql` is read as PostgreSQL, which SQLite also passes but MySQL, BigQuery and Snowflake do not. Supporting them takes a table of lexer rules per dialect in the SQL adapter, chosen per path by a git attribute such as `agent-gates-sql=mysql`.
+
 ## Setup
 
 Install [mise](https://mise.jdx.dev), then:
