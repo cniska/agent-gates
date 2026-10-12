@@ -1,19 +1,23 @@
-const MARKER_LINE = /^(?:#|\/\/) agent-gate:([a-z-]+):(\d+)$/;
+const MARKER_LINE = /^(?:#|\/\/) ([a-z]+(?:-[a-z]+)*)-gate:(?:([a-z-]+):)?(\d+)$/;
 
-export type MarkerLine = { readonly part: string; readonly version: number };
+const OURS = "agent";
+
+type MarkerLine = { readonly tool: string; readonly part: string | null; readonly version: number };
+
+type OurMarker = { readonly part: string; readonly version: number };
 
 export function markerLine(line: string): MarkerLine | null {
   const found = MARKER_LINE.exec(line);
-  const part = found?.[1];
-  const version = found?.[2];
-  if (part === undefined || version === undefined) return null;
-  return { part, version: Number(version) };
+  if (found === null) return null;
+  const [, tool, part, version] = found;
+  if (tool === undefined || version === undefined) return null;
+  return { tool, part: part ?? null, version: Number(version) };
 }
 
-export function firstMarkerLine(text: string): MarkerLine | null {
+export function ourMarker(text: string): OurMarker | null {
   for (const line of text.split("\n")) {
     const marker = markerLine(line);
-    if (marker !== null) return marker;
+    if (marker?.tool === OURS && marker.part !== null) return { part: marker.part, version: marker.version };
   }
   return null;
 }

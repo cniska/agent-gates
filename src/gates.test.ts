@@ -5,7 +5,7 @@ import { chmodSync, existsSync, readdirSync, readFileSync, rmSync, statSync, wri
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { gatesDoctor } from "./doctor";
-import { firstMarkerLine } from "./gate-marker";
+import { ourMarker } from "./gate-marker";
 import { installGates, SOURCE_DIR } from "./gates";
 import { GATES, isGateName } from "./gates-contract";
 import { commit, refusalOf, removeScratchDirs, repo, scratchDir } from "./repo.test-support";
@@ -53,7 +53,7 @@ describe("the gate registry", () => {
   test("marks each file with the part it belongs to, a shared part when several gates hold it", () => {
     for (const { source, part } of files) {
       const text = readFileSync(join(SOURCE_DIR, source), "utf8");
-      expect([source, firstMarkerLine(text)?.part]).toEqual([source, part]);
+      expect([source, ourMarker(text)?.part]).toEqual([source, part]);
       const holders = Object.entries(GATES)
         .filter(([, held]) => held.some((file) => file.source === source))
         .map(([gate]) => gate);
@@ -72,7 +72,7 @@ describe("the gate registry", () => {
       const current = versions.at(-1);
       expect([source, current?.version, current?.sha256]).toEqual([
         source,
-        firstMarkerLine(text)?.version,
+        ourMarker(text)?.version,
         createHash("sha256").update(text).digest("hex"),
       ]);
     }
@@ -363,7 +363,11 @@ describe("refusals", () => {
   });
 
   test("refuses a project's own commit-msg hook, another tool's too, and writes nothing", () => {
-    for (const own of ["#!/bin/sh\nexit 0\n", "#!/bin/sh\n# dim-gate:1\nexit 0\n"]) {
+    for (const own of [
+      "#!/bin/sh\nexit 0\n",
+      "#!/bin/sh\n# dim-gate:1\nexit 0\n",
+      "#!/bin/sh\n# x-gate:commit-subject:9\nexit 0\n",
+    ]) {
       const dir = repo({ ".githooks/commit-msg": own });
       expect(refusalOf(() => installGates(dir, ["commit-subject"]))).toBe("hook_occupied");
       expect(read(dir, ".githooks/commit-msg")).toBe(own);

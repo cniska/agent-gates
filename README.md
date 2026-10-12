@@ -77,7 +77,7 @@ A comment a tool reads stays:
 | SQL | drizzle's `--> statement-breakpoint` |
 | Shell | the first-line shebang, `shellcheck` directives |
 | Rust | none; a first-line shebang is not a comment, and an attribute without doc text, such as `#[doc(hidden)]`, is code |
-| Every language | the `agent-gate` markers |
+| Every language | a gate marker on a line of its own, this tool's `agent-gate:<part>:<version>` or another's `<tool>-gate:[<part>:]<version>` |
 
 How SQL, shell and Rust are read:
 

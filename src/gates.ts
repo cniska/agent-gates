@@ -4,7 +4,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { unreachable } from "./assert";
 import { type Refusal, refusals } from "./coded-error";
 import { copyAside } from "./file-backup";
-import { firstMarkerLine } from "./gate-marker";
+import { ourMarker } from "./gate-marker";
 import {
   type FileState,
   GATE_NAMES,
@@ -93,7 +93,7 @@ type GatesInstalled = {
 };
 
 function markerOf(text: string): Marker | null {
-  const found = firstMarkerLine(text);
+  const found = ourMarker(text);
   if (found === null || !isPart(found.part)) return null;
   return { part: found.part, version: found.version };
 }
