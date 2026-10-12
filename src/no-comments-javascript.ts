@@ -1,5 +1,6 @@
 import { type ParserPlugin, parse } from "@babel/parser";
-import { type Comment, type CommentsOf, interpreterOf, routeOf } from "./no-comments-languages";
+import type { Comment, CommentsOf } from "./no-comments-languages";
+import { firstLine, interpreterOf, routeOf } from "./no-comments-route";
 
 type Dialect = { readonly syntax: ParserPlugin[]; readonly typedByJsdoc: boolean };
 
@@ -80,8 +81,7 @@ function isToolContract(comment: Parsed, dialect: Dialect): boolean {
 }
 
 function refused({ line, source }: Parsed): Comment {
-  const [first = ""] = source.split("\n");
-  return { line, body: first.trim() };
+  return { line, body: firstLine(source).trim() };
 }
 
 export const comments: CommentsOf = async (path, text) => {

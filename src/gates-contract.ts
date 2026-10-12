@@ -79,7 +79,10 @@ const NO_COMMENTS_SHARED: readonly GateFile[] = [
     source: "no-comments/scan.cjs",
     target: `${HOOKS_DIR}/no-comments/scan.cjs`,
     executable: false,
-    versions: [{ version: 1, sha256: "6c7e734fa6c585451a823e4dcf8b85fe990e811e315d05f757ae5a52635eaefc" }],
+    versions: [
+      { version: 1, sha256: "6c7e734fa6c585451a823e4dcf8b85fe990e811e315d05f757ae5a52635eaefc" },
+      { version: 2, sha256: "eb649b51cb538051af71579b679cead7cd3b0f6ccb3841164d9c3457eebdbcf8" },
+    ],
   },
   {
     part: "no-comments",
@@ -131,6 +134,13 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
   ],
   "no-comments-javascript": noCommentsFiles("javascript", [
     { version: 1, sha256: "fb0f19610a50648d653df231f19803b3843dfe0f24909621067c842563cf3696" },
+    { version: 2, sha256: "0d043a7c6514e98e6c0b8e6c843e73fe39a733de9b31ac49254bc9ce7ca1d9d4" },
+  ]),
+  "no-comments-dart": noCommentsFiles("dart", [
+    { version: 1, sha256: "25cc760fcd6ef317da0c52457e79e84926f4b87f81e67630b40dfd666f0feb2a" },
+  ]),
+  "no-comments-sql": noCommentsFiles("sql", [
+    { version: 1, sha256: "261cd8dc159c4222234bd5bc2796723b803ecf0cf448a7d417471faea8c3ef13" },
   ]),
 };
 

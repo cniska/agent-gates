@@ -2,7 +2,8 @@ import { unreachable } from "./assert";
 import { markerLine } from "./gate-marker";
 import { gitOutput, namesCommit, nulFields } from "./git";
 import { type CommentsOf, type Language, languageOf } from "./no-comments-languages";
-import { firstLine, marksGenerated, outsideTheCode } from "./no-comments-skips";
+import { firstLine } from "./no-comments-route";
+import { marksGenerated, outsideTheCode } from "./no-comments-skips";
 
 export type Judged =
   | { readonly kind: "staged" }

@@ -16,8 +16,10 @@ import { CodedError } from "./coded-error";
 import { gatesDoctor } from "./doctor";
 import { bundled, GATE_BUNDLES } from "./gate-bundles";
 import { installGates, SOURCE_DIR } from "./gates";
+import { comments as dartComments } from "./no-comments-dart";
 import { comments } from "./no-comments-javascript";
 import { LANGUAGE_NAMES, LANGUAGES, languageOf } from "./no-comments-languages";
+import { comments as sqlComments } from "./no-comments-sql";
 
 const NO_COMMIT = "0000000000000000000000000000000000000000";
 const IDENTITY = ["-c", "user.name=T", "-c", "user.email=t@example.com"];
@@ -106,6 +108,9 @@ describe("the language table", () => {
     expect(languageOf("bin/tool", "#!/usr/local/bin/deno run")).toBe("javascript");
     expect(languageOf("bin/tool", "#!/bin/sh")).toBeNull();
     expect(languageOf(".eslintrc", "")).toBeNull();
+    expect(languageOf("lib/a.dart", "")).toBe("dart");
+    expect(languageOf("bin/tool", "#!/usr/bin/env dart")).toBe("dart");
+    expect(languageOf("db/001.sql", "")).toBe("sql");
   });
 });
 
@@ -161,7 +166,123 @@ describe("the javascript adapter", () => {
   });
 });
 
+describe("the dart adapter", () => {
+  test("refuses each comment, doc comments and nested blocks too", async () => {
+    const text = [
+      "/// A doc comment.",
+      "final url = 'https://example.com'; // trailing",
+      "/* outer /* inner */ still outer */",
+      `final s = "\${map['//']} // still the string";`,
+      "/* a",
+      "   block */",
+      `final m = '\${{'a': 1}['a']}'; // after a map in an interpolation`,
+      "final e = 'it\\'s // x'; // after an escaped quote",
+    ].join("\n");
+    expect(await dartComments("a.dart", text)).toEqual([
+      { line: 1, body: "/// A doc comment." },
+      { line: 2, body: "// trailing" },
+      { line: 3, body: "/* outer /* inner */ still outer */" },
+      { line: 5, body: "/* a" },
+      { line: 7, body: "// after a map in an interpolation" },
+      { line: 8, body: "// after an escaped quote" },
+    ]);
+  });
+
+  test("reads no comment inside a string, raw and triple-quoted alike", async () => {
+    const text = [
+      "#!/usr/bin/env dart",
+      "final a = r'// raw';",
+      'final c = r"""// raw \\""";',
+      "final b = '''",
+      "// inside",
+      "''';",
+    ].join("\n");
+    expect(await dartComments("a.dart", text)).toEqual([]);
+  });
+
+  test("keeps the comments the analyzer reads", async () => {
+    const text = [
+      "// ignore_for_file: avoid_print",
+      "// ignore: unused_element",
+      "/// ignore: unused_element",
+      "// coverage:ignore-line",
+      "// @dart=3.0",
+      "// @dart = 3.0",
+      "void f() {}",
+    ].join("\n");
+    expect(await dartComments("a.dart", text)).toEqual([]);
+  });
+
+  test("returns null for a file whose string, comment or interpolation never closes", async () => {
+    expect(await dartComments("a.dart", "final a = 'open;\nfinal b = 1;\n")).toBeNull();
+    expect(await dartComments("a.dart", "/* open\n")).toBeNull();
+    expect(await dartComments("a.dart", "final a = '${b';\n")).toBeNull();
+  });
+});
+
+describe("the sql adapter", () => {
+  test("refuses each comment, inside a function body too", async () => {
+    const text = [
+      "-- header",
+      `select '--not a comment', "col--name" from t; /* block */`,
+      "create function f() returns void language plpgsql as $body$",
+      "begin",
+      "  -- in the body",
+      "  perform 'it''s -- quoted';",
+      "end $body$;",
+      "/* outer /* inner */",
+      "   still outer */",
+      `select "a""--b" from t;`,
+    ].join("\n");
+    expect(await sqlComments("a.sql", text)).toEqual([
+      { line: 1, body: "-- header" },
+      { line: 2, body: "/* block */" },
+      { line: 5, body: "-- in the body" },
+      { line: 8, body: "/* outer /* inner */" },
+    ]);
+  });
+
+  test("reads a dollar quote that is not SQL as a literal, and SQL inside one as code", async () => {
+    expect(await sqlComments("a.sql", "comment on table t is $$Don't drop$$;\n")).toEqual([]);
+    expect(await sqlComments("a.sql", "do $$ # it's python $$;\n-- after\n")).toEqual([
+      { line: 2, body: "-- after" },
+    ]);
+    const nested =
+      "create function f() returns void as $a$\nbegin\n  execute $b$\n  -- inner\n  $b$;\nend $a$;\n";
+    expect(await sqlComments("a.sql", nested)).toEqual([{ line: 4, body: "-- inner" }]);
+  });
+
+  test("reads positional parameters and identifiers as code, not dollar quotes", async () => {
+    expect(await sqlComments("a.sql", "select $1, $2 -- trailing")).toEqual([
+      { line: 1, body: "-- trailing" },
+    ]);
+    expect(await sqlComments("a.sql", "select a$b$c from t;")).toEqual([]);
+  });
+
+  test("lets a backslash escape the quote only in an escape string", async () => {
+    expect(await sqlComments("a.sql", "select E'a\\'-- still quoted';")).toEqual([]);
+    expect(await sqlComments("a.sql", "select 'a\\' -- a comment")).toEqual([
+      { line: 1, body: "-- a comment" },
+    ]);
+    expect(await sqlComments("a.sql", "select fE'a\\' -- a comment")).toEqual([
+      { line: 1, body: "-- a comment" },
+    ]);
+  });
+
+  test("returns null for a file whose quote, comment or dollar quote never closes", async () => {
+    expect(await sqlComments("a.sql", "select 'open;\n")).toBeNull();
+    expect(await sqlComments("a.sql", "/* open\n")).toBeNull();
+    expect(await sqlComments("a.sql", "select $$ open;\n")).toBeNull();
+    expect(await sqlComments("a.sql", "select $a$ $b$ $a$ $b$;\n")).toBeNull();
+  });
+});
+
 describe("the bundles", () => {
+  test("leave the language table out of every adapter, so a new language changes only the scanner", async () => {
+    for (const [source, text] of Object.entries(await bundled()))
+      expect([source, text.includes("interpreters")]).toEqual([source, source === "no-comments/scan.cjs"]);
+  });
+
   test("are the committed gate files, rebuilt from src", async () => {
     const built = await bundled();
     expect(Object.keys(built)).toEqual(GATE_BUNDLES.map(({ source }) => source));
@@ -204,6 +325,25 @@ describe("the pre-commit hook", () => {
     expect(commit(dir).stderr).toStartWith("no-comments: a.ts:1  // agent-gate:no-comments:1 and more\n");
     write(dir, { "a.ts": "export {}; // agent-gate:no-comments:1\n" });
     expect(commit(dir).stderr).toStartWith("no-comments: a.ts:1  // agent-gate:no-comments:1\n");
+  });
+
+  test("judges each language with the adapter installed for it", () => {
+    const dir = repo();
+    installGates(dir, ["no-comments-dart", "no-comments-sql"]);
+    write(dir, {
+      "lib/a.dart": "void f() {} // why\n",
+      "db/a.sql": "select 1; -- why\n",
+      "a.ts": "// why\n",
+    });
+    expect(commit(dir)).toEqual({
+      status: 1,
+      stderr: [
+        "no-comments: db/a.sql:1  -- why",
+        "no-comments: lib/a.dart:1  // why",
+        "  Remove each comment; a why belongs in a name, a test or the docs.",
+        "",
+      ].join("\n"),
+    });
   });
 
   test("refuses a file that does not parse", () => {
@@ -394,5 +534,17 @@ describe("install and doctor", () => {
       fix: "delete .githooks/no-comments/javascript.cjs",
     });
     expect(gatesDoctor(repo({ "a.ts": "export {};\n" })).checks.map(({ name }) => name)).toEqual(["gates"]);
+  });
+
+  test("doctor names every tracked language whose gate is not installed, with one install for all", () => {
+    const dir = gated({ "a.ts": "export {};\n", "a.dart": "void f() {}\n", "b.dart": "", "db/a.sql": "" });
+    git(dir, ["add", "-A"]);
+    expect(gatesDoctor(dir).checks.at(-1)).toEqual({
+      name: "no-comments languages",
+      state: "warn",
+      detail:
+        "dart reads 2 tracked files, but no-comments-dart is not installed; sql reads 1 tracked file, but no-comments-sql is not installed",
+      fix: "agent-gates install no-comments-dart no-comments-sql",
+    });
   });
 });

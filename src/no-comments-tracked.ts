@@ -1,8 +1,9 @@
 import { closeSync, existsSync, openSync, readSync } from "node:fs";
 import { join } from "node:path";
 import { gitOutput, nulFields } from "./git";
-import { LANGUAGE_NAMES, type Language, languageOf, routeOf } from "./no-comments-languages";
-import { firstLine, HEAD_SPAN, marksGenerated, outsideTheCode } from "./no-comments-skips";
+import { LANGUAGE_NAMES, type Language, languageOf } from "./no-comments-languages";
+import { firstLine, routeOf } from "./no-comments-route";
+import { HEAD_SPAN, marksGenerated, outsideTheCode } from "./no-comments-skips";
 
 const REGULAR_FILE = /^100(?:644|755) /;
 
@@ -20,8 +21,7 @@ function headOf(path: string): string {
 }
 
 function isRouted(path: string): boolean {
-  const route = routeOf(path);
-  return route.kind === "first-line" || route.language !== null;
+  return routeOf(path).kind === "first-line" || languageOf(path, "") !== null;
 }
 
 function trackedRegularFiles(root: string): string[] {

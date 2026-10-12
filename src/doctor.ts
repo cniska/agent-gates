@@ -72,10 +72,11 @@ function plannedHealth(planned: PlannedFile, preCommit: PreCommitState): Health 
 function missingHealth(missing: readonly Language[], tracked: ReadonlyMap<Language, number>): Health[] {
   if (missing.length === 0) return [];
   const detail = missing
-    .map(
-      (language) =>
-        `tracks ${tracked.get(language)} files ${language} reads but ${noCommentsGate(language)} is not installed`,
-    )
+    .map((language) => {
+      const count = tracked.get(language) ?? 0;
+      const files = count === 1 ? "file" : "files";
+      return `${language} reads ${count} tracked ${files}, but ${noCommentsGate(language)} is not installed`;
+    })
     .join("; ");
   return [
     {

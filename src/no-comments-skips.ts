@@ -15,11 +15,6 @@ export function marksGenerated(text: string): boolean {
   return GENERATED.test(head) || AUTO_GENERATED.test(head);
 }
 
-export function firstLine(text: string): string {
-  const end = text.indexOf("\n");
-  return end === -1 ? text : text.slice(0, end);
-}
-
 export function outsideTheCode(root: string, paths: readonly string[]): Set<string> {
   if (paths.length === 0) return new Set();
   const fields = nulFields(

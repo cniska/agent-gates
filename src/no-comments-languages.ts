@@ -1,4 +1,6 @@
-export const LANGUAGE_NAMES = ["javascript"] as const;
+import { interpreterOf, routeOf } from "./no-comments-route";
+
+export const LANGUAGE_NAMES = ["javascript", "dart", "sql"] as const;
 
 export type Language = (typeof LANGUAGE_NAMES)[number];
 
@@ -13,30 +15,16 @@ export const LANGUAGES: Readonly<Record<Language, Routing>> = {
     extensions: [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"],
     interpreters: ["node", "bun", "deno"],
   },
+  dart: { extensions: [".dart"], interpreters: ["dart"] },
+  sql: { extensions: [".sql"], interpreters: [] },
 };
-
-const SHEBANG = /^#!\s*(?:\/usr\/bin\/env\s+(?:-\S+\s+)*)?(?:\S*\/)?([^\s/]+)/;
-
-export type Route =
-  | { readonly kind: "extension"; readonly extension: string; readonly language: Language | null }
-  | { readonly kind: "first-line" };
-
-export function routeOf(path: string): Route {
-  const name = path.slice(path.lastIndexOf("/") + 1);
-  const dot = name.lastIndexOf(".");
-  if (dot <= 0) return { kind: "first-line" };
-  const extension = name.slice(dot);
-  const language = LANGUAGE_NAMES.find((named) => LANGUAGES[named].extensions.includes(extension)) ?? null;
-  return { kind: "extension", extension, language };
-}
-
-export function interpreterOf(head: string): string | null {
-  return SHEBANG.exec(head)?.[1] ?? null;
-}
 
 export function languageOf(path: string, firstLine: string): Language | null {
   const route = routeOf(path);
-  if (route.kind === "extension") return route.language;
+  if (route.kind === "extension")
+    return (
+      LANGUAGE_NAMES.find((language) => LANGUAGES[language].extensions.includes(route.extension)) ?? null
+    );
   const interpreter = interpreterOf(firstLine);
   if (interpreter === null) return null;
   return LANGUAGE_NAMES.find((language) => LANGUAGES[language].interpreters.includes(interpreter)) ?? null;
