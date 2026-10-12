@@ -1,6 +1,6 @@
 import { interpreterOf, routeOf } from "./no-comments-route";
 
-export const LANGUAGE_NAMES = ["javascript", "dart", "sql"] as const;
+export const LANGUAGE_NAMES = ["javascript", "dart", "sql", "shell"] as const;
 
 export type Language = (typeof LANGUAGE_NAMES)[number];
 
@@ -17,6 +17,7 @@ export const LANGUAGES: Readonly<Record<Language, Routing>> = {
   },
   dart: { extensions: [".dart"], interpreters: ["dart"] },
   sql: { extensions: [".sql"], interpreters: [] },
+  shell: { extensions: [".sh", ".bash"], interpreters: ["sh", "bash", "dash", "zsh"] },
 };
 
 export function languageOf(path: string, firstLine: string): Language | null {

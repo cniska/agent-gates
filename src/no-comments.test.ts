@@ -19,6 +19,7 @@ import { installGates, SOURCE_DIR } from "./gates";
 import { comments as dartComments } from "./no-comments-dart";
 import { comments } from "./no-comments-javascript";
 import { LANGUAGE_NAMES, LANGUAGES, languageOf } from "./no-comments-languages";
+import { comments as shellComments } from "./no-comments-shell";
 import { comments as sqlComments } from "./no-comments-sql";
 
 const NO_COMMIT = "0000000000000000000000000000000000000000";
@@ -106,11 +107,15 @@ describe("the language table", () => {
     expect(languageOf("bin/tool", "#!/usr/bin/env node")).toBe("javascript");
     expect(languageOf("bin/tool", "#!/usr/bin/env -S bun --silent")).toBe("javascript");
     expect(languageOf("bin/tool", "#!/usr/local/bin/deno run")).toBe("javascript");
-    expect(languageOf("bin/tool", "#!/bin/sh")).toBeNull();
+    expect(languageOf("bin/tool", "#!/usr/bin/env python3")).toBeNull();
     expect(languageOf(".eslintrc", "")).toBeNull();
     expect(languageOf("lib/a.dart", "")).toBe("dart");
     expect(languageOf("bin/tool", "#!/usr/bin/env dart")).toBe("dart");
     expect(languageOf("db/001.sql", "")).toBe("sql");
+    expect(languageOf("scripts/a.sh", "")).toBe("shell");
+    expect(languageOf("scripts/a.bash", "")).toBe("shell");
+    for (const shebang of ["#!/bin/sh", "#!/usr/bin/env bash", "#!/bin/dash", "#!/bin/zsh -f"])
+      expect([shebang, languageOf(".githooks/pre-push", shebang)]).toEqual([shebang, "shell"]);
   });
 });
 
@@ -293,6 +298,161 @@ describe("the sql adapter", () => {
   });
 });
 
+describe("the shell adapter", () => {
+  test("refuses each comment, and no hash in a string, heredoc or expansion", async () => {
+    const text = [
+      "#!/usr/bin/env bash",
+      "# header",
+      "echo \"a # b\" 'c # d' a#b $# # trailing",
+      "cat <<EOF",
+      "# heredoc text",
+      "EOF",
+      `n=\${#list[@]}`,
+      "if true; then",
+      "  :",
+      "  # last in its block",
+      "fi",
+      "# last in the file",
+    ].join("\n");
+    expect(await shellComments("a.sh", text)).toEqual([
+      { line: 2, body: "# header" },
+      { line: 3, body: "# trailing" },
+      { line: 10, body: "# last in its block" },
+      { line: 12, body: "# last in the file" },
+    ]);
+  });
+
+  test("keeps the shebang and shellcheck's directives, and only those", async () => {
+    const text = "#!/bin/sh\n# shellcheck disable=SC2034\nx=1\n  # shellcheck source=lib.sh\n#!/bin/sh\n";
+    expect(await shellComments("a.sh", text)).toEqual([{ line: 5, body: "#!/bin/sh" }]);
+    expect(await shellComments("a.sh", "# shellchecked by hand\n")).toEqual([
+      { line: 1, body: "# shellchecked by hand" },
+    ]);
+  });
+
+  test("starts a comment only where a word starts", async () => {
+    const lines = [
+      "a=1 #c",
+      "echo a;#c",
+      "echo a&#c",
+      "echo a|#c",
+      "a=( #c",
+      ")",
+      "f() #c",
+      "{ :; }",
+      "a#b c\\#d",
+    ];
+    expect(await shellComments("a.sh", lines.join("\n"))).toEqual([
+      { line: 1, body: "#c" },
+      { line: 2, body: "#c" },
+      { line: 3, body: "#c" },
+      { line: 4, body: "#c" },
+      { line: 5, body: "#c" },
+      { line: 7, body: "#c" },
+    ]);
+    expect(await shellComments("a.sh", "echo a\\\n# not a comment\necho b \\\n# a comment\n")).toEqual([
+      { line: 4, body: "# a comment" },
+    ]);
+  });
+
+  test("reads no comment in a parameter, an arithmetic expansion or a regex", async () => {
+    const lines = [
+      `echo $# \${#x} \${x#p} \${x##p} \${x/#a/b} $$#`,
+      "echo $((1 << 2)) $[1+2] $'a\\'#b' $\"#\"",
+      "(( x << 1 ))",
+      "[[ $x =~ #a ]]",
+      `echo \${x:-$(echo #c`,
+      ")}",
+    ];
+    expect(await shellComments("a.sh", lines.join("\n"))).toEqual([{ line: 5, body: "#c" }]);
+  });
+
+  test("reads comments inside command and process substitutions, a case in one too", async () => {
+    const lines = [
+      "x=$( (case a in b) echo;; (c) :;; esac) ) #1",
+      'echo "$(echo "# x" #2',
+      ')" <(echo #3',
+      ")#3b",
+      "echo `echo a #4`",
+      'echo `echo "\\`echo #5\\`"` #6',
+      'y=`sed -e "s,\\"\\\\"(,," #7`',
+    ];
+    expect((await shellComments("a.sh", lines.join("\n")))?.map(({ line, body }) => [line, body])).toEqual([
+      [1, "#1"],
+      [2, "#2"],
+      [3, "#3"],
+      [5, "#4"],
+      [6, "#5"],
+      [6, "#6"],
+      [7, "#7"],
+    ]);
+  });
+
+  test("reads a =~ regex as one word, its parenthesised groups and alternatives included", async () => {
+    const regex = "[[ $l =~ ^[[:space:]]*(#|$) ]]";
+    expect(await shellComments("a.sh", `${regex}\n`)).toEqual([]);
+    expect(await shellComments("a.sh", `x=$(${regex} && echo y)\n`)).toEqual([]);
+    expect(await shellComments("a.sh", "[[ $l =~ ^( #a)$ ]] #c\n")).toEqual([{ line: 1, body: "#c" }]);
+  });
+
+  test("closes a substitution at its own parenthesis, not at a case pattern's", async () => {
+    expect(await shellComments("a.sh", 'x="$(case a in b) echo " #c";; esac)"\n')).toEqual([]);
+    expect(await shellComments("a.sh", 'x="$(case a in b) echo esac;; c) echo " #c";; esac)"\n')).toEqual([]);
+  });
+
+  test("reads (( as arithmetic where a command starts, and after for", async () => {
+    expect(await shellComments("a.sh", "if (( x << 1 )); then :; fi\n")).toEqual([]);
+    expect(await shellComments("a.sh", "for ((i = 0; i << 2; i++)); do :; done\n")).toEqual([]);
+    expect(await shellComments("a.sh", "echo $[1 << 2]\n")).toEqual([]);
+  });
+
+  test("unescapes a backtick's quotes inside double quotes before reading it", async () => {
+    expect(await shellComments("a.sh", 'echo "`echo \\"a #b\\"`"\n')).toEqual([]);
+    expect(await shellComments("a.sh", 'echo "`echo \\"#\\" #x`"\n')).toEqual([{ line: 1, body: "#x" }]);
+  });
+
+  test("reads heredoc bodies as text, and the substitutions in an unquoted one as code", async () => {
+    const lines = [
+      "cat <<EOF; cat <<-'E2' # c",
+      "# body",
+      "$(echo #in",
+      ")",
+      "EOF",
+      "\t# body",
+      "\t$(echo #x",
+      "\tE2",
+      "cat <<\\E3; cat <<< x #here",
+      "$(echo #literal)",
+      "E3",
+      "# after",
+    ];
+    expect(await shellComments("a.sh", lines.join("\n"))).toEqual([
+      { line: 1, body: "# c" },
+      { line: 3, body: "#in" },
+      { line: 9, body: "#here" },
+      { line: 12, body: "# after" },
+    ]);
+  });
+
+  test("returns null for a quote, substitution or heredoc that never closes", async () => {
+    for (const open of [
+      "echo 'a\n",
+      'echo "a\n',
+      "echo $'a\n",
+      "echo $(a\n",
+      "echo ${a\n",
+      "echo `a\n",
+      "echo $[1\n",
+    ])
+      expect([open, await shellComments("a.sh", open)]).toEqual([open, null]);
+    expect(await shellComments("a.sh", "cat <<EOF\nbody\n")).toBeNull();
+    expect(await shellComments("a.sh", "cat <<EOF\nbody\n EOF\n")).toBeNull();
+    expect(await shellComments("a.sh", "if true; then\n  echo # open\n")).toEqual([
+      { line: 2, body: "# open" },
+    ]);
+  });
+});
+
 describe("the bundles", () => {
   test("leave the language table out of every adapter, so a new language changes only the scanner", async () => {
     for (const [source, text] of Object.entries(await bundled()))
@@ -345,15 +505,17 @@ describe("the pre-commit hook", () => {
 
   test("judges each language with the adapter installed for it", () => {
     const dir = repo();
-    installGates(dir, ["no-comments-dart", "no-comments-sql"]);
+    installGates(dir, ["no-comments-dart", "no-comments-sql", "no-comments-shell"]);
     write(dir, {
       "lib/a.dart": "void f() {} // why\n",
       "db/a.sql": "select 1; -- why\n",
+      "bin/tool": "#!/bin/sh\n# why\n",
       "a.ts": "// why\n",
     });
     expect(commit(dir)).toEqual({
       status: 1,
       stderr: [
+        "no-comments: bin/tool:2  # why",
         "no-comments: db/a.sql:1  -- why",
         "no-comments: lib/a.dart:1  // why",
         "  Remove each comment; a why belongs in a name, a test or the docs.",
