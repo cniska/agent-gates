@@ -4,7 +4,7 @@ Commit gates a project owns: git hooks that refuse a bad commit locally, and the
 
 ## Install
 
-agent-gates runs on [Bun](https://bun.sh), which [mise](https://mise.jdx.dev) installs for it. With mise installed:
+agent-gates runs on [Bun](https://bun.sh), and its tests run the shipped scanner under Node; [mise](https://mise.jdx.dev) installs both. With mise installed:
 
 ```bash
 git clone https://github.com/cniska/agent-gates.git
@@ -12,7 +12,7 @@ cd agent-gates
 mise trust && mise install
 ```
 
-`mise install` installs Bun and the dependencies, and puts `agent-gates` in `~/.bun/bin` with `bun link`. Add that directory to your `PATH` if it is not there yet. Then, in the project you want to gate:
+`mise install` installs Bun, Node and the dependencies, and puts `agent-gates` in `~/.bun/bin` with `bun link`. Add that directory to your `PATH` if it is not there yet. Then, in the project you want to gate:
 
 ```bash
 agent-gates install commit-subject no-comments-javascript
