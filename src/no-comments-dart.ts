@@ -1,6 +1,14 @@
 import type { CommentsOf } from "./no-comments-languages";
-import { lineEnd, SHEBANG_PREFIX } from "./no-comments-route";
-import { nestedBlockEnd, refusedComments, type Span } from "./no-comments-spans";
+import { SHEBANG_PREFIX } from "./no-comments-route";
+import {
+  type Lexed,
+  lineEnd,
+  nestedBlockEnd,
+  refusedComments,
+  type Span,
+  type Stopped,
+  unterminated,
+} from "./no-comments-spans";
 
 const ANALYZER_DIRECTIVE = /^(?:ignore:|ignore_for_file:|coverage:|@dart\s*=)/;
 
@@ -10,7 +18,7 @@ const DOC_SLASH_AND_SPACE = /^\/?\s*/;
 
 const IDENTIFIER_CHAR = /[A-Za-z0-9_$]/;
 
-function commentSpans(text: string): Span[] | null {
+function commentSpans(text: string): Lexed {
   const spans: Span[] = [];
   let at = text.startsWith(SHEBANG_PREFIX) ? lineEnd(text, 0) : 0;
 
@@ -20,64 +28,63 @@ function commentSpans(text: string): Span[] | null {
     spans.push({ start, end: at });
   }
 
-  function blockComment(): boolean {
+  function blockComment(): Stopped | null {
     const end = nestedBlockEnd(text, at, text.length);
-    if (end === null) return false;
+    if (end === null) return unterminated(at, "comment");
     spans.push({ start: at, end });
     at = end;
-    return true;
+    return null;
   }
 
-  function string(raw: boolean): boolean {
+  function string(raw: boolean): Stopped | null {
+    const start = at;
     const quote = text[at] ?? "";
     const close = text.startsWith(quote.repeat(3), at) ? quote.repeat(3) : quote;
     at += close.length;
     while (at < text.length) {
       if (text.startsWith(close, at)) {
         at += close.length;
-        return true;
+        return null;
       }
       const char = text[at];
-      if (close.length === 1 && char === "\n") return false;
+      if (close.length === 1 && char === "\n") return unterminated(start, "string");
       if (!raw && char === "\\") at += 2;
       else if (!raw && char === "$" && text[at + 1] === "{") {
         at += 2;
-        if (!code(true)) return false;
+        const stopped = code(true);
+        if (stopped !== null) return stopped;
       } else at++;
     }
-    return false;
+    return unterminated(start, "string");
   }
 
-  function code(closesInterpolation: boolean): boolean {
+  function code(closesInterpolation: boolean): Stopped | null {
+    const start = at;
     let depth = 0;
     while (at < text.length) {
       const char = text[at];
       const next = text[at + 1];
+      let stopped: Stopped | null = null;
       if (char === "/" && next === "/") lineComment();
-      else if (char === "/" && next === "*") {
-        if (!blockComment()) return false;
-      } else if (char === "'" || char === '"') {
-        if (!string(false)) return false;
-      } else if (
-        char === "r" &&
-        (next === "'" || next === '"') &&
-        !IDENTIFIER_CHAR.test(text[at - 1] ?? "")
-      ) {
+      else if (char === "/" && next === "*") stopped = blockComment();
+      else if (char === "'" || char === '"') stopped = string(false);
+      else if (char === "r" && (next === "'" || next === '"') && !IDENTIFIER_CHAR.test(text[at - 1] ?? "")) {
         at++;
-        if (!string(true)) return false;
+        stopped = string(true);
       } else if (char === "{") {
         depth++;
         at++;
       } else if (char === "}") {
         at++;
-        if (closesInterpolation && depth === 0) return true;
+        if (closesInterpolation && depth === 0) return null;
         depth--;
       } else at++;
+      if (stopped !== null) return stopped;
     }
-    return !closesInterpolation;
+    return closesInterpolation ? unterminated(start, "interpolation") : null;
   }
 
-  return code(false) ? spans : null;
+  return code(false) ?? { kind: "lexed", spans };
 }
 
 function isKept(text: string, { start, end }: Span): boolean {

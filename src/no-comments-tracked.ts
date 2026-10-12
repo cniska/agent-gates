@@ -2,8 +2,9 @@ import { closeSync, existsSync, openSync, readSync } from "node:fs";
 import { join } from "node:path";
 import { gitOutput, nulFields } from "./git";
 import { LANGUAGE_NAMES, type Language, languageOf } from "./no-comments-languages";
-import { firstLine, routeOf } from "./no-comments-route";
+import { routeOf } from "./no-comments-route";
 import { HEAD_SPAN, marksGenerated, outsideTheCode } from "./no-comments-skips";
+import { firstLine } from "./no-comments-spans";
 
 const REGULAR_FILE = /^100(?:644|755) /;
 

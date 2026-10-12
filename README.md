@@ -59,7 +59,7 @@ The `no-comments-<language>` gates judge whole files:
 
 - On commit, each file the commit changes, read from the index.
 - In CI, each file the push changes, read at its head.
-- A file that does not parse is refused.
+- A file that does not parse is refused, with the line and the reason its parser gives.
 
 They need `node` on `PATH` and nothing installed in the project. A file with no extension is routed by its shebang. They skip:
 
@@ -82,8 +82,8 @@ A comment a tool reads stays:
 How SQL, shell and Rust are read:
 
 - **SQL** is read as PostgreSQL, with its dollar quotes and `E''` strings. A dollar-quoted body that reads as SQL is judged as code, so a `--` in a dollar-quoted text literal is refused. A body that does not read as SQL is left alone as text.
-- **Shell** is read by a lexer, not a parser. A `#` starts a comment only where a word starts, and never inside quotes, parameter and arithmetic expansions, the regex after `=~`, or heredoc bodies. Only an unclosed quote, substitution or heredoc is refused as not parsing.
-- **Rust** is read by a lexer that finds the comments rustc's own lexer finds, with raw strings, byte and C strings, char literals, lifetimes and raw identifiers. An attribute that carries doc text is refused as one comment, from its `#` to its closing `]`: one with `doc = …` anywhere inside it, so `#[doc = …]`, `#![doc = …]` and `#[cfg_attr(docsrs, doc = …)]` alike. `#[doc(hidden)]`, `#[doc(alias = …)]` and `#[cfg(doc)]` carry none. A `#[doc = $doc]` that a `macro_rules!` forwards is refused too, so a macro that generates docs is refused with them. Only an unclosed literal or block comment is refused as not parsing.
+- **Shell** is read by a lexer, not a parser. A `#` starts a comment only where a word starts, and never inside quotes, parameter and arithmetic expansions, the regex after `=~`, or heredoc bodies. Only an unclosed quote, expansion, substitution, backquote or heredoc is refused as not parsing, at the line where it opens.
+- **Rust** is read by a lexer that finds the comments rustc's own lexer finds, with raw strings, byte and C strings, char literals, lifetimes and raw identifiers. An attribute that carries doc text is refused as one comment, from its `#` to its closing `]`: one with `doc = …` anywhere inside it, so `#[doc = …]`, `#![doc = …]` and `#[cfg_attr(docsrs, doc = …)]` alike. `#[doc(hidden)]`, `#[doc(alias = …)]` and `#[cfg(doc)]` carry none. A `#[doc = $doc]` that a `macro_rules!` forwards is refused too, so a macro that generates docs is refused with them. Only an unclosed literal, char literal or block comment is refused as not parsing, at the line where it opens.
 
 To remove a language, delete its `.githooks/no-comments/<language>.cjs`.
 
@@ -115,7 +115,7 @@ Each gate file is in one of these states, and `install` acts on it:
 To add a language:
 
 1. Add its extensions and shebang interpreters to `LANGUAGES` in `src/no-comments-languages.ts`.
-2. Write a lexer in `src/no-comments-<language>.ts` that exports `comments`, which returns the comments it refuses, or `null` for a file that does not parse.
+2. Write a lexer in `src/no-comments-<language>.ts` that exports `comments`, built with `refusedComments` from `src/no-comments-spans.ts`. The lexer returns the comment spans it read, or `unterminated(<offset>, "<construct>")` for a construct that never closes, at the offset where it opens. `comments` then returns `{ kind: "read", comments }`, each comment its line and full text, or `{ kind: "unparsed", line, reason }`.
 3. Check the lexer against the language's own tokenizer over real and deliberately broken files. It must find the same comments, and never refuse a file the tokenizer accepts.
 4. Add its tests, its `GATES` entry and its README row.
 5. Run `bun run gates:bundle`, and record the bundle's hash as [AGENTS.md](AGENTS.md) describes.

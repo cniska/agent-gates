@@ -1,6 +1,13 @@
 import type { CommentsOf } from "./no-comments-languages";
-import { lineEnd, SHEBANG_PREFIX } from "./no-comments-route";
-import { refusedComments, type Span } from "./no-comments-spans";
+import { SHEBANG_PREFIX } from "./no-comments-route";
+import {
+  type Lexed,
+  lineEnd,
+  refusedComments,
+  type Span,
+  type Stopped,
+  unterminated,
+} from "./no-comments-spans";
 
 const SHELLCHECK_DIRECTIVE = /^#\s*shellcheck\s/;
 
@@ -35,11 +42,16 @@ const BACKTICK_ESCAPES = { unquoted: "\\`$", double: '\\`$"', heredoc: "\\`$" } 
 
 type Quoting = keyof typeof BACKTICK_ESCAPES;
 
-type Heredoc = { readonly delimiter: string; readonly expands: boolean; readonly stripsTabs: boolean };
+type Heredoc = {
+  readonly start: number;
+  readonly delimiter: string;
+  readonly expands: boolean;
+  readonly stripsTabs: boolean;
+};
 
 type CaseState = "subject" | "in" | "pattern" | "body";
 
-function commentSpans(text: string): Span[] | null {
+function commentSpans(text: string): Lexed {
   const spans: Span[] = [];
   const pending: Heredoc[] = [];
   let at = 0;
@@ -50,43 +62,46 @@ function commentSpans(text: string): Span[] | null {
     spans.push({ start, end: at });
   }
 
-  function singleQuoted(): boolean {
+  function singleQuoted(): Stopped | null {
     const close = text.indexOf("'", at + 1);
-    if (close < 0) return false;
+    if (close < 0) return unterminated(at, "quote");
     at = close + 1;
-    return true;
+    return null;
   }
 
-  function ansiQuoted(): boolean {
+  function ansiQuoted(): Stopped | null {
+    const start = at;
     at += 2;
     while (at < text.length) {
       const char = text[at];
       if (char === "\\") at += 2;
       else if (char === "'") {
         at++;
-        return true;
+        return null;
       } else at++;
     }
-    return false;
+    return unterminated(start, "quote");
   }
 
-  function doubleQuoted(): boolean {
+  function doubleQuoted(): Stopped | null {
+    const start = at;
     at++;
     while (at < text.length) {
       if (text[at] === '"') {
         at++;
-        return true;
+        return null;
       }
-      if (!expansion("double")) return false;
+      const stopped = expansion("double");
+      if (stopped !== null) return stopped;
     }
-    return false;
+    return unterminated(start, "quote");
   }
 
-  function backticked(quoting: Quoting): boolean {
+  function backticked(quoting: Quoting): Stopped | null {
     const start = at + 1;
     let end = start;
     while (end < text.length && text[end] !== "`") end += text[end] === "\\" ? 2 : 1;
-    if (end >= text.length) return false;
+    if (end >= text.length) return unterminated(at, "backquote");
     const offsets: number[] = [];
     let inner = "";
     for (let index = start; index < end; index++) {
@@ -95,47 +110,50 @@ function commentSpans(text: string): Span[] | null {
       inner += text[index];
     }
     const nested = commentSpans(inner);
-    if (nested === null) return false;
-    for (const span of nested)
+    if (nested.kind === "stopped") return { ...nested, at: offsets[nested.at] ?? end };
+    for (const span of nested.spans)
       spans.push({ start: offsets[span.start] ?? end, end: (offsets[span.end - 1] ?? end) + 1 });
     at = end + 1;
-    return true;
+    return null;
   }
 
-  function expansion(quoting: Quoting): boolean {
+  function expansion(quoting: Quoting): Stopped | null {
     const char = text[at];
     if (char === "\\") at += 2;
     else if (char === "$") return dollar(quoting);
     else if (char === "`") return backticked(quoting);
     else at++;
-    return true;
+    return null;
   }
 
-  function quotedOrExpansion(quoting: Quoting): boolean {
+  function quotedOrExpansion(quoting: Quoting): Stopped | null {
     const char = text[at];
     if (char === "'" && quoting === "unquoted") return singleQuoted();
     if (char === '"' && quoting !== "heredoc") return doubleQuoted();
     return expansion(quoting);
   }
 
-  function braced(quoting: Quoting): boolean {
+  function braced(quoting: Quoting): Stopped | null {
+    const start = at;
     while (at < text.length) {
       if (text[at] === "}") {
         at++;
-        return true;
+        return null;
       }
-      if (!quotedOrExpansion(quoting)) return false;
+      const stopped = quotedOrExpansion(quoting);
+      if (stopped !== null) return stopped;
     }
-    return false;
+    return unterminated(start, "parameter expansion");
   }
 
-  function arithmetic(open: string, close: string): boolean {
+  function arithmetic(open: string, close: string): Stopped | null {
+    const start = at;
     let depth = 0;
     while (at < text.length) {
       const char = text[at];
       if (depth === 0 && text.startsWith(close, at)) {
         at += close.length;
-        return true;
+        return null;
       }
       if (char === open) {
         depth++;
@@ -143,12 +161,15 @@ function commentSpans(text: string): Span[] | null {
       } else if (char === close[0]) {
         depth--;
         at++;
-      } else if (!quotedOrExpansion("unquoted")) return false;
+      } else {
+        const stopped = quotedOrExpansion("unquoted");
+        if (stopped !== null) return stopped;
+      }
     }
-    return false;
+    return unterminated(start, "arithmetic expansion");
   }
 
-  function dollar(quoting: Quoting): boolean {
+  function dollar(quoting: Quoting): Stopped | null {
     const next = text[at + 1];
     if (next === "'" && quoting === "unquoted") return ansiQuoted();
     if (text.startsWith("$((", at)) {
@@ -168,17 +189,20 @@ function commentSpans(text: string): Span[] | null {
       return arithmetic("[", "]");
     }
     at += SPECIAL_PARAMETER.test(next ?? "") ? 2 : 1;
-    return true;
+    return null;
   }
 
-  function word(): string | null {
+  function word(): string | Stopped {
     const start = at;
-    while (at < text.length && !WORD_ENDS.has(text[at] ?? ""))
-      if (!quotedOrExpansion("unquoted")) return null;
+    while (at < text.length && !WORD_ENDS.has(text[at] ?? "")) {
+      const stopped = quotedOrExpansion("unquoted");
+      if (stopped !== null) return stopped;
+    }
     return text.slice(start, at);
   }
 
   function heredocOperator(): void {
+    const start = at;
     const stripsTabs = text[at] === "-";
     if (stripsTabs) at++;
     while (BLANKS.has(text[at] ?? "")) at++;
@@ -200,24 +224,25 @@ function commentSpans(text: string): Span[] | null {
         at++;
       }
     }
-    if (delimiter !== "") pending.push({ delimiter, expands: !quoted, stripsTabs });
+    if (delimiter !== "") pending.push({ start, delimiter, expands: !quoted, stripsTabs });
   }
 
-  function expandedLine(): boolean {
+  function expandedLine(): Stopped | null {
     while (at < text.length) {
       if (text[at] === "\n") {
         at++;
-        return true;
+        return null;
       }
-      if (!expansion("heredoc")) return false;
+      const stopped = expansion("heredoc");
+      if (stopped !== null) return stopped;
     }
-    return true;
+    return null;
   }
 
-  function heredocBodies(): boolean {
-    for (const { delimiter, expands, stripsTabs } of pending.splice(0)) {
+  function heredocBodies(): Stopped | null {
+    for (const { start, delimiter, expands, stripsTabs } of pending.splice(0)) {
       for (;;) {
-        if (at >= text.length) return false;
+        if (at >= text.length) return unterminated(start, "heredoc");
         const end = lineEnd(text, at);
         const line = text.slice(at, end);
         if ((stripsTabs ? line.replace(LEADING_TABS, "") : line) === delimiter) {
@@ -225,13 +250,16 @@ function commentSpans(text: string): Span[] | null {
           break;
         }
         if (!expands) at = end + 1;
-        else if (!expandedLine()) return false;
+        else {
+          const stopped = expandedLine();
+          if (stopped !== null) return stopped;
+        }
       }
     }
-    return true;
+    return null;
   }
 
-  function redirect(): boolean {
+  function redirect(): Stopped | null {
     if (text[at + 1] === "(") {
       at += 2;
       return code(true);
@@ -240,10 +268,11 @@ function commentSpans(text: string): Span[] | null {
       at += 2;
       heredocOperator();
     } else at++;
-    return true;
+    return null;
   }
 
-  function code(substitution: boolean): boolean {
+  function code(substitution: boolean): Stopped | null {
+    const start = at;
     const cases: CaseState[] = [];
     let depth = 0;
     let wordStart = true;
@@ -268,7 +297,7 @@ function commentSpans(text: string): Span[] | null {
       return false;
     }
 
-    function openParen(): boolean {
+    function openParen(): Stopped | null {
       wordStart = true;
       if ((commandPosition || arithmeticNext) && text[at + 1] === "(") {
         at += 2;
@@ -281,7 +310,7 @@ function commentSpans(text: string): Span[] | null {
         depth++;
         commandPosition = true;
       }
-      return true;
+      return null;
     }
 
     function separator(): void {
@@ -292,7 +321,7 @@ function commentSpans(text: string): Span[] | null {
       commandPosition = true;
     }
 
-    function regexWord(): boolean {
+    function regexWord(): Stopped | null {
       while (BLANKS.has(text[at] ?? "")) at++;
       let groups = 0;
       while (at < text.length) {
@@ -304,9 +333,12 @@ function commentSpans(text: string): Span[] | null {
           groups--;
           at++;
         } else if (groups === 0 && char !== "|" && WORD_ENDS.has(char)) break;
-        else if (!quotedOrExpansion("unquoted")) return false;
+        else {
+          const stopped = quotedOrExpansion("unquoted");
+          if (stopped !== null) return stopped;
+        }
       }
-      return true;
+      return null;
     }
 
     function keyword(read: string): void {
@@ -324,11 +356,24 @@ function commentSpans(text: string): Span[] | null {
         commandPosition = commandPosition && KEEPS_COMMAND_POSITION.has(read);
     }
 
+    function wordAt(): Stopped | null {
+      const read = word();
+      if (typeof read !== "string") return read;
+      if (read === REGEX_OPERATOR) {
+        const stopped = regexWord();
+        if (stopped !== null) return stopped;
+      }
+      wordStart = false;
+      keyword(read);
+      return null;
+    }
+
     while (at < text.length) {
       const char = text[at] ?? "";
+      let stopped: Stopped | null = null;
       if (char === "\n") {
         at++;
-        if (!heredocBodies()) return false;
+        stopped = heredocBodies();
         wordStart = true;
         commandPosition = true;
       } else if (BLANKS.has(char)) {
@@ -337,25 +382,23 @@ function commentSpans(text: string): Span[] | null {
       } else if (text.startsWith(LINE_CONTINUATION, at)) at += LINE_CONTINUATION.length;
       else if (char === "#" && wordStart) comment();
       else if (char === ")") {
-        if (closesSubstitution()) return true;
-      } else if (char === "(") {
-        if (!openParen()) return false;
-      } else if (char === ";" || char === "&" || char === "|") separator();
+        if (closesSubstitution()) return null;
+      } else if (char === "(") stopped = openParen();
+      else if (char === ";" || char === "&" || char === "|") separator();
       else if (char === "<" || char === ">") {
         wordStart = text[at + 1] !== "(";
         commandPosition = false;
-        if (!redirect()) return false;
-      } else {
-        const read = word();
-        if (read === null || (read === REGEX_OPERATOR && !regexWord())) return false;
-        wordStart = false;
-        keyword(read);
-      }
+        stopped = redirect();
+      } else stopped = wordAt();
+      if (stopped !== null) return stopped;
     }
-    return !substitution && pending.length === 0;
+    if (substitution) return unterminated(start, "substitution");
+    const [heredoc] = pending;
+    if (heredoc !== undefined) return unterminated(heredoc.start, "heredoc");
+    return null;
   }
 
-  return code(false) ? spans : null;
+  return code(false) ?? { kind: "lexed", spans };
 }
 
 function isKept(text: string, { start, end }: Span): boolean {

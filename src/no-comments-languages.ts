@@ -4,9 +4,13 @@ export const LANGUAGE_NAMES = ["javascript", "dart", "sql", "shell", "rust"] as 
 
 export type Language = (typeof LANGUAGE_NAMES)[number];
 
-export type Comment = { readonly line: number; readonly body: string };
+export type Comment = { readonly line: number; readonly text: string };
 
-export type CommentsOf = (path: string, text: string) => Promise<readonly Comment[] | null>;
+export type Reading =
+  | { readonly kind: "read"; readonly comments: readonly Comment[] }
+  | { readonly kind: "unparsed"; readonly line: number; readonly reason: string };
+
+export type CommentsOf = (path: string, text: string) => Reading;
 
 type Routing = { readonly extensions: readonly string[]; readonly interpreters: readonly string[] };
 

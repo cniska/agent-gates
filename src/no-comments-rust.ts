@@ -1,6 +1,14 @@
 import type { CommentsOf } from "./no-comments-languages";
-import { lineEnd, SHEBANG_PREFIX } from "./no-comments-route";
-import { nestedBlockEnd, refusedComments, type Span } from "./no-comments-spans";
+import { SHEBANG_PREFIX } from "./no-comments-route";
+import {
+  type Lexed,
+  lineEnd,
+  nestedBlockEnd,
+  refusedComments,
+  type Span,
+  type Stopped,
+  unterminated,
+} from "./no-comments-spans";
 
 const IDENTIFIER_START = /^[\p{XID_Start}_]$/u;
 
@@ -39,7 +47,7 @@ function shebangEnd(text: string): number {
   return text[at] === "[" ? 0 : lineEnd(text, 0);
 }
 
-function commentSpans(text: string): Span[] | null {
+function commentSpans(text: string): Lexed {
   const spans: Span[] = [];
   let carriesDocText = false;
   let at = shebangEnd(text);
@@ -60,9 +68,9 @@ function commentSpans(text: string): Span[] | null {
     while (isIdentifierContinue(at) || isEmoji(at)) bump();
   }
 
-  function suffixed(closed: boolean): boolean {
-    if (closed && isIdentifierStart(at)) word();
-    return closed;
+  function suffixed(stopped: Stopped | null): Stopped | null {
+    if (stopped === null && isIdentifierStart(at)) word();
+    return stopped;
   }
 
   function lineComment(): void {
@@ -71,57 +79,59 @@ function commentSpans(text: string): Span[] | null {
     spans.push({ start, end: at });
   }
 
-  function blockComment(): boolean {
+  function blockComment(): Stopped | null {
     const end = nestedBlockEnd(text, at, text.length);
-    if (end === null) return false;
+    if (end === null) return unterminated(at, "comment");
     spans.push({ start: at, end });
     at = end;
-    return true;
+    return null;
   }
 
-  function quoted(): boolean {
+  function quoted(): Stopped | null {
+    const start = at;
     at++;
     while (at < text.length) {
       const char = text[at];
       at++;
-      if (char === '"') return true;
+      if (char === '"') return null;
       if (char === "\\" && (text[at] === "\\" || text[at] === '"')) at++;
     }
-    return false;
+    return unterminated(start, "string");
   }
 
-  function rawQuoted(): boolean {
+  function rawQuoted(): Stopped | null {
     const hashesFrom = at;
     while (text[at] === "#") at++;
     const close = `"${text.slice(hashesFrom, at)}`;
-    if (text[at] !== '"') return false;
+    if (text[at] !== '"') return unterminated(hashesFrom, "raw string");
     const end = text.indexOf(close, at + 1);
-    if (end < 0) return false;
+    if (end < 0) return unterminated(hashesFrom, "raw string");
     at = end + close.length;
-    return true;
+    return null;
   }
 
-  function singleQuoted(): boolean {
+  function singleQuoted(): Stopped | null {
+    const start = at;
     at++;
     const first = charAt(at);
     if (first !== "\\" && charAt(at + first.length) === "'") {
       at += first.length + 1;
-      return true;
+      return null;
     }
     while (at < text.length) {
       const char = text[at];
       if (char === "'") {
         at++;
-        return true;
+        return null;
       }
-      if (char === "/" || (char === "\n" && text[at + 1] !== "'")) return false;
+      if (char === "/" || (char === "\n" && text[at + 1] !== "'")) return unterminated(start, "character");
       if (char === "\\") bump();
       bump();
     }
-    return false;
+    return unterminated(start, "character");
   }
 
-  function lifetimeOrChar(): boolean {
+  function lifetimeOrChar(): Stopped | null {
     const first = charAt(at + 1);
     const second = charAt(at + 1 + first.length);
     const canBeLifetime = second !== "'" && (IDENTIFIER_START.test(first) || DIGIT.test(first));
@@ -131,27 +141,27 @@ function commentSpans(text: string): Span[] | null {
     bump();
     word();
     if (text[at] === "'") at++;
-    return true;
+    return null;
   }
 
-  function literal(prefix: string): boolean {
+  function literal(prefix: string): Stopped | null {
     at += prefix.length;
     if (prefix.endsWith("r")) return suffixed(rawQuoted());
     return suffixed(text[at] === "'" ? singleQuoted() : quoted());
   }
 
-  function identifier(): boolean {
+  function identifier(): Stopped | null {
     if (text[at] === "r" && text[at + 1] === "#" && isIdentifierStart(at + 2)) {
       at += 2;
       word();
-      return true;
+      return null;
     }
     const prefix = STRING_PREFIXES.find((candidate) => opensLiteral(candidate));
     if (prefix !== undefined) return literal(prefix);
     const start = at;
     word();
     if (text.slice(start, at) === DOC_TEXT_WORD && isSingleEquals(afterTrivia(at))) carriesDocText = true;
-    return true;
+    return null;
   }
 
   function isSingleEquals(index: number): boolean {
@@ -186,21 +196,25 @@ function commentSpans(text: string): Span[] | null {
     return text[index] === "[";
   }
 
-  function attribute(): boolean {
+  function attribute(): Stopped | null {
     const start = at;
     const firstInside = spans.length;
     const outerCarriesDocText = carriesDocText;
     carriesDocText = false;
     at++;
-    while (text[at] !== "[") if (!token()) return false;
+    while (text[at] !== "[") {
+      const stopped = token();
+      if (stopped !== null) return stopped;
+    }
     at++;
-    if (!code(true)) return false;
+    const stopped = code(true);
+    if (stopped !== null) return stopped;
     if (carriesDocText) spans.splice(firstInside, Infinity, { start, end: at });
     carriesDocText ||= outerCarriesDocText;
-    return true;
+    return null;
   }
 
-  function token(): boolean {
+  function token(): Stopped | null {
     const char = text[at];
     if (text.startsWith("//", at)) lineComment();
     else if (text.startsWith("/*", at)) return blockComment();
@@ -208,28 +222,29 @@ function commentSpans(text: string): Span[] | null {
     else if (char === "'") return lifetimeOrChar();
     else if (isIdentifierStart(at) || isEmoji(at) || DIGIT.test(char ?? "")) return identifier();
     else bump();
-    return true;
+    return null;
   }
 
-  function code(closesBracket: boolean): boolean {
+  function code(closesBracket: boolean): Stopped | null {
     let depth = 0;
     while (at < text.length) {
       const char = text[at];
-      if (char === "#" && opensAttribute()) {
-        if (!attribute()) return false;
-      } else if (char === "[") {
+      let stopped: Stopped | null = null;
+      if (char === "#" && opensAttribute()) stopped = attribute();
+      else if (char === "[") {
         depth++;
         at++;
       } else if (char === "]") {
         at++;
-        if (closesBracket && depth === 0) return true;
+        if (closesBracket && depth === 0) return null;
         depth--;
-      } else if (!token()) return false;
+      } else stopped = token();
+      if (stopped !== null) return stopped;
     }
-    return true;
+    return null;
   }
 
-  return code(false) ? spans : null;
+  return code(false) ?? { kind: "lexed", spans };
 }
 
 function isKept(): boolean {

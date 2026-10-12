@@ -2,8 +2,8 @@ import { unreachable } from "./assert";
 import { markerLine } from "./gate-marker";
 import { gitOutput, mergeBase, nulFields } from "./git";
 import { type CommentsOf, type Language, languageOf } from "./no-comments-languages";
-import { firstLine } from "./no-comments-route";
 import { marksGenerated, outsideTheCode } from "./no-comments-skips";
+import { firstLine } from "./no-comments-spans";
 
 export type Judged =
   | { readonly kind: "staged" }
@@ -13,7 +13,7 @@ type JudgedFile = { readonly path: string; readonly text: string };
 
 type Finding =
   | { readonly kind: "comment"; readonly path: string; readonly line: number; readonly body: string }
-  | { readonly kind: "unparsed"; readonly path: string };
+  | { readonly kind: "unparsed"; readonly path: string; readonly line: number; readonly reason: string };
 
 export type AdapterOf = (language: Language) => CommentsOf | null;
 
@@ -73,20 +73,21 @@ export function judgedFiles(root: string, judged: Judged): JudgedFile[] {
     .filter(({ text }) => !marksGenerated(text));
 }
 
-export async function findings(files: readonly JudgedFile[], adapterOf: AdapterOf): Promise<Finding[]> {
+export function findings(files: readonly JudgedFile[], adapterOf: AdapterOf): Finding[] {
   const found: Finding[] = [];
   for (const { path, text } of files) {
     const language = languageOf(path, firstLine(text));
     const comments = language === null ? null : adapterOf(language);
     if (comments === null) continue;
-    const refused = await comments(path, text);
-    if (refused === null) {
-      found.push({ kind: "unparsed", path });
+    const reading = comments(path, text);
+    if (reading.kind === "unparsed") {
+      found.push({ kind: "unparsed", path, line: reading.line, reason: reading.reason });
       continue;
     }
     const lines = text.split("\n");
-    for (const { line, body } of refused)
-      if (markerLine(lines[line - 1] ?? "") === null) found.push({ kind: "comment", path, line, body });
+    for (const comment of reading.comments)
+      if (markerLine(lines[comment.line - 1] ?? "") === null)
+        found.push({ kind: "comment", path, line: comment.line, body: firstLine(comment.text).trim() });
   }
   return found;
 }
@@ -96,7 +97,7 @@ function lineOf(finding: Finding): string {
     case "comment":
       return `no-comments: ${finding.path}:${finding.line}  ${finding.body}`;
     case "unparsed":
-      return `no-comments: ${finding.path} does not parse; fix its syntax`;
+      return `no-comments: ${finding.path}:${finding.line} does not parse: ${finding.reason}; fix its syntax`;
     default:
       return unreachable(finding);
   }

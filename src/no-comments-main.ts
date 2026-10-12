@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { invariant } from "./assert";
 import { EXIT_STATUS, recordOf, usageErrors } from "./coded-error";
 import { checkoutRoot } from "./git";
-import type { Comment, CommentsOf, Language } from "./no-comments-languages";
+import type { Comment, CommentsOf, Language, Reading } from "./no-comments-languages";
 import { type AdapterOf, findings, type Judged, judgedFiles, verdict } from "./no-comments-scan";
 
 const SCANNER = "scan.cjs";
@@ -22,21 +22,34 @@ function isComment(value: unknown): value is Comment {
     typeof value === "object" &&
     value !== null &&
     typeof Reflect.get(value, "line") === "number" &&
-    typeof Reflect.get(value, "body") === "string"
+    typeof Reflect.get(value, "text") === "string"
   );
+}
+
+function isReading(value: unknown): value is Reading {
+  if (typeof value !== "object" || value === null) return false;
+  switch (Reflect.get(value, "kind")) {
+    case "read": {
+      const comments: unknown = Reflect.get(value, "comments");
+      return Array.isArray(comments) && comments.every(isComment);
+    }
+    case "unparsed":
+      return (
+        typeof Reflect.get(value, "line") === "number" && typeof Reflect.get(value, "reason") === "string"
+      );
+    default:
+      return false;
+  }
 }
 
 function adapterAt(path: string, load: NodeJS.Require): CommentsOf | null {
   if (!existsSync(path)) return null;
   const comments: unknown = Reflect.get(Object(load(path)), "comments");
   invariant(typeof comments === "function", `${path} exports comments()`);
-  return async (file, text) => {
-    const found: unknown = await Reflect.apply(comments, undefined, [file, text]);
-    invariant(
-      found === null || (Array.isArray(found) && found.every(isComment)),
-      `${path} returns comments or null`,
-    );
-    return found;
+  return (file, text) => {
+    const reading: unknown = Reflect.apply(comments, undefined, [file, text]);
+    invariant(isReading(reading), `${path} returns the comments it read, or where the file stops parsing`);
+    return reading;
   };
 }
 
@@ -59,27 +72,22 @@ function judgedOf(args: readonly string[]): Judged | null {
   return null;
 }
 
-async function main(): Promise<number> {
+function main(): number {
   const script = process.argv[1];
   invariant(script !== undefined, "node names the script it runs");
   const args = process.argv.slice(2);
   const judged = judgedOf(args);
   if (judged === null) throw scanUsageError("wrong_arguments", { got: args });
   const root = checkoutRoot(process.cwd());
-  const lines = verdict(
-    await findings(judgedFiles(root, judged), adaptersBeside(dirname(realpathSync(script)))),
-  );
+  const lines = verdict(findings(judgedFiles(root, judged), adaptersBeside(dirname(realpathSync(script)))));
   for (const line of lines) process.stderr.write(`${line}\n`);
   return lines.length === 0 ? 0 : EXIT_STATUS.refusal;
 }
 
-main().then(
-  (code) => {
-    process.exitCode = code;
-  },
-  (error: unknown) => {
-    const { kind, message, resolve } = recordOf(error);
-    process.stderr.write(`no-comments: ${message}; ${resolve}\n`);
-    process.exitCode = EXIT_STATUS[kind];
-  },
-);
+try {
+  process.exitCode = main();
+} catch (error) {
+  const { kind, message, resolve } = recordOf(error);
+  process.stderr.write(`no-comments: ${message}; ${resolve}\n`);
+  process.exitCode = EXIT_STATUS[kind];
+}

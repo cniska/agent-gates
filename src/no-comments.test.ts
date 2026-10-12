@@ -8,7 +8,7 @@ import { installGates, SOURCE_DIR } from "./gates";
 import { ADAPTER_FILES, SCANNER_FILE } from "./gates-contract";
 import { comments as dartComments } from "./no-comments-dart";
 import { comments } from "./no-comments-javascript";
-import { LANGUAGE_NAMES, LANGUAGES, languageOf } from "./no-comments-languages";
+import { type Comment, LANGUAGE_NAMES, LANGUAGES, languageOf, type Reading } from "./no-comments-languages";
 import { comments as rustComments } from "./no-comments-rust";
 import { comments as shellComments } from "./no-comments-shell";
 import { comments as sqlComments } from "./no-comments-sql";
@@ -23,6 +23,14 @@ import {
   scratchDir,
   writeFiles,
 } from "./repo.test-support";
+
+function read(comments: readonly Comment[]): Reading {
+  return { kind: "read", comments };
+}
+
+function unparsed(line: number, reason: string): Reading {
+  return { kind: "unparsed", line, reason };
+}
 
 function gated(files: Record<string, string> = {}): string {
   const dir = repo(files);
@@ -84,19 +92,21 @@ describe("the language table", () => {
 });
 
 describe("the javascript adapter", () => {
-  test("refuses each comment, naming its line and first line", async () => {
+  test("refuses each comment, naming its line and first line", () => {
     const text = "const a = 1; // why\n/* a\n   block */\nconst b = <T,>(x: T) => x;\n/** doc */\n";
-    expect(await comments("a.ts", text)).toEqual([
-      { line: 1, body: "// why" },
-      { line: 2, body: "/* a" },
-      { line: 5, body: "/** doc */" },
-    ]);
-    expect(await comments("a.tsx", "const a = <div>{/* note */}</div>;\n")).toEqual([
-      { line: 1, body: "/* note */" },
-    ]);
+    expect(comments("a.ts", text)).toEqual(
+      read([
+        { line: 1, text: "// why" },
+        { line: 2, text: "/* a\n   block */" },
+        { line: 5, text: "/** doc */" },
+      ]),
+    );
+    expect(comments("a.tsx", "const a = <div>{/* note */}</div>;\n")).toEqual(
+      read([{ line: 1, text: "/* note */" }]),
+    );
   });
 
-  test("keeps the comments a tool reads", async () => {
+  test("keeps the comments a tool reads", () => {
     const kept = [
       "// @ts-expect-error",
       "// eslint-disable-next-line no-console",
@@ -108,35 +118,44 @@ describe("the javascript adapter", () => {
       "/*! license */",
       "/** @vitest-environment jsdom */",
     ];
-    expect(await comments("a.ts", `#!/usr/bin/env node\n${kept.join("\nf();\n")}\n`)).toEqual([]);
+    expect(comments("a.ts", `#!/usr/bin/env node\n${kept.join("\nf();\n")}\n`)).toEqual(read([]));
   });
 
-  test("keeps JSDoc types only where plain JavaScript needs them", async () => {
+  test("keeps JSDoc types only where plain JavaScript needs them", () => {
     const typed =
       "/** @type {number} */\nlet a;\n/**\n * @param {string} x\n * @param y\n */\nfunction f(x, y) {}\n";
-    expect(await comments("a.js", typed)).toEqual([]);
-    expect(
-      await comments("a.mjs", "/**\n * @param x the input\n * Adds one.\n */\nfunction f(x) {}\n"),
-    ).toEqual([{ line: 1, body: "/**" }]);
-    expect(await comments("a.ts", typed)).toEqual([
-      { line: 1, body: "/** @type {number} */" },
-      { line: 3, body: "/**" },
-    ]);
-    expect(await comments("bin/tool", `#!/usr/bin/env node\n${typed}const b = <div />;\n`)).toEqual([]);
-    expect(await comments("bin/tool", `#!/usr/bin/env bun\n${typed}const b: number = 1;\n`)).toEqual([
-      { line: 2, body: "/** @type {number} */" },
-      { line: 4, body: "/**" },
-    ]);
+    expect(comments("a.js", typed)).toEqual(read([]));
+    expect(comments("a.mjs", "/**\n * @param x the input\n * Adds one.\n */\nfunction f(x) {}\n")).toEqual(
+      read([{ line: 1, text: "/**\n * @param x the input\n * Adds one.\n */" }]),
+    );
+    expect(comments("a.ts", typed)).toEqual(
+      read([
+        { line: 1, text: "/** @type {number} */" },
+        { line: 3, text: "/**\n * @param {string} x\n * @param y\n */" },
+      ]),
+    );
+    expect(comments("bin/tool", `#!/usr/bin/env node\n${typed}const b = <div />;\n`)).toEqual(read([]));
+    expect(comments("bin/tool", `#!/usr/bin/env bun\n${typed}const b: number = 1;\n`)).toEqual(
+      read([
+        { line: 2, text: "/** @type {number} */" },
+        { line: 4, text: "/**\n * @param {string} x\n * @param y\n */" },
+      ]),
+    );
   });
 
-  test("returns null for a file that does not parse", async () => {
-    expect(await comments("a.ts", "const = ;\n")).toBeNull();
-    expect(await comments("a.js", "const a: number = 1;\n")).toBeNull();
+  test("names the line and reason Babel gives for a file that does not parse", () => {
+    expect(comments("a.ts", "const a = 1;\nconst = ;\n")).toEqual(unparsed(2, "Unexpected token"));
+    expect(comments("a.js", "\nconst a: number = 1;\n")).toEqual(
+      unparsed(2, "Missing initializer in const declaration"),
+    );
+    expect(comments("a.ts", "const a = 1;\nconst b = `open\n\n")).toEqual(
+      unparsed(2, "Unterminated template"),
+    );
   });
 });
 
 describe("the dart adapter", () => {
-  test("refuses each comment, doc comments and nested blocks too", async () => {
+  test("refuses each comment, doc comments and nested blocks too", () => {
     const text = [
       "/// A doc comment.",
       "final url = 'https://example.com'; // trailing",
@@ -147,17 +166,19 @@ describe("the dart adapter", () => {
       `final m = '\${{'a': 1}['a']}'; // after a map in an interpolation`,
       "final e = 'it\\'s // x'; // after an escaped quote",
     ].join("\n");
-    expect(await dartComments("a.dart", text)).toEqual([
-      { line: 1, body: "/// A doc comment." },
-      { line: 2, body: "// trailing" },
-      { line: 3, body: "/* outer /* inner */ still outer */" },
-      { line: 5, body: "/* a" },
-      { line: 7, body: "// after a map in an interpolation" },
-      { line: 8, body: "// after an escaped quote" },
-    ]);
+    expect(dartComments("a.dart", text)).toEqual(
+      read([
+        { line: 1, text: "/// A doc comment." },
+        { line: 2, text: "// trailing" },
+        { line: 3, text: "/* outer /* inner */ still outer */" },
+        { line: 5, text: "/* a\n   block */" },
+        { line: 7, text: "// after a map in an interpolation" },
+        { line: 8, text: "// after an escaped quote" },
+      ]),
+    );
   });
 
-  test("reads no comment inside a string, raw and triple-quoted alike", async () => {
+  test("reads no comment inside a string, raw and triple-quoted alike", () => {
     const text = [
       "#!/usr/bin/env dart",
       "final a = r'// raw';",
@@ -166,10 +187,10 @@ describe("the dart adapter", () => {
       "// inside",
       "''';",
     ].join("\n");
-    expect(await dartComments("a.dart", text)).toEqual([]);
+    expect(dartComments("a.dart", text)).toEqual(read([]));
   });
 
-  test("keeps the comments the analyzer reads", async () => {
+  test("keeps the comments the analyzer reads", () => {
     const text = [
       "// ignore_for_file: avoid_print",
       "// ignore: unused_element",
@@ -179,18 +200,27 @@ describe("the dart adapter", () => {
       "// @dart = 3.0",
       "void f() {}",
     ].join("\n");
-    expect(await dartComments("a.dart", text)).toEqual([]);
+    expect(dartComments("a.dart", text)).toEqual(read([]));
   });
 
-  test("returns null for a file whose string, comment or interpolation never closes", async () => {
-    expect(await dartComments("a.dart", "final a = 'open;\nfinal b = 1;\n")).toBeNull();
-    expect(await dartComments("a.dart", "/* open\n")).toBeNull();
-    expect(await dartComments("a.dart", "final a = '${b';\n")).toBeNull();
+  test("names the line where a string, comment or interpolation that never closes opens", () => {
+    expect(dartComments("a.dart", "final a = 1;\nfinal b = 'open;\nfinal c = 1;\n")).toEqual(
+      unparsed(2, "Unterminated string"),
+    );
+    expect(dartComments("a.dart", "final a = 1;\n/* open\nmore\n")).toEqual(
+      unparsed(2, "Unterminated comment"),
+    );
+    expect(dartComments("a.dart", "final a = 1;\nfinal b = '${c';\n")).toEqual(
+      unparsed(2, "Unterminated string"),
+    );
+    expect(dartComments("a.dart", "final a = 1;\nfinal b = '''${c\nmore\n")).toEqual(
+      unparsed(2, "Unterminated interpolation"),
+    );
   });
 });
 
 describe("the sql adapter", () => {
-  test("refuses each comment, inside a function body too", async () => {
+  test("refuses each comment, inside a function body too", () => {
     const text = [
       "-- header",
       `select '--not a comment', "col--name" from t; /* block */`,
@@ -203,67 +233,75 @@ describe("the sql adapter", () => {
       "   still outer */",
       `select "a""--b" from t;`,
     ].join("\n");
-    expect(await sqlComments("a.sql", text)).toEqual([
-      { line: 1, body: "-- header" },
-      { line: 2, body: "/* block */" },
-      { line: 5, body: "-- in the body" },
-      { line: 8, body: "/* outer /* inner */" },
-    ]);
-  });
-
-  test("reads a dollar quote that is not SQL as a literal, and SQL inside one as code", async () => {
-    expect(await sqlComments("a.sql", "comment on table t is $$Don't drop$$;\n")).toEqual([]);
-    expect(await sqlComments("a.sql", "do $$ # it's python $$;\n-- after\n")).toEqual([
-      { line: 2, body: "-- after" },
-    ]);
-    const nested =
-      "create function f() returns void as $a$\nbegin\n  execute $b$\n  -- inner\n  $b$;\nend $a$;\n";
-    expect(await sqlComments("a.sql", nested)).toEqual([{ line: 4, body: "-- inner" }]);
-  });
-
-  test("reads positional parameters and identifiers as code, not dollar quotes", async () => {
-    expect(await sqlComments("a.sql", "select $1, $2 -- trailing")).toEqual([
-      { line: 1, body: "-- trailing" },
-    ]);
-    expect(await sqlComments("a.sql", "select a$b$c from t;")).toEqual([]);
-  });
-
-  test("keeps drizzle's statement breakpoint, and only that exact comment", async () => {
-    const text = "create table a (id int);\n--> statement-breakpoint\ncreate table b (id int);\n";
-    expect(await sqlComments("a.sql", text)).toEqual([]);
-    expect(await sqlComments("a.sql", "--> statement-breakpoint and why\n-- statement-breakpoint\n")).toEqual(
-      [
-        { line: 1, body: "--> statement-breakpoint and why" },
-        { line: 2, body: "-- statement-breakpoint" },
-      ],
+    expect(sqlComments("a.sql", text)).toEqual(
+      read([
+        { line: 1, text: "-- header" },
+        { line: 2, text: "/* block */" },
+        { line: 5, text: "-- in the body" },
+        { line: 8, text: "/* outer /* inner */\n   still outer */" },
+      ]),
     );
   });
 
-  test("reads letters beyond ASCII in identifiers and dollar quote tags as Postgres does", async () => {
-    expect(await sqlComments("a.sql", "select $ä$Don't$ä$; -- c")).toEqual([{ line: 1, body: "-- c" }]);
-    expect(await sqlComments("a.sql", "select ä$b$ from t; -- c")).toEqual([{ line: 1, body: "-- c" }]);
+  test("reads a dollar quote that is not SQL as a literal, and SQL inside one as code", () => {
+    expect(sqlComments("a.sql", "comment on table t is $$Don't drop$$;\n")).toEqual(read([]));
+    expect(sqlComments("a.sql", "do $$ # it's python $$;\n-- after\n")).toEqual(
+      read([{ line: 2, text: "-- after" }]),
+    );
+    const nested =
+      "create function f() returns void as $a$\nbegin\n  execute $b$\n  -- inner\n  $b$;\nend $a$;\n";
+    expect(sqlComments("a.sql", nested)).toEqual(read([{ line: 4, text: "-- inner" }]));
   });
 
-  test("lets a backslash escape the quote only in an escape string", async () => {
-    expect(await sqlComments("a.sql", "select E'a\\'-- still quoted';")).toEqual([]);
-    expect(await sqlComments("a.sql", "select 'a\\' -- a comment")).toEqual([
-      { line: 1, body: "-- a comment" },
-    ]);
-    expect(await sqlComments("a.sql", "select fE'a\\' -- a comment")).toEqual([
-      { line: 1, body: "-- a comment" },
-    ]);
+  test("reads positional parameters and identifiers as code, not dollar quotes", () => {
+    expect(sqlComments("a.sql", "select $1, $2 -- trailing")).toEqual(
+      read([{ line: 1, text: "-- trailing" }]),
+    );
+    expect(sqlComments("a.sql", "select a$b$c from t;")).toEqual(read([]));
   });
 
-  test("returns null for a file whose quote, comment or dollar quote never closes", async () => {
-    expect(await sqlComments("a.sql", "select 'open;\n")).toBeNull();
-    expect(await sqlComments("a.sql", "/* open\n")).toBeNull();
-    expect(await sqlComments("a.sql", "select $$ open;\n")).toBeNull();
-    expect(await sqlComments("a.sql", "select $a$ $b$ $a$ $b$;\n")).toBeNull();
+  test("keeps drizzle's statement breakpoint, and only that exact comment", () => {
+    const text = "create table a (id int);\n--> statement-breakpoint\ncreate table b (id int);\n";
+    expect(sqlComments("a.sql", text)).toEqual(read([]));
+    expect(sqlComments("a.sql", "--> statement-breakpoint and why\n-- statement-breakpoint\n")).toEqual(
+      read([
+        { line: 1, text: "--> statement-breakpoint and why" },
+        { line: 2, text: "-- statement-breakpoint" },
+      ]),
+    );
+  });
+
+  test("reads letters beyond ASCII in identifiers and dollar quote tags as Postgres does", () => {
+    expect(sqlComments("a.sql", "select $ä$Don't$ä$; -- c")).toEqual(read([{ line: 1, text: "-- c" }]));
+    expect(sqlComments("a.sql", "select ä$b$ from t; -- c")).toEqual(read([{ line: 1, text: "-- c" }]));
+  });
+
+  test("lets a backslash escape the quote only in an escape string", () => {
+    expect(sqlComments("a.sql", "select E'a\\'-- still quoted';")).toEqual(read([]));
+    expect(sqlComments("a.sql", "select 'a\\' -- a comment")).toEqual(
+      read([{ line: 1, text: "-- a comment" }]),
+    );
+    expect(sqlComments("a.sql", "select fE'a\\' -- a comment")).toEqual(
+      read([{ line: 1, text: "-- a comment" }]),
+    );
+  });
+
+  test("names the line where a quote, comment or dollar quote that never closes opens", () => {
+    expect(sqlComments("a.sql", "select 1;\nselect 'open;\nmore\n")).toEqual(
+      unparsed(2, "Unterminated quote"),
+    );
+    expect(sqlComments("a.sql", "select 1;\n/* open\nmore\n")).toEqual(unparsed(2, "Unterminated comment"));
+    expect(sqlComments("a.sql", "select 1;\nselect $$ open;\nmore\n")).toEqual(
+      unparsed(2, "Unterminated dollar quote"),
+    );
+    expect(sqlComments("a.sql", "select $a$\n$b$ $a$\n$b$;\n")).toEqual(
+      unparsed(3, "Unterminated dollar quote"),
+    );
   });
 });
 
 describe("the shell adapter", () => {
-  test("refuses each comment, and no hash in a string, heredoc or expansion", async () => {
+  test("refuses each comment, and no hash in a string, heredoc or expansion", () => {
     const text = [
       "#!/usr/bin/env bash",
       "# header",
@@ -278,23 +316,25 @@ describe("the shell adapter", () => {
       "fi",
       "# last in the file",
     ].join("\n");
-    expect(await shellComments("a.sh", text)).toEqual([
-      { line: 2, body: "# header" },
-      { line: 3, body: "# trailing" },
-      { line: 10, body: "# last in its block" },
-      { line: 12, body: "# last in the file" },
-    ]);
+    expect(shellComments("a.sh", text)).toEqual(
+      read([
+        { line: 2, text: "# header" },
+        { line: 3, text: "# trailing" },
+        { line: 10, text: "# last in its block" },
+        { line: 12, text: "# last in the file" },
+      ]),
+    );
   });
 
-  test("keeps the shebang and shellcheck's directives, and only those", async () => {
+  test("keeps the shebang and shellcheck's directives, and only those", () => {
     const text = "#!/bin/sh\n# shellcheck disable=SC2034\nx=1\n  # shellcheck source=lib.sh\n#!/bin/sh\n";
-    expect(await shellComments("a.sh", text)).toEqual([{ line: 5, body: "#!/bin/sh" }]);
-    expect(await shellComments("a.sh", "# shellchecked by hand\n")).toEqual([
-      { line: 1, body: "# shellchecked by hand" },
-    ]);
+    expect(shellComments("a.sh", text)).toEqual(read([{ line: 5, text: "#!/bin/sh" }]));
+    expect(shellComments("a.sh", "# shellchecked by hand\n")).toEqual(
+      read([{ line: 1, text: "# shellchecked by hand" }]),
+    );
   });
 
-  test("starts a comment only where a word starts", async () => {
+  test("starts a comment only where a word starts", () => {
     const lines = [
       "a=1 #c",
       "echo a;#c",
@@ -306,20 +346,22 @@ describe("the shell adapter", () => {
       "{ :; }",
       "a#b c\\#d",
     ];
-    expect(await shellComments("a.sh", lines.join("\n"))).toEqual([
-      { line: 1, body: "#c" },
-      { line: 2, body: "#c" },
-      { line: 3, body: "#c" },
-      { line: 4, body: "#c" },
-      { line: 5, body: "#c" },
-      { line: 7, body: "#c" },
-    ]);
-    expect(await shellComments("a.sh", "echo a\\\n# not a comment\necho b \\\n# a comment\n")).toEqual([
-      { line: 4, body: "# a comment" },
-    ]);
+    expect(shellComments("a.sh", lines.join("\n"))).toEqual(
+      read([
+        { line: 1, text: "#c" },
+        { line: 2, text: "#c" },
+        { line: 3, text: "#c" },
+        { line: 4, text: "#c" },
+        { line: 5, text: "#c" },
+        { line: 7, text: "#c" },
+      ]),
+    );
+    expect(shellComments("a.sh", "echo a\\\n# not a comment\necho b \\\n# a comment\n")).toEqual(
+      read([{ line: 4, text: "# a comment" }]),
+    );
   });
 
-  test("reads no comment in a parameter, an arithmetic expansion or a regex", async () => {
+  test("reads no comment in a parameter, an arithmetic expansion or a regex", () => {
     const lines = [
       `echo $# \${#x} \${x#p} \${x##p} \${x/#a/b} $$#`,
       "echo $((1 << 2)) $[1+2] $'a\\'#b' $\"#\"",
@@ -328,10 +370,10 @@ describe("the shell adapter", () => {
       `echo \${x:-$(echo #c`,
       ")}",
     ];
-    expect(await shellComments("a.sh", lines.join("\n"))).toEqual([{ line: 5, body: "#c" }]);
+    expect(shellComments("a.sh", lines.join("\n"))).toEqual(read([{ line: 5, text: "#c" }]));
   });
 
-  test("reads comments inside command and process substitutions, a case in one too", async () => {
+  test("reads comments inside command and process substitutions, a case in one too", () => {
     const lines = [
       "x=$( (case a in b) echo;; (c) :;; esac) ) #1",
       'echo "$(echo "# x" #2',
@@ -341,41 +383,43 @@ describe("the shell adapter", () => {
       'echo `echo "\\`echo #5\\`"` #6',
       'y=`sed -e "s,\\"\\\\"(,," #7`',
     ];
-    expect((await shellComments("a.sh", lines.join("\n")))?.map(({ line, body }) => [line, body])).toEqual([
-      [1, "#1"],
-      [2, "#2"],
-      [3, "#3"],
-      [5, "#4"],
-      [6, "#5"],
-      [6, "#6"],
-      [7, "#7"],
-    ]);
+    expect(shellComments("a.sh", lines.join("\n"))).toEqual(
+      read([
+        { line: 1, text: "#1" },
+        { line: 2, text: "#2" },
+        { line: 3, text: "#3" },
+        { line: 5, text: "#4" },
+        { line: 6, text: "#5" },
+        { line: 6, text: "#6" },
+        { line: 7, text: "#7" },
+      ]),
+    );
   });
 
-  test("reads a =~ regex as one word, its parenthesised groups and alternatives included", async () => {
+  test("reads a =~ regex as one word, its parenthesised groups and alternatives included", () => {
     const regex = "[[ $l =~ ^[[:space:]]*(#|$) ]]";
-    expect(await shellComments("a.sh", `${regex}\n`)).toEqual([]);
-    expect(await shellComments("a.sh", `x=$(${regex} && echo y)\n`)).toEqual([]);
-    expect(await shellComments("a.sh", "[[ $l =~ ^( #a)$ ]] #c\n")).toEqual([{ line: 1, body: "#c" }]);
+    expect(shellComments("a.sh", `${regex}\n`)).toEqual(read([]));
+    expect(shellComments("a.sh", `x=$(${regex} && echo y)\n`)).toEqual(read([]));
+    expect(shellComments("a.sh", "[[ $l =~ ^( #a)$ ]] #c\n")).toEqual(read([{ line: 1, text: "#c" }]));
   });
 
-  test("closes a substitution at its own parenthesis, not at a case pattern's", async () => {
-    expect(await shellComments("a.sh", 'x="$(case a in b) echo " #c";; esac)"\n')).toEqual([]);
-    expect(await shellComments("a.sh", 'x="$(case a in b) echo esac;; c) echo " #c";; esac)"\n')).toEqual([]);
+  test("closes a substitution at its own parenthesis, not at a case pattern's", () => {
+    expect(shellComments("a.sh", 'x="$(case a in b) echo " #c";; esac)"\n')).toEqual(read([]));
+    expect(shellComments("a.sh", 'x="$(case a in b) echo esac;; c) echo " #c";; esac)"\n')).toEqual(read([]));
   });
 
-  test("reads (( as arithmetic where a command starts, and after for", async () => {
-    expect(await shellComments("a.sh", "if (( x << 1 )); then :; fi\n")).toEqual([]);
-    expect(await shellComments("a.sh", "for ((i = 0; i << 2; i++)); do :; done\n")).toEqual([]);
-    expect(await shellComments("a.sh", "echo $[1 << 2]\n")).toEqual([]);
+  test("reads (( as arithmetic where a command starts, and after for", () => {
+    expect(shellComments("a.sh", "if (( x << 1 )); then :; fi\n")).toEqual(read([]));
+    expect(shellComments("a.sh", "for ((i = 0; i << 2; i++)); do :; done\n")).toEqual(read([]));
+    expect(shellComments("a.sh", "echo $[1 << 2]\n")).toEqual(read([]));
   });
 
-  test("unescapes a backtick's quotes inside double quotes before reading it", async () => {
-    expect(await shellComments("a.sh", 'echo "`echo \\"a #b\\"`"\n')).toEqual([]);
-    expect(await shellComments("a.sh", 'echo "`echo \\"#\\" #x`"\n')).toEqual([{ line: 1, body: "#x" }]);
+  test("unescapes a backtick's quotes inside double quotes before reading it", () => {
+    expect(shellComments("a.sh", 'echo "`echo \\"a #b\\"`"\n')).toEqual(read([]));
+    expect(shellComments("a.sh", 'echo "`echo \\"#\\" #x`"\n')).toEqual(read([{ line: 1, text: "#x" }]));
   });
 
-  test("reads heredoc bodies as text, and the substitutions in an unquoted one as code", async () => {
+  test("reads heredoc bodies as text, and the substitutions in an unquoted one as code", () => {
     const lines = [
       "cat <<EOF; cat <<-'E2' # c",
       "# body",
@@ -390,35 +434,38 @@ describe("the shell adapter", () => {
       "E3",
       "# after",
     ];
-    expect(await shellComments("a.sh", lines.join("\n"))).toEqual([
-      { line: 1, body: "# c" },
-      { line: 3, body: "#in" },
-      { line: 9, body: "#here" },
-      { line: 12, body: "# after" },
-    ]);
+    expect(shellComments("a.sh", lines.join("\n"))).toEqual(
+      read([
+        { line: 1, text: "# c" },
+        { line: 3, text: "#in" },
+        { line: 9, text: "#here" },
+        { line: 12, text: "# after" },
+      ]),
+    );
   });
 
-  test("returns null for a quote, substitution or heredoc that never closes", async () => {
-    for (const open of [
-      "echo 'a\n",
-      'echo "a\n',
-      "echo $'a\n",
-      "echo $(a\n",
-      "echo ${a\n",
-      "echo `a\n",
-      "echo $[1\n",
-    ])
-      expect([open, await shellComments("a.sh", open)]).toEqual([open, null]);
-    expect(await shellComments("a.sh", "cat <<EOF\nbody\n")).toBeNull();
-    expect(await shellComments("a.sh", "cat <<EOF\nbody\n EOF\n")).toBeNull();
-    expect(await shellComments("a.sh", "if true; then\n  echo # open\n")).toEqual([
-      { line: 2, body: "# open" },
-    ]);
+  test("names the line where a quote, substitution or heredoc that never closes opens", () => {
+    for (const [open, reason] of [
+      ["echo 'a\nb\n", "Unterminated quote"],
+      ['echo "a\nb\n', "Unterminated quote"],
+      ["echo $'a\nb\n", "Unterminated quote"],
+      ["echo $(a\nb\n", "Unterminated substitution"],
+      ["echo ${a\nb\n", "Unterminated parameter expansion"],
+      ["echo `a\nb\n", "Unterminated backquote"],
+      ["echo `echo $(a`\nb\n", "Unterminated substitution"],
+      ["echo $[1\nb\n", "Unterminated arithmetic expansion"],
+      ["cat <<EOF\nbody\n", "Unterminated heredoc"],
+      ["cat <<EOF\nbody\n EOF\n", "Unterminated heredoc"],
+    ] as const)
+      expect([open, shellComments("a.sh", `x=1\n${open}`)]).toEqual([open, unparsed(2, reason)]);
+    expect(shellComments("a.sh", "if true; then\n  echo # open\n")).toEqual(
+      read([{ line: 2, text: "# open" }]),
+    );
   });
 });
 
 describe("the rust adapter", () => {
-  test("refuses each comment, doc comments and nested blocks too", async () => {
+  test("refuses each comment, doc comments and nested blocks too", () => {
     const text = [
       "//! Crate docs.",
       "/// Item docs.",
@@ -430,19 +477,21 @@ describe("the rust adapter", () => {
       "   block */",
       "//// four slashes",
     ].join("\n");
-    expect(await rustComments("a.rs", text)).toEqual([
-      { line: 1, body: "//! Crate docs." },
-      { line: 2, body: "/// Item docs." },
-      { line: 3, body: "// trailing" },
-      { line: 4, body: "/* outer /* inner */ still outer */" },
-      { line: 5, body: "/** block docs */" },
-      { line: 6, body: "/*! inner block docs */" },
-      { line: 7, body: "/* a" },
-      { line: 9, body: "//// four slashes" },
-    ]);
+    expect(rustComments("a.rs", text)).toEqual(
+      read([
+        { line: 1, text: "//! Crate docs." },
+        { line: 2, text: "/// Item docs." },
+        { line: 3, text: "// trailing" },
+        { line: 4, text: "/* outer /* inner */ still outer */" },
+        { line: 5, text: "/** block docs */" },
+        { line: 6, text: "/*! inner block docs */" },
+        { line: 7, text: "/* a\n   block */" },
+        { line: 9, text: "//// four slashes" },
+      ]),
+    );
   });
 
-  test("reads no comment inside a literal, and finds the one after it", async () => {
+  test("reads no comment inside a literal, and finds the one after it", () => {
     const lines = [
       'let a = "http://x /* y */"; // 1',
       'let b = "a\\" // still the string"; // 2',
@@ -461,23 +510,25 @@ describe("the rust adapter", () => {
       'let 😀r"\\" = 1; // in the string rustc reads after an emoji identifier"',
       `let 😀${String.fromCodePoint(0x200d)}r"\\" = 1; // still the string past a zero-width joiner"`,
     ];
-    expect(await rustComments("a.rs", lines.join("\n"))).toEqual([
-      { line: 1, body: "// 1" },
-      { line: 2, body: "// 2" },
-      { line: 3, body: "// 3" },
-      { line: 4, body: "// 4" },
-      { line: 5, body: "// 5" },
-      { line: 6, body: "// 6" },
-      { line: 7, body: "// 7" },
-      { line: 8, body: "// 8" },
-      { line: 9, body: "// 9" },
-      { line: 10, body: "// 10" },
-      { line: 13, body: "// 13" },
-      { line: 14, body: "// 14" },
-    ]);
+    expect(rustComments("a.rs", lines.join("\n"))).toEqual(
+      read([
+        { line: 1, text: "// 1" },
+        { line: 2, text: "// 2" },
+        { line: 3, text: "// 3" },
+        { line: 4, text: "// 4" },
+        { line: 5, text: "// 5" },
+        { line: 6, text: "// 6" },
+        { line: 7, text: "// 7" },
+        { line: 8, text: "// 8" },
+        { line: 9, text: "// 9" },
+        { line: 10, text: "// 10" },
+        { line: 13, text: "// 13" },
+        { line: 14, text: "// 14" },
+      ]),
+    );
   });
 
-  test("refuses a doc attribute that carries doc text, and keeps every other attribute", async () => {
+  test("refuses a doc attribute that carries doc text, and keeps every other attribute", () => {
     const lines = [
       '#![doc = "Crate docs."]',
       '#[doc = include_str!("../README.md")]',
@@ -493,16 +544,18 @@ describe("the rust adapter", () => {
       ")]",
       'let doc = "#[doc = x]";',
     ];
-    expect(await rustComments("a.rs", lines.join("\n"))).toEqual([
-      { line: 1, body: '#![doc = "Crate docs."]' },
-      { line: 2, body: '#[doc = include_str!("../README.md")]' },
-      { line: 8, body: '# [ doc = "spaced" ]' },
-      { line: 9, body: '#[doc = "a ] in a string"]' },
-      { line: 10, body: "#[doc = concat!(" },
-    ]);
+    expect(rustComments("a.rs", lines.join("\n"))).toEqual(
+      read([
+        { line: 1, text: '#![doc = "Crate docs."]' },
+        { line: 2, text: '#[doc = include_str!("../README.md")]' },
+        { line: 8, text: '# [ doc = "spaced" ]' },
+        { line: 9, text: '#[doc = "a ] in a string"]' },
+        { line: 10, text: '#[doc = concat!(\n    "spans [lines]",\n)]' },
+      ]),
+    );
   });
 
-  test("refuses doc text anywhere in an attribute, and only there", async () => {
+  test("refuses doc text anywhere in an attribute, and only there", () => {
     const lines = [
       '#[cfg_attr(docsrs, doc = "text")]',
       '#![cfg_attr(feature = "x", doc = include_str!("x.md"))]',
@@ -513,62 +566,66 @@ describe("the rust adapter", () => {
       "let doc = 1;",
       "fn f(doc: u8) { if doc == 1 {} }",
     ];
-    expect(await rustComments("a.rs", lines.join("\n"))).toEqual([
-      { line: 1, body: '#[cfg_attr(docsrs, doc = "text")]' },
-      { line: 2, body: '#![cfg_attr(feature = "x", doc = include_str!("x.md"))]' },
-    ]);
+    expect(rustComments("a.rs", lines.join("\n"))).toEqual(
+      read([
+        { line: 1, text: '#[cfg_attr(docsrs, doc = "text")]' },
+        { line: 2, text: '#![cfg_attr(feature = "x", doc = include_str!("x.md"))]' },
+      ]),
+    );
   });
 
-  test("refuses a doc attribute once, with the comments inside it", async () => {
-    expect(await rustComments("a.rs", '#[doc = "x" /* y */]\n')).toEqual([
-      { line: 1, body: '#[doc = "x" /* y */]' },
-    ]);
-    expect(await rustComments("a.rs", '#[doc = concat!(\n  // n\n  "x")]\n')).toEqual([
-      { line: 1, body: "#[doc = concat!(" },
-    ]);
-    expect(await rustComments("a.rs", "#[derive(Debug /* y */)]\n")).toEqual([{ line: 1, body: "/* y */" }]);
-    expect(await rustComments("a.rs", '#[doc /* y */ = "x"]\n')).toEqual([
-      { line: 1, body: '#[doc /* y */ = "x"]' },
-    ]);
-    expect(await rustComments("a.rs", '# /* y */ [doc = "x"]\n')).toEqual([
-      { line: 1, body: '# /* y */ [doc = "x"]' },
-    ]);
-    expect(await rustComments("a.rs", "# /* y */ [derive(Debug)]\n")).toEqual([{ line: 1, body: "/* y */" }]);
-    expect(await rustComments("a.rs", '#[x(#[doc = "y"] /* z */)]\n')).toEqual([
-      { line: 1, body: '#[x(#[doc = "y"] /* z */)]' },
-    ]);
+  test("refuses a doc attribute once, with the comments inside it", () => {
+    expect(rustComments("a.rs", '#[doc = "x" /* y */]\n')).toEqual(
+      read([{ line: 1, text: '#[doc = "x" /* y */]' }]),
+    );
+    expect(rustComments("a.rs", '#[doc = concat!(\n  // n\n  "x")]\n')).toEqual(
+      read([{ line: 1, text: '#[doc = concat!(\n  // n\n  "x")]' }]),
+    );
+    expect(rustComments("a.rs", "#[derive(Debug /* y */)]\n")).toEqual(read([{ line: 1, text: "/* y */" }]));
+    expect(rustComments("a.rs", '#[doc /* y */ = "x"]\n')).toEqual(
+      read([{ line: 1, text: '#[doc /* y */ = "x"]' }]),
+    );
+    expect(rustComments("a.rs", '# /* y */ [doc = "x"]\n')).toEqual(
+      read([{ line: 1, text: '# /* y */ [doc = "x"]' }]),
+    );
+    expect(rustComments("a.rs", "# /* y */ [derive(Debug)]\n")).toEqual(read([{ line: 1, text: "/* y */" }]));
+    expect(rustComments("a.rs", '#[x(#[doc = "y"] /* z */)]\n')).toEqual(
+      read([{ line: 1, text: '#[x(#[doc = "y"] /* z */)]' }]),
+    );
   });
 
-  test("refuses the doc attribute a macro forwards", async () => {
+  test("refuses the doc attribute a macro forwards", () => {
     const text = "macro_rules! m {\n    ($(#[doc = $doc:expr])*) => {};\n}\n";
-    expect(await rustComments("a.rs", text)).toEqual([{ line: 2, body: "#[doc = $doc:expr]" }]);
+    expect(rustComments("a.rs", text)).toEqual(read([{ line: 2, text: "#[doc = $doc:expr]" }]));
   });
 
-  test("skips a first-line shebang, and reads #![ there as an inner attribute", async () => {
-    expect(await rustComments("a.rs", "#!/usr/bin/env run-cargo-script // x\nfn main() {}\n")).toEqual([]);
-    expect(await rustComments("a.rs", '#! [doc = "x"]\n')).toEqual([{ line: 1, body: '#! [doc = "x"]' }]);
-    expect(await rustComments("a.rs", "#![allow(dead_code)] // x\n")).toEqual([{ line: 1, body: "// x" }]);
-    expect(await rustComments("a.rs", "fn main() {}\n#!/bin/sh // x\n")).toEqual([{ line: 2, body: "// x" }]);
-    expect(await rustComments("a.rs", "#! /* a */ // b\n[allow(dead_code)]\n")).toEqual([
-      { line: 1, body: "/* a */" },
-      { line: 1, body: "// b" },
-    ]);
-    expect(await rustComments("a.rs", "#! /// doc\n[allow(dead_code)]\n")).toEqual([]);
+  test("skips a first-line shebang, and reads #![ there as an inner attribute", () => {
+    expect(rustComments("a.rs", "#!/usr/bin/env run-cargo-script // x\nfn main() {}\n")).toEqual(read([]));
+    expect(rustComments("a.rs", '#! [doc = "x"]\n')).toEqual(read([{ line: 1, text: '#! [doc = "x"]' }]));
+    expect(rustComments("a.rs", "#![allow(dead_code)] // x\n")).toEqual(read([{ line: 1, text: "// x" }]));
+    expect(rustComments("a.rs", "fn main() {}\n#!/bin/sh // x\n")).toEqual(read([{ line: 2, text: "// x" }]));
+    expect(rustComments("a.rs", "#! /* a */ // b\n[allow(dead_code)]\n")).toEqual(
+      read([
+        { line: 1, text: "/* a */" },
+        { line: 1, text: "// b" },
+      ]),
+    );
+    expect(rustComments("a.rs", "#! /// doc\n[allow(dead_code)]\n")).toEqual(read([]));
   });
 
-  test("returns null for a file whose literal or comment never closes", async () => {
-    for (const open of [
-      'let a = "open;\n',
-      'let a = r#"open"";\n',
-      'let a = br"open;\n',
-      'let a = c"open;\n',
-      "let a = ' ;\n",
-      "let a = '\\u{1F600};\n",
-      "let a = b'x;\n",
-      "let a = r#;\n",
-      "/* open /* nested */\n",
-    ])
-      expect([open, await rustComments("a.rs", open)]).toEqual([open, null]);
+  test("names the line where a literal or comment that never closes opens", () => {
+    for (const [open, reason] of [
+      ['let a = "open;\nb\n', "Unterminated string"],
+      ['let a = r#"open"";\nb\n', "Unterminated raw string"],
+      ['let a = br"open;\nb\n', "Unterminated raw string"],
+      ['let a = c"open;\nb\n', "Unterminated string"],
+      ["let a = ' ;\nb\n", "Unterminated character"],
+      ["let a = '\\u{1F600};\nb\n", "Unterminated character"],
+      ["let a = b'x;\nb\n", "Unterminated character"],
+      ["let a = r#;\nb\n", "Unterminated raw string"],
+      ["/* open /* nested */\nb\n", "Unterminated comment"],
+    ] as const)
+      expect([open, rustComments("a.rs", `fn f() {}\n${open}`)]).toEqual([open, unparsed(2, reason)]);
   });
 });
 
@@ -600,12 +657,15 @@ describe("the pre-commit hook", () => {
   test("refuses each comment the commit stages, and lets a clean commit through", () => {
     const dir = gated({ "src/a.ts": "export const a = 1;\n" });
     expect(commit(dir)).toEqual({ status: 0, stderr: "" });
-    writeFiles(dir, { "src/a.ts": "export const a = 1; // why\n", "src/b.js": "/* b */\nexport {};\n" });
+    writeFiles(dir, {
+      "src/a.ts": "export const a = 1; // why\n",
+      "src/b.js": "/* b\n   more */\nexport {};\n",
+    });
     expect(commit(dir)).toEqual({
       status: 1,
       stderr: [
         "no-comments: src/a.ts:1  // why",
-        "no-comments: src/b.js:1  /* b */",
+        "no-comments: src/b.js:1  /* b",
         "  Remove each comment; a why belongs in a name, a test or the docs.",
         "",
       ].join("\n"),
@@ -661,9 +721,12 @@ describe("the pre-commit hook", () => {
     });
   });
 
-  test("refuses a file that does not parse", () => {
-    const dir = gated({ "a.ts": "const = ;\n" });
-    expect(commit(dir)).toEqual({ status: 1, stderr: "no-comments: a.ts does not parse; fix its syntax\n" });
+  test("refuses a file that does not parse, naming where and why", () => {
+    const dir = gated({ "a.ts": "const a = 1;\nconst = ;\n" });
+    expect(commit(dir)).toEqual({
+      status: 1,
+      stderr: "no-comments: a.ts:2 does not parse: Unexpected token; fix its syntax\n",
+    });
   });
 
   test("reads the staged content, and the index git commit <paths> builds", () => {
@@ -725,6 +788,18 @@ describe("the pre-commit hook", () => {
     git(dir, ["merge", "-q", "--no-commit", "side"]);
     writeFiles(dir, { "b.ts": "// resolved\nexport {};\n" });
     expect(commit(dir)).toEqual({ status: 0, stderr: "" });
+  });
+
+  test("exits 3 when an adapter returns what the scanner does not read", () => {
+    const dir = gated();
+    writeFileSync(join(dir, ".githooks/no-comments/javascript.cjs"), "exports.comments = () => [];\n");
+    writeFiles(dir, { "a.ts": "// why\n" });
+    git(dir, ["add", "a.ts"]);
+    const run = scan(dir, []);
+    expect(run.status).toBe(3);
+    expect(run.stderr).toContain(
+      "javascript.cjs returns the comments it read, or where the file stops parsing",
+    );
   });
 
   test("exits 3 when node is not on PATH, since nothing was judged", () => {

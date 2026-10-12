@@ -1,9 +1,25 @@
 import type { Comment, CommentsOf } from "./no-comments-languages";
-import { firstLine } from "./no-comments-route";
 
 export type Span = { readonly start: number; readonly end: number };
 
+export type Stopped = { readonly kind: "stopped"; readonly at: number; readonly reason: string };
+
+export type Lexed = { readonly kind: "lexed"; readonly spans: readonly Span[] } | Stopped;
+
 const NEWLINE = 10;
+
+export function lineEnd(text: string, from: number): number {
+  const newline = text.indexOf("\n", from);
+  return newline < 0 ? text.length : newline;
+}
+
+export function firstLine(text: string): string {
+  return text.slice(0, lineEnd(text, 0));
+}
+
+export function unterminated(at: number, construct: string): Stopped {
+  return { kind: "stopped", at, reason: `Unterminated ${construct}` };
+}
 
 export function nestedBlockEnd(text: string, start: number, to: number): number | null {
   let depth = 0;
@@ -21,25 +37,26 @@ export function nestedBlockEnd(text: string, start: number, to: number): number 
   return null;
 }
 
-function commentsAt(text: string, spans: readonly Span[]): Comment[] {
+function lineCounter(text: string): (offset: number) => number {
   let line = 1;
   let counted = 0;
-  return spans.map(({ start, end }) => {
-    for (; counted < start; counted++) if (text.charCodeAt(counted) === NEWLINE) line++;
-    return { line, body: firstLine(text.slice(start, end)).trim() };
-  });
+  return (offset) => {
+    for (; counted < offset; counted++) if (text.charCodeAt(counted) === NEWLINE) line++;
+    return line;
+  };
 }
 
 export function refusedComments(
-  commentSpans: (text: string) => readonly Span[] | null,
+  commentSpans: (text: string) => Lexed,
   isKept: (text: string, span: Span) => boolean,
 ): CommentsOf {
-  return async (_path, text) => {
-    const spans = commentSpans(text);
-    if (spans === null) return null;
-    return commentsAt(
-      text,
-      spans.filter((span) => !isKept(text, span)),
-    );
+  return (_path, text) => {
+    const lexed = commentSpans(text);
+    const lineAt = lineCounter(text);
+    if (lexed.kind === "stopped") return { kind: "unparsed", line: lineAt(lexed.at), reason: lexed.reason };
+    const comments: Comment[] = lexed.spans
+      .filter((span) => !isKept(text, span))
+      .map(({ start, end }) => ({ line: lineAt(start), text: text.slice(start, end) }));
+    return { kind: "read", comments };
   };
 }

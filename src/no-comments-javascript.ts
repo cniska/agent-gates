@@ -1,8 +1,11 @@
 import { type ParserPlugin, parse } from "@babel/parser";
-import type { Comment, CommentsOf } from "./no-comments-languages";
-import { firstLine, interpreterOf, routeOf } from "./no-comments-route";
+import { invariant } from "./assert";
+import type { Comment, CommentsOf, Reading } from "./no-comments-languages";
+import { interpreterOf, routeOf } from "./no-comments-route";
 
 type Dialect = { readonly syntax: ParserPlugin[]; readonly typedByJsdoc: boolean };
+
+type Unparsed = Extract<Reading, { readonly kind: "unparsed" }>;
 
 type Parsed = {
   readonly type: "CommentLine" | "CommentBlock";
@@ -27,6 +30,8 @@ const JSDOC_PARAM = /^@param\b/;
 
 const LEADING_STARS = /^[\s*]*/;
 
+const BABEL_POSITION = /\.? \(\d+:\d+\)$/;
+
 function dialectOf(path: string, text: string): Dialect {
   const route = routeOf(path);
   if (route.kind === "first-line") {
@@ -41,7 +46,14 @@ function dialectOf(path: string, text: string): Dialect {
   return { syntax: ["typescript"], typedByJsdoc: false };
 }
 
-function parsed(text: string, dialect: Dialect): Parsed[] | null {
+function unparsed(error: SyntaxError): Unparsed {
+  const loc: unknown = Reflect.get(error, "loc");
+  const line: unknown = typeof loc === "object" && loc !== null ? Reflect.get(loc, "line") : null;
+  invariant(typeof line === "number", "Babel locates each syntax error");
+  return { kind: "unparsed", line, reason: error.message.replace(BABEL_POSITION, "") };
+}
+
+function parsed(text: string, dialect: Dialect): Parsed[] | Unparsed {
   try {
     const file = parse(text, {
       sourceType: "unambiguous",
@@ -56,7 +68,7 @@ function parsed(text: string, dialect: Dialect): Parsed[] | null {
       loc ? [{ type, value, line: loc.start.line, source: text.slice(start, end) }] : [],
     );
   } catch (error) {
-    if (error instanceof SyntaxError) return null;
+    if (error instanceof SyntaxError) return unparsed(error);
     throw error;
   }
 }
@@ -81,14 +93,15 @@ function isToolContract(comment: Parsed, dialect: Dialect): boolean {
 }
 
 function refused({ line, source }: Parsed): Comment {
-  return { line, body: firstLine(source).trim() };
+  return { line, text: source };
 }
 
-export const comments: CommentsOf = async (path, text) => {
+export const comments: CommentsOf = (path, text) => {
   const dialect = dialectOf(path, text);
-  return (
-    parsed(text, dialect)
-      ?.filter((comment) => !isToolContract(comment, dialect))
-      .map(refused) ?? null
-  );
+  const found = parsed(text, dialect);
+  if (!Array.isArray(found)) return found;
+  return {
+    kind: "read",
+    comments: found.filter((comment) => !isToolContract(comment, dialect)).map(refused),
+  };
 };

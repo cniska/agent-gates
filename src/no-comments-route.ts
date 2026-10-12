@@ -14,12 +14,3 @@ export function routeOf(path: string): Route {
 export function interpreterOf(head: string): string | null {
   return SHEBANG.exec(head)?.[1] ?? null;
 }
-
-export function lineEnd(text: string, from: number): number {
-  const newline = text.indexOf("\n", from);
-  return newline < 0 ? text.length : newline;
-}
-
-export function firstLine(text: string): string {
-  return text.slice(0, lineEnd(text, 0));
-}
