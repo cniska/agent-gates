@@ -32,6 +32,13 @@ function unparsed(line: number, reason: string): Reading {
   return { kind: "unparsed", line, reason };
 }
 
+function refusalText(listing: readonly string[]): string {
+  const count = listing.filter((line) => line.startsWith("  ")).length;
+  const total = count === 1 ? "1 comment" : `${count} comments`;
+  const header = `no-comments: this change adds ${total}. Remove each comment; a why belongs in a name, a test or the docs.`;
+  return [header, ...listing, ""].join("\n");
+}
+
 function gated(files: Record<string, string> = {}): string {
   const dir = repo(files);
   installGates(dir, ["no-comments-javascript"]);
@@ -720,12 +727,7 @@ describe("the pre-commit hook", () => {
     });
     expect(commit(dir)).toEqual({
       status: 1,
-      stderr: [
-        "no-comments: src/a.ts:1  // why",
-        "no-comments: src/b.js:1  /* b",
-        "  Remove each comment; a why belongs in a name, a test or the docs.",
-        "",
-      ].join("\n"),
+      stderr: refusalText(["src/a.ts", "  1  // why", "src/b.js", "  1  /* b"]),
     });
     expect(git(dir, ["rev-list", "--count", "HEAD"])).toBe("1");
   });
@@ -738,9 +740,9 @@ describe("the pre-commit hook", () => {
     writeFiles(dir, { "a.ts": "// old\nexport const a = 2;\n" });
     expect(commit(dir)).toEqual({ status: 0, stderr: "" });
     writeFiles(dir, { "a.ts": "// old\nexport const a = 3; // new\n" });
-    expect(commit(dir).stderr).toStartWith("no-comments: a.ts:2  // new\n");
+    expect(commit(dir).stderr).toBe(refusalText(["a.ts", "  2  // new"]));
     writeFiles(dir, { "a.ts": "// older\nexport const a = 3;\n" });
-    expect(commit(dir).stderr).toStartWith("no-comments: a.ts:1  // older\n");
+    expect(commit(dir).stderr).toBe(refusalText(["a.ts", "  1  // older"]));
   });
 
   test("keeps a comment the change moves, renamed, reindented or into another file", () => {
@@ -759,9 +761,7 @@ describe("the pre-commit hook", () => {
     const dir = gated({ "a.ts": "// twice\n/* one\n   two */\nexport {};\n" });
     commitPastHooks(dir, "feat: start");
     writeFiles(dir, { "a.ts": "// twice\n// twice\n/* one two */\nexport {};\n" });
-    expect(commit(dir).stderr).toStartWith(
-      "no-comments: a.ts:2  // twice\nno-comments: a.ts:3  /* one two */\n",
-    );
+    expect(commit(dir).stderr).toBe(refusalText(["a.ts", "  2  // twice", "  3  /* one two */"]));
   });
 
   test("refuses the copy or the new duplicate, never the comment its source keeps", () => {
@@ -769,10 +769,10 @@ describe("the pre-commit hook", () => {
     const dir = gated({ "z.ts": `// kept\n${body}` });
     commitPastHooks(dir, "feat: start");
     writeFiles(dir, { "z.ts": `// kept\n${body}export const e = 5;\n`, "a-copy.ts": `// kept\n${body}` });
-    expect(commit(dir).stderr).toStartWith("no-comments: a-copy.ts:1  // kept\n  Remove");
+    expect(commit(dir).stderr).toBe(refusalText(["a-copy.ts", "  1  // kept"]));
     rmSync(join(dir, "a-copy.ts"));
     writeFiles(dir, { "a.ts": "// kept\nexport {};\n" });
-    expect(commit(dir).stderr).toStartWith("no-comments: a.ts:1  // kept\n  Remove");
+    expect(commit(dir).stderr).toBe(refusalText(["a.ts", "  1  // kept"]));
   });
 
   test("skips a binary file the change renames or copies", () => {
@@ -790,11 +790,16 @@ describe("the pre-commit hook", () => {
     const dir = gated({ "a.ts": "// old\nconst = ;\n" });
     commitPastHooks(dir, "feat: start");
     writeFiles(dir, { "a.ts": "// old\nconst a = 1;\n" });
-    expect(commit(dir).stderr).toStartWith("no-comments: a.ts:1  // old\n");
+    expect(commit(dir).stderr).toBe(refusalText(["a.ts", "  1  // old"]));
     writeFiles(dir, { "a.ts": "// old\nconst = 1;\n" });
     expect(commit(dir)).toEqual({
       status: 1,
-      stderr: "no-comments: a.ts:2 does not parse: Unexpected token; fix its syntax\n",
+      stderr: [
+        "no-comments: 1 file does not parse. Fix the syntax where each file stops parsing.",
+        "a.ts",
+        "  2  does not parse: Unexpected token",
+        "",
+      ].join("\n"),
     });
   });
 
@@ -802,16 +807,16 @@ describe("the pre-commit hook", () => {
     const dir = gated({ "a.ts": "// agent-gate:no-comments:1\nexport {};\n" });
     expect(commit(dir)).toEqual({ status: 0, stderr: "" });
     writeFiles(dir, { "a.ts": "// agent-gate:no-comments:1 and more\nexport {};\n" });
-    expect(commit(dir).stderr).toStartWith("no-comments: a.ts:1  // agent-gate:no-comments:1 and more\n");
+    expect(commit(dir).stderr).toBe(refusalText(["a.ts", "  1  // agent-gate:no-comments:1 and more"]));
     writeFiles(dir, { "a.ts": "export {}; // agent-gate:no-comments:1\n" });
-    expect(commit(dir).stderr).toStartWith("no-comments: a.ts:1  // agent-gate:no-comments:1\n");
+    expect(commit(dir).stderr).toBe(refusalText(["a.ts", "  1  // agent-gate:no-comments:1"]));
   });
 
   test("keeps another tool's gate marker, with or without a part", () => {
     const dir = gated({ "a.ts": "// dim-gate:1\n// other-tool-gate:lint:12\nexport {};\n" });
     expect(commit(dir)).toEqual({ status: 0, stderr: "" });
     writeFiles(dir, { "a.ts": "// dim-gate:one\nexport {};\n" });
-    expect(commit(dir).stderr).toStartWith("no-comments: a.ts:1  // dim-gate:one\n");
+    expect(commit(dir).stderr).toBe(refusalText(["a.ts", "  1  // dim-gate:one"]));
   });
 
   test("judges each language with the adapter installed for it", () => {
@@ -826,14 +831,16 @@ describe("the pre-commit hook", () => {
     });
     expect(commit(dir)).toEqual({
       status: 1,
-      stderr: [
-        "no-comments: bin/tool:2  # why",
-        "no-comments: db/a.sql:1  -- why",
-        "no-comments: lib/a.dart:1  // why",
-        'no-comments: src/a.rs:1  #[doc = "why"]',
-        "  Remove each comment; a why belongs in a name, a test or the docs.",
-        "",
-      ].join("\n"),
+      stderr: refusalText([
+        "bin/tool",
+        "  2  # why",
+        "db/a.sql",
+        "  1  -- why",
+        "lib/a.dart",
+        "  1  // why",
+        "src/a.rs",
+        '  1  #[doc = "why"]',
+      ]),
     });
   });
 
@@ -841,7 +848,12 @@ describe("the pre-commit hook", () => {
     const dir = gated({ "a.ts": "const a = 1;\nconst = ;\n" });
     expect(commit(dir)).toEqual({
       status: 1,
-      stderr: "no-comments: a.ts:2 does not parse: Unexpected token; fix its syntax\n",
+      stderr: [
+        "no-comments: 1 file does not parse. Fix the syntax where each file stops parsing.",
+        "a.ts",
+        "  2  does not parse: Unexpected token",
+        "",
+      ].join("\n"),
     });
   });
 
@@ -856,8 +868,7 @@ describe("the pre-commit hook", () => {
     writeFiles(dir, { "a.ts": "export const a = 3; // why\n" });
     expect(commitPaths(dir, ["a.ts"])).toEqual({
       status: 1,
-      stderr:
-        "no-comments: a.ts:1  // why\n  Remove each comment; a why belongs in a name, a test or the docs.\n",
+      stderr: refusalText(["a.ts", "  1  // why"]),
     });
   });
 
@@ -872,7 +883,7 @@ describe("the pre-commit hook", () => {
     symlinkSync("// a link target", join(dir, "src/link.ts"));
     expect(commit(dir)).toEqual({ status: 0, stderr: "" });
     writeFiles(dir, { "src/header.ts": "// Code GENERATED by a tool\nexport {};\n" });
-    expect(commit(dir).stderr).toStartWith("no-comments: src/header.ts:1  // Code GENERATED by a tool\n");
+    expect(commit(dir).stderr).toBe(refusalText(["src/header.ts", "  1  // Code GENERATED by a tool"]));
   });
 
   test("loads an adapter only for a file it reads, and leaves a language alone without one", () => {
@@ -979,8 +990,7 @@ describe("the no-comments workflow", () => {
     const head = commitPastHooks(dir, "feat: more");
     expect(judged(dir, { base, head, ref: "refs/heads/main" })).toEqual({
       status: 1,
-      stderr:
-        "no-comments: b.ts:1  // new\n  Remove each comment; a why belongs in a name, a test or the docs.\n",
+      stderr: refusalText(["b.ts", "  1  // new"]),
     });
     expect(judged(dir, { base: head, head, ref: "refs/heads/main" })).toEqual({ status: 0, stderr: "" });
   });
@@ -994,8 +1004,7 @@ describe("the no-comments workflow", () => {
     const head = commitPastHooks(dir, "feat: tip");
     expect(judged(dir, { base: NO_COMMIT, head, ref: "refs/heads/topic" })).toEqual({
       status: 1,
-      stderr:
-        "no-comments: b.ts:1  // early\n  Remove each comment; a why belongs in a name, a test or the docs.\n",
+      stderr: refusalText(["b.ts", "  1  // early"]),
     });
   });
 
@@ -1007,8 +1016,7 @@ describe("the no-comments workflow", () => {
     git(dir, ["update-ref", "refs/remotes/origin/main", head]);
     expect(judged(dir, { base: NO_COMMIT, head, ref: "refs/heads/main" })).toEqual({
       status: 1,
-      stderr:
-        "no-comments: a.ts:1  // root\n  Remove each comment; a why belongs in a name, a test or the docs.\n",
+      stderr: refusalText(["a.ts", "  1  // root"]),
     });
   });
 
@@ -1019,8 +1027,7 @@ describe("the no-comments workflow", () => {
     const head = commitPastHooks(dir, "feat: more");
     expect(judged(dir, { base: NO_COMMIT, head, ref: "refs/heads/topic" })).toEqual({
       status: 1,
-      stderr:
-        "no-comments: a.ts:1  // root\n  Remove each comment; a why belongs in a name, a test or the docs.\n",
+      stderr: refusalText(["a.ts", "  1  // root"]),
     });
   });
 
@@ -1034,8 +1041,7 @@ describe("the no-comments workflow", () => {
     const head = commitPastHooks(dir, "feat: tip");
     expect(judged(dir, { base: NO_COMMIT, head, ref: "refs/heads/pages" })).toEqual({
       status: 1,
-      stderr:
-        "no-comments: b.ts:1  // orphan\n  Remove each comment; a why belongs in a name, a test or the docs.\n",
+      stderr: refusalText(["b.ts", "  1  // orphan"]),
     });
   });
 
@@ -1048,6 +1054,16 @@ describe("the no-comments workflow", () => {
     expect(scan(dir, ["--format", "github"])).toEqual({ status: 2, stderr: usage("2: --format github") });
   });
 
+  test("keeps the reply within 4,000 bytes, counting the comments it does not show", () => {
+    const dir = gated({ "a.ts": "// why\nexport {};\n".repeat(300) });
+    commitPastHooks(dir, "feat: start");
+    const { status, stderr } = scan(dir, ["--all"]);
+    expect(status).toBe(1);
+    expect(Buffer.byteLength(stderr)).toBeLessThanOrEqual(4000);
+    expect(stderr).toStartWith("no-comments: the tracked files hold 300 comments.");
+    expect(stderr).toMatch(/\na\.ts: \d+ more\n$/);
+  });
+
   test("judges every comment of every tracked file with --all, as the index holds it", () => {
     const dir = gated({ "a.ts": "// old\nexport {};\n", "b.ts": "export {};\n" });
     commitPastHooks(dir, "feat: start");
@@ -1057,9 +1073,11 @@ describe("the no-comments workflow", () => {
     expect(scan(dir, ["--all"])).toEqual({
       status: 1,
       stderr: [
-        "no-comments: a.ts:1  // old",
-        "no-comments: b.ts:1  // staged",
-        "  Remove each comment; a why belongs in a name, a test or the docs.",
+        "no-comments: the tracked files hold 2 comments. Remove each comment; a why belongs in a name, a test or the docs.",
+        "a.ts",
+        "  1  // old",
+        "b.ts",
+        "  1  // staged",
         "",
       ].join("\n"),
     });

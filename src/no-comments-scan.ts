@@ -26,8 +26,10 @@ type JudgedChange = { readonly heads: readonly JudgedHead[]; readonly bases: rea
 
 type Pool = Map<string, number>;
 
-type Finding =
-  | { readonly kind: "comment"; readonly path: string; readonly line: number; readonly body: string }
+export type Refused = { readonly line: number; readonly body: string };
+
+export type FileFindings =
+  | { readonly kind: "comments"; readonly path: string; readonly comments: readonly [Refused, ...Refused[]] }
   | { readonly kind: "unparsed"; readonly path: string; readonly line: number; readonly reason: string };
 
 export type AdapterOf = (language: Language) => CommentsOf | null;
@@ -45,8 +47,6 @@ const NUMSTAT_RECORD = /^([^\t]*\t[^\t]*\t)(.*)$/s;
 const BINARY = "-\t-\t";
 
 const WHITESPACE_RUN = /\s+/g;
-
-const FIX = "  Remove each comment; a why belongs in a name, a test or the docs.";
 
 function emptyTree(root: string): string {
   return gitOutput(root, ["hash-object", "-t", "tree", "--stdin"], "").toString().trim();
@@ -190,44 +190,30 @@ function unmatchedIn(reading: Reading | null, own: Pool | null): Reading | null 
   return { kind: "read", comments: reading.comments.filter(({ text }) => !takenFrom(own, text)) };
 }
 
-export function findings({ heads, bases }: JudgedChange, adapterOf: AdapterOf): Finding[] {
+function byPath(a: FileFindings, b: FileFindings): number {
+  if (a.path === b.path) return 0;
+  return a.path < b.path ? -1 : 1;
+}
+
+export function findings({ heads, bases }: JudgedChange, adapterOf: AdapterOf): FileFindings[] {
   const pools = new Map(bases.map((base) => [base.path, poolOf(base, adapterOf)]));
   const unmatched = heads.map(({ file, base }) => {
     const own = base?.origin === "own" ? (pools.get(base.path) ?? null) : null;
     return { file, reading: unmatchedIn(readingOf(file, adapterOf), own) };
   });
   const leftovers = leftoversOf(pools.values());
-  const found: Finding[] = [];
+  const found: FileFindings[] = [];
   for (const { file, reading } of unmatched) {
     if (reading === null) continue;
     if (reading.kind === "unparsed") {
       found.push({ kind: "unparsed", path: file.path, line: reading.line, reason: reading.reason });
       continue;
     }
-    for (const comment of reading.comments)
-      if (!takenFrom(leftovers, comment.text))
-        found.push({
-          kind: "comment",
-          path: file.path,
-          line: comment.line,
-          body: firstLine(comment.text).trim(),
-        });
+    const [first, ...rest] = reading.comments
+      .filter(({ text }) => !takenFrom(leftovers, text))
+      .map(({ line, text }) => ({ line, body: firstLine(text).trim() }))
+      .sort((a, b) => a.line - b.line);
+    if (first !== undefined) found.push({ kind: "comments", path: file.path, comments: [first, ...rest] });
   }
-  return found;
-}
-
-function lineOf(finding: Finding): string {
-  switch (finding.kind) {
-    case "comment":
-      return `no-comments: ${finding.path}:${finding.line}  ${finding.body}`;
-    case "unparsed":
-      return `no-comments: ${finding.path}:${finding.line} does not parse: ${finding.reason}; fix its syntax`;
-    default:
-      return unreachable(finding);
-  }
-}
-
-export function verdict(found: readonly Finding[]): string[] {
-  const lines = found.map(lineOf);
-  return found.some(({ kind }) => kind === "comment") ? [...lines, FIX] : lines;
+  return found.sort(byPath);
 }

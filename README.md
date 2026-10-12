@@ -62,6 +62,8 @@ The `no-comments-<language>` gates refuse the comments a change adds:
 - A comment is added when its text, each line trimmed and its runs of whitespace collapsed, is not left in the comments the changed files held before the change. A comment the change moves, reindents or carries through a rename is not added, nor one a copy carries out of a source that drops it. One it edits by a word, splits, joins or duplicates is, a copy's included, and a file is first matched against its own earlier comments, so the duplicate is the one refused.
 - A file that does not parse is refused, with the line and the reason its parser gives, whatever it was before the change. A file that did not parse before the change brings no comments with it, so each of its comments is judged.
 
+A refusal leads with its total and the fix, then lists each file's findings under its path, sorted by path and line, so a retry after a partial fix prints a subset of the same lines in the same order. A comment is shown by its first line, cut at 120 characters, and the reply stops at 4,000 bytes, which reaches every agent harness [measured](docs/no-comments-measurements.md) whole. Past that, each file with findings left gets a line counting them, and the files no line fits for share one count.
+
 The gates stop the comment count from growing; they do not drive it to zero. Comments already in the tree wait for a deliberate sweep: `node .githooks/no-comments/scan.cjs --all` judges every comment of every tracked file, as the index holds it.
 
 They need `node` on `PATH` and nothing installed in the project. A file with no extension is routed by its shebang. They skip:

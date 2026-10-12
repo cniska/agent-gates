@@ -1,11 +1,12 @@
 import { existsSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { invariant } from "./assert";
+import { invariant, unreachable } from "./assert";
 import { EXIT_STATUS, recordOf, usageErrors } from "./coded-error";
 import { checkoutRoot } from "./git";
 import type { Comment, CommentsOf, Language, Reading } from "./no-comments-languages";
-import { type AdapterOf, findings, type Judged, judgedChange, verdict } from "./no-comments-scan";
+import { REPLY_BYTES, reply, type Scope } from "./no-comments-report";
+import { type AdapterOf, findings, type Judged, judgedChange } from "./no-comments-scan";
 
 const SCANNER = "scan.cjs";
 
@@ -78,6 +79,18 @@ function judgedOf(args: readonly string[]): Judged | null {
   return null;
 }
 
+function scopeOf(judged: Judged): Scope {
+  switch (judged.kind) {
+    case "staged":
+    case "pushed":
+      return "change";
+    case "all":
+      return "tracked";
+    default:
+      return unreachable(judged);
+  }
+}
+
 function main(): number {
   const script = process.argv[1];
   invariant(script !== undefined, "node names the script it runs");
@@ -85,9 +98,9 @@ function main(): number {
   const judged = judgedOf(args);
   if (judged === null) throw scanUsageError("wrong_arguments", { got: args });
   const root = checkoutRoot(process.cwd());
-  const lines = verdict(findings(judgedChange(root, judged), adaptersBeside(dirname(realpathSync(script)))));
-  for (const line of lines) process.stderr.write(`${line}\n`);
-  return lines.length === 0 ? 0 : EXIT_STATUS.refusal;
+  const found = findings(judgedChange(root, judged), adaptersBeside(dirname(realpathSync(script))));
+  process.stderr.write(reply(found, scopeOf(judged), REPLY_BYTES));
+  return found.length === 0 ? 0 : EXIT_STATUS.refusal;
 }
 
 try {
