@@ -259,6 +259,11 @@ describe("the sql adapter", () => {
     expect(await sqlComments("a.sql", "select a$b$c from t;")).toEqual([]);
   });
 
+  test("reads letters beyond ASCII in identifiers and dollar quote tags as Postgres does", async () => {
+    expect(await sqlComments("a.sql", "select $ä$Don't$ä$; -- c")).toEqual([{ line: 1, body: "-- c" }]);
+    expect(await sqlComments("a.sql", "select ä$b$ from t; -- c")).toEqual([{ line: 1, body: "-- c" }]);
+  });
+
   test("lets a backslash escape the quote only in an escape string", async () => {
     expect(await sqlComments("a.sql", "select E'a\\'-- still quoted';")).toEqual([]);
     expect(await sqlComments("a.sql", "select 'a\\' -- a comment")).toEqual([

@@ -2,9 +2,11 @@ import type { CommentsOf } from "./no-comments-languages";
 import { lineEnd } from "./no-comments-route";
 import { commentsAt, nestedBlockEnd, type Span } from "./no-comments-spans";
 
-const IDENTIFIER_CHAR = /[A-Za-z0-9_$]/;
+const POSTGRES_LETTER = "A-Za-z\\u0080-\\uffff_";
 
-const DOLLAR_TAG = /\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/y;
+const IDENTIFIER_CHAR = new RegExp(`[${POSTGRES_LETTER}0-9$]`);
+
+const DOLLAR_TAG = new RegExp(`\\$(?:[${POSTGRES_LETTER}][${POSTGRES_LETTER}0-9]*)?\\$`, "y");
 
 const ESCAPE_STRING_PREFIX = /^[Ee]$/;
 

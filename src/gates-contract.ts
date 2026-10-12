@@ -141,6 +141,7 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
   ]),
   "no-comments-sql": noCommentsFiles("sql", [
     { version: 1, sha256: "261cd8dc159c4222234bd5bc2796723b803ecf0cf448a7d417471faea8c3ef13" },
+    { version: 2, sha256: "53e8a1300d76f40adf25c20c4ec496821197977c72d4af0792db7d2b4d6ee50c" },
   ]),
 };
 
