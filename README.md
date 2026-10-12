@@ -55,11 +55,14 @@ A comment is where a coding agent excuses a workaround instead of fixing it. The
 
 Cursor's [pstack](https://github.com/cursor/plugins/tree/main/pstack) plugin works from the same observation. Its [`/no-comments`](https://github.com/cursor/plugins/blob/main/pstack/skills/no-comments/SKILL.md) skill hands comments to a reviewer that did not write them, because an author defends its own comments, and fixes each workaround that reviewer names at its root cause. These gates hold the same line at commit time and in CI, keeping only comments a tool reads.
 
-The `no-comments-<language>` gates judge whole files:
+The `no-comments-<language>` gates refuse the comments a change adds:
 
-- On commit, each file the commit changes, read from the index.
-- In CI, each file the push changes, read at its head.
-- A file that does not parse is refused, with the line and the reason its parser gives.
+- On commit, the commit's changes, read from the index against `HEAD`.
+- In CI, the push's changes, read at its head against the merge base.
+- A comment is added when its text, each line trimmed and its runs of whitespace collapsed, is not left in the comments the changed files held before the change. A comment the change moves, reindents or carries through a rename is not added, nor one a copy carries out of a source that drops it. One it edits by a word, splits, joins or duplicates is, a copy's included, and a file is first matched against its own earlier comments, so the duplicate is the one refused.
+- A file that does not parse is refused, with the line and the reason its parser gives, whatever it was before the change. A file that did not parse before the change brings no comments with it, so each of its comments is judged.
+
+The gates stop the comment count from growing; they do not drive it to zero. Comments already in the tree wait for a deliberate sweep.
 
 They need `node` on `PATH` and nothing installed in the project. A file with no extension is routed by its shebang. They skip:
 

@@ -673,13 +673,72 @@ describe("the pre-commit hook", () => {
     expect(git(dir, ["rev-list", "--count", "HEAD"])).toBe("1");
   });
 
-  test("judges a file whole, not only the lines the commit changes", () => {
+  test("refuses only the comments a change adds, an edited one among them", () => {
     const dir = repo({ "a.ts": "// old\nexport const a = 1;\n" });
     expect(commit(dir).status).toBe(0);
     installGates(dir, ["no-comments-javascript"]);
     expect(commit(dir).status).toBe(0);
     writeFiles(dir, { "a.ts": "// old\nexport const a = 2;\n" });
+    expect(commit(dir)).toEqual({ status: 0, stderr: "" });
+    writeFiles(dir, { "a.ts": "// old\nexport const a = 3; // new\n" });
+    expect(commit(dir).stderr).toStartWith("no-comments: a.ts:2  // new\n");
+    writeFiles(dir, { "a.ts": "// older\nexport const a = 3;\n" });
+    expect(commit(dir).stderr).toStartWith("no-comments: a.ts:1  // older\n");
+  });
+
+  test("keeps a comment the change moves, renamed, reindented or into another file", () => {
+    const body = "export const a = 1;\nexport const b = 2;\nexport const c = 3;\nexport const d = 4;\n";
+    const dir = gated({ "a.ts": `/* kept\n   block */\nexport function f() {}\n${body}// moved\n` });
+    commitPastHooks(dir, "feat: start");
+    git(dir, ["mv", "a.ts", "renamed.ts"]);
+    writeFiles(dir, {
+      "renamed.ts": `export function f() {\n  /* kept\n     block */\n}\n${body}`,
+      "b.ts": "// moved\nexport {};\n",
+    });
+    expect(commit(dir)).toEqual({ status: 0, stderr: "" });
+  });
+
+  test("refuses a comment the change duplicates, or a block it joins", () => {
+    const dir = gated({ "a.ts": "// twice\n/* one\n   two */\nexport {};\n" });
+    commitPastHooks(dir, "feat: start");
+    writeFiles(dir, { "a.ts": "// twice\n// twice\n/* one two */\nexport {};\n" });
+    expect(commit(dir).stderr).toStartWith(
+      "no-comments: a.ts:2  // twice\nno-comments: a.ts:3  /* one two */\n",
+    );
+  });
+
+  test("refuses the copy or the new duplicate, never the comment its source keeps", () => {
+    const body = "export const a = 1;\nexport const b = 2;\nexport const c = 3;\nexport const d = 4;\n";
+    const dir = gated({ "z.ts": `// kept\n${body}` });
+    commitPastHooks(dir, "feat: start");
+    writeFiles(dir, { "z.ts": `// kept\n${body}export const e = 5;\n`, "a-copy.ts": `// kept\n${body}` });
+    expect(commit(dir).stderr).toStartWith("no-comments: a-copy.ts:1  // kept\n  Remove");
+    rmSync(join(dir, "a-copy.ts"));
+    writeFiles(dir, { "a.ts": "// kept\nexport {};\n" });
+    expect(commit(dir).stderr).toStartWith("no-comments: a.ts:1  // kept\n  Remove");
+  });
+
+  test("skips a binary file the change renames or copies", () => {
+    const dir = gated({ "data.js": "\0// binary\nexport {};\n".repeat(20) });
+    commitPastHooks(dir, "feat: start");
+    git(dir, ["mv", "data.js", "moved.js"]);
+    writeFiles(dir, {
+      "moved.js": `${"\0// binary\nexport {};\n".repeat(20)}// more\n`,
+      "copy.js": "\0// binary\nexport {};\n".repeat(20),
+    });
+    expect(commit(dir)).toEqual({ status: 0, stderr: "" });
+  });
+
+  test("judges every comment of a file whose base does not parse, and refuses one that still does not", () => {
+    const dir = gated({ "a.ts": "// old\nconst = ;\n" });
+    commitPastHooks(dir, "feat: start");
+    writeFiles(dir, { "a.ts": "// old\nconst a = 1;\n" });
     expect(commit(dir).stderr).toStartWith("no-comments: a.ts:1  // old\n");
+    writeFiles(dir, { "a.ts": "// old\nconst = 1;\n" });
+    expect(commit(dir)).toEqual({
+      status: 1,
+      stderr: "no-comments: a.ts:2 does not parse: Unexpected token; fix its syntax\n",
+    });
   });
 
   test("keeps an agent-gate marker in any language, and only the whole marker", () => {

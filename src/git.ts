@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { invariant } from "./assert";
 import { faults, refusals } from "./coded-error";
 
 type GitRun = {
@@ -26,6 +27,7 @@ const gitFault = faults<{
     readonly signal: string | null;
     readonly detail: string;
   };
+  readonly blob_missing: { readonly repo: string; readonly blob: string };
 }>({
   git_unavailable: {
     message: ({ detail }) => `git could not run: ${detail}`,
@@ -36,7 +38,18 @@ const gitFault = faults<{
       `${command} ${status === null ? `was killed by ${signal}` : `exited ${status}`}: ${detail}`,
     resolve: ({ repo }) => `stop and hand this error to the owner: git must run in ${repo}`,
   },
+  blob_missing: {
+    message: ({ blob }) => `git reports blob ${blob} missing`,
+    resolve: ({ repo, blob }) =>
+      `stop and hand this error to the owner: ${repo}'s object store must hold ${blob}`,
+  },
 });
+
+const BATCH_BLOB = /^([0-9a-f]+) blob (\d+)$/;
+
+const MISSING = "missing";
+
+const NEWLINE = 0x0a;
 
 function git(repo: string, args: readonly string[], input: string | null = null): GitRun {
   const run = spawnSync("git", ["-C", repo, ...args], {
@@ -86,6 +99,26 @@ export function gitOutput(repo: string, args: readonly string[], input: string |
   const run = git(repo, args, input);
   if (run.status !== 0) throw failed(repo, args, run);
   return run.out;
+}
+
+export function blobsOf(repo: string, blobs: readonly string[]): Buffer[] {
+  if (blobs.length === 0) return [];
+  const out = gitOutput(repo, ["cat-file", "--batch"], blobs.map((blob) => `${blob}\n`).join(""));
+  let at = 0;
+  return blobs.map((blob) => {
+    const newline = out.indexOf(NEWLINE, at);
+    const header = out.subarray(at, newline < 0 ? out.length : newline).toString();
+    if (header === `${blob} ${MISSING}`) throw gitFault("blob_missing", { repo, blob });
+    const [, id, size] = BATCH_BLOB.exec(header) ?? [];
+    const start = newline + 1;
+    const end = start + Number(size);
+    invariant(
+      newline >= 0 && id === blob && size !== undefined && out[end] === NEWLINE,
+      "git cat-file --batch frames each blob asked for as header, body, LF",
+    );
+    at = end + 1;
+    return out.subarray(start, end);
+  });
 }
 
 export function nulFields(output: Buffer): string[] {

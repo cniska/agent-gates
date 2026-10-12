@@ -5,7 +5,7 @@ import { invariant } from "./assert";
 import { EXIT_STATUS, recordOf, usageErrors } from "./coded-error";
 import { checkoutRoot } from "./git";
 import type { Comment, CommentsOf, Language, Reading } from "./no-comments-languages";
-import { type AdapterOf, findings, type Judged, judgedFiles, verdict } from "./no-comments-scan";
+import { type AdapterOf, findings, type Judged, judgedChange, verdict } from "./no-comments-scan";
 
 const SCANNER = "scan.cjs";
 
@@ -79,7 +79,7 @@ function main(): number {
   const judged = judgedOf(args);
   if (judged === null) throw scanUsageError("wrong_arguments", { got: args });
   const root = checkoutRoot(process.cwd());
-  const lines = verdict(findings(judgedFiles(root, judged), adaptersBeside(dirname(realpathSync(script)))));
+  const lines = verdict(findings(judgedChange(root, judged), adaptersBeside(dirname(realpathSync(script)))));
   for (const line of lines) process.stderr.write(`${line}\n`);
   return lines.length === 0 ? 0 : EXIT_STATUS.refusal;
 }
