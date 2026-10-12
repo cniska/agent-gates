@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { SOURCE_DIR } from "./gates";
@@ -43,13 +43,24 @@ function bash(dir: string, run: string, env: Record<string, string>) {
   return { status: ran.status, stderr: ran.stderr };
 }
 
-function rangeOf(dir: string, base: string, head: string): string {
+function rangeOf(dir: string, push: { base: string; head: string; ref: string }): string {
   const output = join(dir, "output");
   writeFileSync(output, "");
-  expect(bash(dir, RESOLVE, { BASE_SHA: base, HEAD_SHA: head, GITHUB_OUTPUT: output }).status).toBe(0);
+  const env = {
+    BASE_SHA: push.base,
+    HEAD_SHA: push.head,
+    PUSHED_REF: push.ref,
+    DEFAULT_BRANCH: "main",
+    GITHUB_OUTPUT: output,
+  };
+  expect(bash(dir, RESOLVE, env).status).toBe(0);
   return readFileSync(output, "utf8")
     .replace(/^range=/, "")
     .trim();
+}
+
+function setOriginMain(dir: string, sha: string): void {
+  execFileSync("git", ["-C", dir, "update-ref", "refs/remotes/origin/main", sha]);
 }
 
 function judged(dir: string, range: string) {
@@ -64,19 +75,39 @@ describe("the commits workflow", () => {
     const base = commitPastHooks(dir, "feat: start");
     commitPastHooks(dir, "Add a bad subject");
     const head = commitPastHooks(dir, "fix: follow up");
-    const range = rangeOf(dir, base, head);
+    const range = rangeOf(dir, { base, head, ref: "refs/heads/main" });
     expect(range).toBe(`${base}..${head}`);
     expect(judged(dir, range).stderr).toContain("got: Add a bad subject");
   });
 
-  test("judges the head alone when the base names no commit, even a root commit", () => {
+  test("judges a new branch from the default branch, not its tip alone", () => {
     const dir = hookedRepo();
-    const root = commitPastHooks(dir, "Start badly");
-    expect(rangeOf(dir, NO_COMMIT, root)).toBe(root);
-    expect(judged(dir, root).stderr).toContain("got: Start badly");
+    const main = commitPastHooks(dir, "feat: start");
+    setOriginMain(dir, main);
+    commitPastHooks(dir, "Add a bad subject");
+    const head = commitPastHooks(dir, "fix: follow up");
+    const range = rangeOf(dir, { base: NO_COMMIT, head, ref: "refs/heads/topic" });
+    expect(range).toBe(`origin/main..${head}`);
+    expect(judged(dir, range).stderr).toContain("got: Add a bad subject");
+  });
+
+  test("judges every commit when the default branch is pushed for the first time", () => {
+    const dir = hookedRepo();
+    commitPastHooks(dir, "Start badly");
     const head = commitPastHooks(dir, "feat: carry on");
-    expect(rangeOf(dir, NO_COMMIT, head)).toBe(`${head}^..${head}`);
-    expect(judged(dir, `${head}^..${head}`)).toEqual({ status: 0, stderr: "" });
+    setOriginMain(dir, head);
+    const range = rangeOf(dir, { base: NO_COMMIT, head, ref: "refs/heads/main" });
+    expect(range).toBe(head);
+    expect(judged(dir, range).stderr).toContain("got: Start badly");
+  });
+
+  test("judges every commit when a new branch reaches a remote with no default branch", () => {
+    const dir = hookedRepo();
+    commitPastHooks(dir, "Start badly");
+    const head = commitPastHooks(dir, "feat: carry on");
+    const range = rangeOf(dir, { base: NO_COMMIT, head, ref: "refs/heads/topic" });
+    expect(range).toBe(head);
+    expect(judged(dir, range).stderr).toContain("got: Start badly");
   });
 
   test("fails when the range names no commits, rather than judging nothing", () => {

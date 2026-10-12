@@ -136,6 +136,7 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
       versions: [
         { version: 1, sha256: "cba3046993d4ca84942aa37b60c17cf77af0123f1a6152482db0301a933587ba" },
         { version: 2, sha256: "f5863ec0ebb55f68779bd8f5693406178e5adbfb1dfbe09db12550286487656f" },
+        { version: 3, sha256: "f28727dbb2e815970fe0e9233c753274cf66c04ae8ac608da31d433e97c3df87" },
       ],
     },
     GITATTRIBUTES,
