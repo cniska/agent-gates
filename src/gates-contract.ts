@@ -34,7 +34,16 @@ export const PREPARE = `! git rev-parse --git-dir >/dev/null 2>&1 || git config 
 
 export const PAST_PREPARES: readonly string[] = [`git config core.hooksPath ${HOOKS_DIR}`];
 
-export type FileState = "installed" | "missing" | "behind" | "changed" | "ahead" | "not-executable";
+export type FileState =
+  | "installed"
+  | "missing"
+  | "behind"
+  | "changed"
+  | "ahead"
+  | "not-executable"
+  | "occupied";
+
+export type WritableState = Exclude<FileState, "occupied">;
 
 type GateVersion = { readonly version: number; readonly sha256: string };
 
@@ -57,7 +66,7 @@ const GITATTRIBUTES: GateFile = {
   ],
 };
 
-export const PRE_COMMIT: GateFile = {
+const PRE_COMMIT: GateFile = {
   part: "githooks",
   source: "pre-commit",
   target: `${HOOKS_DIR}/pre-commit`,

@@ -856,7 +856,7 @@ describe("the no-comments workflow", () => {
 describe("install and doctor", () => {
   test("refuses a project's own pre-commit hook, and writes nothing", () => {
     const dir = repo({ ".githooks/pre-commit": "#!/bin/sh\nmake check\n" });
-    expect(refusalOf(() => installGates(dir, ["no-comments-javascript"]))).toBe("pre_commit_occupied");
+    expect(refusalOf(() => installGates(dir, ["no-comments-javascript"]))).toBe("hook_occupied");
     expect(existsSync(join(dir, ".githooks/no-comments"))).toBe(false);
     expect(readFileSync(join(dir, ".githooks/pre-commit"), "utf8")).toBe("#!/bin/sh\nmake check\n");
     expect(installGates(dir, ["commit-subject"]).gates).toEqual(["commit-subject"]);
@@ -870,8 +870,8 @@ describe("install and doctor", () => {
     expect(report.checks.find(({ name }) => name === ".githooks/pre-commit")).toEqual({
       name: ".githooks/pre-commit",
       state: "fail",
-      detail: `${dir} has its own .githooks/pre-commit, which the gates that run before a commit would replace`,
-      fix: `stop and hand this error to the owner: ${dir}'s .githooks/pre-commit must move to .githooks/pre-commit.d/<name> before the gates install`,
+      detail: `${dir} has its own .githooks/pre-commit, which a gate would replace`,
+      fix: `stop and hand this error to the owner: ${dir}'s .githooks/pre-commit must move out before the gates install; a step that runs before each commit belongs in .githooks/pre-commit.d/<name>, and commit-subject owns .githooks/commit-msg`,
     });
   });
 

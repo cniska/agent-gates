@@ -15,7 +15,7 @@ import {
   INSTALL_GATES,
   isPart,
   type Part,
-  PRE_COMMIT,
+  type WritableState,
 } from "./gates-contract";
 import { configValue, setConfig } from "./git";
 import { type PrepareState, prepareState } from "./package-manifest";
@@ -25,7 +25,7 @@ export const SOURCE_DIR = resolve(import.meta.dir, "..", "gates");
 const gatesRefusal = refusals<{
   readonly no_gates_chosen: { readonly root: string };
   readonly hooks_path_occupied: { readonly root: string; readonly hooksPath: string };
-  readonly pre_commit_occupied: { readonly root: string };
+  readonly hook_occupied: { readonly root: string; readonly target: string };
   readonly write_failed: { readonly path: string; readonly detail: string };
 }>({
   no_gates_chosen: {
@@ -39,11 +39,10 @@ const gatesRefusal = refusals<{
     resolve: ({ root }) =>
       `stop and hand this error to the owner: ${root}'s hooks must move to ${HOOKS_DIR} before the gates install`,
   },
-  pre_commit_occupied: {
-    message: ({ root }) =>
-      `${root} has its own ${HOOKS_DIR}/pre-commit, which the gates that run before a commit would replace`,
-    resolve: ({ root }) =>
-      `stop and hand this error to the owner: ${root}'s ${HOOKS_DIR}/pre-commit must move to ${HOOKS_DIR}/pre-commit.d/<name> before the gates install`,
+  hook_occupied: {
+    message: ({ root, target }) => `${root} has its own ${target}, which a gate would replace`,
+    resolve: ({ root, target }) =>
+      `stop and hand this error to the owner: ${root}'s ${target} must move out before the gates install; a step that runs before each commit belongs in ${HOOKS_DIR}/pre-commit.d/<name>, and commit-subject owns ${HOOKS_DIR}/commit-msg`,
   },
   write_failed: {
     message: ({ path, detail }) => `${path} could not be written: ${detail}`,
@@ -63,17 +62,18 @@ type Found = { readonly text: string; readonly executable: boolean };
 
 type Action = "skip" | "write" | "set-aside-and-write";
 
-export type PlannedFile = {
+type PlannedAt = {
   readonly target: string;
-  readonly state: FileState;
   readonly file: GateFile;
   readonly path: string;
   readonly source: string;
 };
 
-export type PreCommitState =
-  | { readonly kind: "free" }
-  | { readonly kind: "occupied"; readonly refusal: Refusal };
+type WritableFile = PlannedAt & { readonly state: WritableState };
+
+export type PlannedFile =
+  | WritableFile
+  | (PlannedAt & { readonly state: "occupied"; readonly refusal: Refusal });
 
 export type HooksPathState =
   | { readonly kind: "wired" }
@@ -82,7 +82,7 @@ export type HooksPathState =
 
 type InstalledFile = {
   readonly target: string;
-  readonly state: FileState;
+  readonly state: WritableState;
   readonly backup: string | null;
 };
 
@@ -113,6 +113,7 @@ function stateOf(file: GateFile, source: string, found: Found | null): FileState
   const hash = sha256(found.text);
   if (file.versions.slice(0, -1).some((earlier) => earlier.sha256 === hash)) return "behind";
   const at = markerOf(found.text);
+  if (at === null && file.executable) return "occupied";
   const current = markerOf(source);
   if (at !== null && current !== null && at.part === current.part && at.version > current.version)
     return "ahead";
@@ -124,7 +125,11 @@ export function plannedFiles(root: string, gates: readonly GateName[]): PlannedF
   return [...files.values()].map((file) => {
     const path = join(root, file.target);
     const source = readFileSync(join(SOURCE_DIR, file.source), "utf8");
-    return { target: file.target, state: stateOf(file, source, foundAt(path)), file, path, source };
+    const at = { target: file.target, file, path, source };
+    const state = stateOf(file, source, foundAt(path));
+    if (state === "occupied")
+      return { ...at, state, refusal: gatesRefusal("hook_occupied", { root, target: file.target }) };
+    return { ...at, state };
   });
 }
 
@@ -144,14 +149,7 @@ export function hooksPathState(root: string): HooksPathState {
   return { kind: "occupied", refusal: gatesRefusal("hooks_path_occupied", { root, hooksPath }) };
 }
 
-export function preCommitState(root: string, gates: readonly GateName[]): PreCommitState {
-  if (!gates.some((gate) => GATES[gate].includes(PRE_COMMIT))) return { kind: "free" };
-  const found = foundAt(join(root, PRE_COMMIT.target));
-  if (found === null || markerOf(found.text) !== null) return { kind: "free" };
-  return { kind: "occupied", refusal: gatesRefusal("pre_commit_occupied", { root }) };
-}
-
-function actionFor(state: FileState): Action {
+function actionFor(state: WritableState): Action {
   switch (state) {
     case "installed":
     case "ahead":
@@ -175,7 +173,7 @@ function writing<T>(path: string, write: () => T): T {
   }
 }
 
-function applied(root: string, { file, path, source, state }: PlannedFile): string | null {
+function applied(root: string, { file, path, source, state }: WritableFile): string | null {
   const action = actionFor(state);
   if (action === "skip") return null;
   const backup =
@@ -199,11 +197,13 @@ export function installGates(root: string, named: readonly GateName[]): GatesIns
   if (gates.length === 0) throw gatesRefusal("no_gates_chosen", { root });
   const hooksPath = hooksPathState(root);
   if (hooksPath.kind === "occupied") throw hooksPath.refusal;
-  const preCommit = preCommitState(root, gates);
-  if (preCommit.kind === "occupied") throw preCommit.refusal;
+  const toWrite = plannedFiles(root, gates).map((planned) => {
+    if (planned.state === "occupied") throw planned.refusal;
+    return planned;
+  });
   const prepare = prepareState(root);
   if (prepare.kind === "occupied" || prepare.kind === "unparseable") throw prepare.refusal;
-  const files = plannedFiles(root, gates).map((planned) => ({
+  const files = toWrite.map((planned) => ({
     target: planned.target,
     state: planned.state,
     backup: applied(root, planned),

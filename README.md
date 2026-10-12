@@ -106,8 +106,9 @@ Each gate file is in one of these states, and `install` acts on it:
 | `changed` | matches no version | sets it aside as `<file>.agent-gates-backup`, then writes it |
 | `ahead` | a newer agent-gates wrote it | leaves it alone |
 | `not-executable` | a hook git would skip | writes it |
+| `occupied` | a hook with no `agent-gate` marker: the project's own, or another tool's | refuses, writing nothing |
 
-`install` refuses when `core.hooksPath` or `prepare` already hold something else, or when `.githooks/pre-commit` is the project's own hook rather than this one.
+`install` refuses when `core.hooksPath` or `prepare` already hold something else, or when a hook it writes is occupied. A step the project runs before each commit moves to `.githooks/pre-commit.d/<name>`; `commit-subject` owns `.githooks/commit-msg`.
 
 ## Extending
 

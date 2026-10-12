@@ -1,21 +1,12 @@
 import { unreachable } from "./assert";
 import type { Refusal } from "./coded-error";
-import {
-  type HooksPathState,
-  hooksPathState,
-  installedGates,
-  type PlannedFile,
-  type PreCommitState,
-  plannedFiles,
-  preCommitState,
-} from "./gates";
+import { type HooksPathState, hooksPathState, installedGates, type PlannedFile, plannedFiles } from "./gates";
 import {
   ADAPTER_FILES,
   type GateName,
   HOOKS_DIR,
   INSTALL_GATES,
   noCommentsGate,
-  PRE_COMMIT,
   REINSTALL,
 } from "./gates-contract";
 import { LANGUAGE_NAMES, type Language } from "./no-comments-languages";
@@ -35,8 +26,9 @@ function refusedHealth(name: string, error: Refusal): Health {
   return { name, state: "fail", detail: error.message, fix: error.resolve };
 }
 
-function fileHealth({ target: name, state }: PlannedFile): Health {
-  switch (state) {
+function fileHealth(planned: PlannedFile): Health {
+  const name = planned.target;
+  switch (planned.state) {
     case "installed":
       return { name, state: "ok", detail: "installed", fix: null };
     case "missing":
@@ -59,15 +51,11 @@ function fileHealth({ target: name, state }: PlannedFile): Health {
         detail: "written by a newer agent-gates than this one",
         fix: `update agent-gates, then ${REINSTALL}`,
       };
+    case "occupied":
+      return refusedHealth(name, planned.refusal);
     default:
-      return unreachable(state);
+      return unreachable(planned);
   }
-}
-
-function plannedHealth(planned: PlannedFile, preCommit: PreCommitState): Health {
-  if (planned.target === PRE_COMMIT.target && preCommit.kind === "occupied")
-    return refusedHealth(planned.target, preCommit.refusal);
-  return fileHealth(planned);
 }
 
 function missingHealth(missing: readonly Language[], tracked: ReadonlyMap<Language, number>): Health[] {
@@ -180,10 +168,9 @@ function judged(root: string): Health[] {
         fix: INSTALL_GATES,
       },
     ];
-  const preCommit = preCommitState(root, gates);
   return [
     { name: "gates", state: "ok", detail: gates.join(", "), fix: null },
-    ...plannedFiles(root, gates).map((planned) => plannedHealth(planned, preCommit)),
+    ...plannedFiles(root, gates).map(fileHealth),
     hooksPathHealth(hooksPathState(root)),
     prepareHealth(prepareState(root)),
     ...languagesHealth(root, gates),

@@ -361,4 +361,35 @@ describe("refusals", () => {
     expect(existsSync(join(prepared, ".githooks"))).toBe(false);
     expect(hooksPath(prepared)).toBe("");
   });
+
+  test("refuses a project's own commit-msg hook, another tool's too, and writes nothing", () => {
+    for (const own of ["#!/bin/sh\nexit 0\n", "#!/bin/sh\n# dim-gate:1\nexit 0\n"]) {
+      const dir = repo({ ".githooks/commit-msg": own });
+      expect(refusalOf(() => installGates(dir, ["commit-subject"]))).toBe("hook_occupied");
+      expect(read(dir, ".githooks/commit-msg")).toBe(own);
+      expect(existsSync(join(dir, ".githooks/.gitattributes"))).toBe(false);
+      expect(existsSync(join(dir, ".githooks/commit-msg.agent-gates-backup"))).toBe(false);
+      expect(hooksPath(dir)).toBe("");
+    }
+  });
+
+  test("doctor fails a project's own commit-msg hook with the move out as the fix", () => {
+    const dir = repo();
+    installGates(dir, ["commit-subject"]);
+    writeFileSync(join(dir, ".githooks/commit-msg"), "#!/bin/sh\nexit 0\n");
+    expect(gatesDoctor(dir).checks.find(({ name }) => name === ".githooks/commit-msg")).toEqual({
+      name: ".githooks/commit-msg",
+      state: "fail",
+      detail: `${dir} has its own .githooks/commit-msg, which a gate would replace`,
+      fix: `stop and hand this error to the owner: ${dir}'s .githooks/commit-msg must move out before the gates install; a step that runs before each commit belongs in .githooks/pre-commit.d/<name>, and commit-subject owns .githooks/commit-msg`,
+    });
+  });
+
+  test("sets aside a project's own file that git does not run, rather than refusing", () => {
+    const dir = repo({ ".github/workflows/commits.yml": "name: ours\n" });
+    expect(statesOf(installGates(dir, ["commit-subject"]))).toMatchObject({
+      ".github/workflows/commits.yml": "changed",
+    });
+    expect(read(dir, ".github/workflows/commits.yml.agent-gates-backup")).toBe("name: ours\n");
+  });
 });
