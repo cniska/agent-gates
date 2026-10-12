@@ -33,6 +33,10 @@ Commit gates a project owns: git hooks that refuse a bad commit locally, and the
 
 ### No comments
 
+A comment is where a coding agent excuses a workaround instead of fixing it. The comment makes the shortcut read as deliberate, and the reviewer of the diff accepts it. Without comments, the reason for a choice has to go into a name, a test that holds the invariant, or the docs, and a workaround has to be fixed or left visibly unfinished.
+
+Cursor's [pstack](https://github.com/cursor/plugins/tree/main/pstack) plugin works from the same observation. Its [`/no-comments`](https://github.com/cursor/plugins/blob/main/pstack/skills/no-comments/SKILL.md) skill hands comments to a reviewer that did not write them, because an author defends its own comments, and fixes each workaround that reviewer names at its root cause. These gates hold the same line at commit time and in CI, keeping only comments a tool reads.
+
 The `no-comments-<language>` gates judge whole files:
 
 - On commit, each file the commit changes, read from the index.
