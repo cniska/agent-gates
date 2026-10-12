@@ -9,9 +9,9 @@ export type Judged =
   | { readonly kind: "staged" }
   | { readonly kind: "pushed"; readonly base: string; readonly head: string };
 
-export type JudgedFile = { readonly path: string; readonly text: string };
+type JudgedFile = { readonly path: string; readonly text: string };
 
-export type Finding =
+type Finding =
   | { readonly kind: "comment"; readonly path: string; readonly line: number; readonly body: string }
   | { readonly kind: "unparsed"; readonly path: string };
 

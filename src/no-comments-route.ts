@@ -1,6 +1,4 @@
-export type Route =
-  | { readonly kind: "extension"; readonly extension: string }
-  | { readonly kind: "first-line" };
+type Route = { readonly kind: "extension"; readonly extension: string } | { readonly kind: "first-line" };
 
 export const SHEBANG_PREFIX = "#!";
 
