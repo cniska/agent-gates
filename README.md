@@ -2,6 +2,23 @@
 
 Commit gates a project owns: git hooks that refuse a bad commit locally, and the GitHub workflows that judge the same thing in CI.
 
+## Install
+
+agent-gates runs on [Bun](https://bun.sh), which [mise](https://mise.jdx.dev) installs for it. With mise installed:
+
+```bash
+git clone https://github.com/cniska/agent-gates.git
+cd agent-gates
+mise trust && mise install
+```
+
+`mise install` installs Bun and the dependencies, and puts `agent-gates` in `~/.bun/bin` with `bun link`. Add that directory to your `PATH` if it is not there yet. Then, in the project you want to gate:
+
+```bash
+agent-gates install commit-subject no-comments-javascript
+agent-gates doctor
+```
+
 ## Gates
 
 | Gate | Hook | Workflow | Refuses |
@@ -103,13 +120,6 @@ To add a language:
 
 To support another SQL dialect: `.sql` is read as PostgreSQL, which SQLite also passes but MySQL, BigQuery and Snowflake do not. Supporting them takes a table of lexer rules per dialect in the SQL adapter, chosen per path by a git attribute such as `agent-gates-sql=mysql`.
 
-## Setup
+## Development
 
-Install [mise](https://mise.jdx.dev), then:
-
-```bash
-mise install && bun install
-ln -s "$PWD/bin/agent-gates" ~/.local/bin/agent-gates
-```
-
-`bun run check` is the repository check.
+`bun run check` is the repository check: lint, typecheck and tests.
