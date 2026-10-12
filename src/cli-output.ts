@@ -1,4 +1,3 @@
-import type { Command } from "./cli-contract";
 import { BUG, CodedError, type RefusalRecord, recordOf } from "./coded-error";
 
 function errorRecord(error: unknown): RefusalRecord {
@@ -17,10 +16,4 @@ export function writeResult(command: string, value: unknown): void {
 
 export function writeError(command: string, error: unknown): void {
   process.stderr.write(`${JSON.stringify({ command, ok: false, error: errorRecord(error) })}\n`);
-}
-
-export function listing(commands: readonly Command[]): {
-  commands: { name: string; usage: string; summary: string }[];
-} {
-  return { commands: commands.map(({ name, usage, summary }) => ({ name, usage, summary })) };
 }

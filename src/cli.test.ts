@@ -44,9 +44,13 @@ describe("the cli", () => {
       command: "install",
       ok: false,
       error: {
-        code: "usage",
+        code: "unknown_gate",
         message: "agent-gates install has no gate named lint-free",
-        meta: {},
+        meta: {
+          names: ["lint-free"],
+          usage:
+            "agent-gates install [<gate>...], choosing from commit-subject, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust",
+        },
         resolve:
           "agent-gates install [<gate>...], choosing from commit-subject, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust",
       },

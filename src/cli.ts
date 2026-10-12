@@ -1,22 +1,19 @@
 #!/usr/bin/env bun
-import { COMMAND_NAMES, COMMANDS, findCommand } from "./cli-commands";
-import { UsageError } from "./cli-contract";
-import { listing, writeError, writeResult } from "./cli-output";
+import { COMMANDS } from "./cli-commands";
+import { refuseUsage } from "./cli-contract";
+import { writeError, writeResult } from "./cli-output";
 
 const [name, ...args] = process.argv.slice(2);
-const command = findCommand(name);
+const command = COMMANDS.find((known) => known.name === name);
 
 if (name === undefined) {
-  writeResult("agent-gates", listing(COMMANDS));
+  writeResult("agent-gates", {
+    commands: COMMANDS.map(({ name, usage, summary }) => ({ name, usage, summary })),
+  });
   process.exitCode = 0;
 } else if (command === undefined) {
-  writeError(
-    "agent-gates",
-    new UsageError(
-      `${name} is not an agent-gates command; agent-gates with no command lists them`,
-      `agent-gates ${COMMAND_NAMES.join("|")}`,
-    ),
-  );
+  const usage = `agent-gates ${COMMANDS.map(({ name }) => name).join("|")}`;
+  writeError("agent-gates", refuseUsage("unknown_command", { name, usage }));
   process.exitCode = 1;
 } else {
   try {
