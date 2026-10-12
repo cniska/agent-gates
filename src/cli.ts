@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
+import { refuseUsage } from "./cli-args";
 import { COMMANDS } from "./cli-commands";
-import { refuseUsage } from "./cli-contract";
 import { writeError, writeResult } from "./cli-output";
 
 const [name, ...args] = process.argv.slice(2);

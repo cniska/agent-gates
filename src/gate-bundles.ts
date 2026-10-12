@@ -2,16 +2,16 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { invariant } from "./assert";
 import { SOURCE_DIR } from "./gates";
-import { GATES } from "./gates-contract";
+import { ADAPTER_FILES, type GateFile, SCANNER_FILE } from "./gates-contract";
 import { LANGUAGE_NAMES } from "./no-comments-languages";
 
 const SRC = import.meta.dir;
 
-export const GATE_BUNDLES: readonly { readonly entry: string; readonly source: string }[] = [
-  { entry: "no-comments-main.ts", source: "no-comments/scan.cjs" },
+const GATE_BUNDLES: readonly { readonly entry: string; readonly file: GateFile }[] = [
+  { entry: "no-comments-main.ts", file: SCANNER_FILE },
   ...LANGUAGE_NAMES.map((language) => ({
     entry: `no-comments-${language}.ts`,
-    source: `no-comments/${language}.cjs`,
+    file: ADAPTER_FILES[language],
   })),
 ];
 
@@ -21,28 +21,26 @@ const LINTERS_LEAVE_IT_ALONE = [
   "/* eslint-disable */",
 ];
 
-function markerFor(source: string): string {
-  const file = Object.values(GATES)
-    .flat()
-    .find((gate) => gate.source === source);
-  invariant(file !== undefined, `${source} is a gate file`);
-  return `// agent-gate:${file.part}:${file.versions.at(-1)?.version}`;
+function markerFor(file: GateFile): string {
+  const current = file.versions.at(-1);
+  invariant(current !== undefined, `${file.source} has a current version`);
+  return `// agent-gate:${file.part}:${current.version}`;
 }
 
 export async function bundled(): Promise<Record<string, string>> {
   const built: Record<string, string> = {};
-  for (const { entry, source } of GATE_BUNDLES) {
+  for (const { entry, file } of GATE_BUNDLES) {
     const output = await Bun.build({
       entrypoints: [join(SRC, entry)],
       target: "node",
       format: "cjs",
       minify: true,
-      banner: [...LINTERS_LEAVE_IT_ALONE, markerFor(source)].join("\n"),
+      banner: [...LINTERS_LEAVE_IT_ALONE, markerFor(file)].join("\n"),
     });
     invariant(output.success, `bundling ${entry} succeeds: ${output.logs.join("\n")}`);
     const [artifact] = output.outputs;
     invariant(artifact !== undefined && output.outputs.length === 1, `bundling ${entry} writes one file`);
-    built[source] = await artifact.text();
+    built[file.source] = await artifact.text();
   }
   return built;
 }

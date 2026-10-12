@@ -3,8 +3,9 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { gatesDoctor } from "./doctor";
-import { bundled, GATE_BUNDLES } from "./gate-bundles";
+import { bundled } from "./gate-bundles";
 import { installGates, SOURCE_DIR } from "./gates";
+import { ADAPTER_FILES, SCANNER_FILE } from "./gates-contract";
 import { comments as dartComments } from "./no-comments-dart";
 import { comments } from "./no-comments-javascript";
 import { LANGUAGE_NAMES, LANGUAGES, languageOf } from "./no-comments-languages";
@@ -577,9 +578,18 @@ describe("the bundles", () => {
       expect([source, text.includes("interpreters")]).toEqual([source, source === "no-comments/scan.cjs"]);
   });
 
+  test("put each adapter beside the scanner, where the scanner loads it", () => {
+    for (const language of LANGUAGE_NAMES)
+      expect(ADAPTER_FILES[language].target).toBe(`.githooks/no-comments/${language}.cjs`);
+    expect(SCANNER_FILE.target).toBe(".githooks/no-comments/scan.cjs");
+  });
+
   test("are the committed gate files, rebuilt from src", async () => {
     const built = await bundled();
-    expect(Object.keys(built)).toEqual(GATE_BUNDLES.map(({ source }) => source));
+    expect(Object.keys(built)).toEqual([
+      "no-comments/scan.cjs",
+      ...LANGUAGE_NAMES.map((language) => `no-comments/${language}.cjs`),
+    ]);
     for (const [source, text] of Object.entries(built)) {
       expect([source, readFileSync(join(SOURCE_DIR, source), "utf8") === text]).toEqual([source, true]);
     }

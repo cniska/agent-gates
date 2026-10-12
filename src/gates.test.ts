@@ -5,8 +5,9 @@ import { chmodSync, existsSync, readdirSync, readFileSync, rmSync, statSync, wri
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { gatesDoctor } from "./doctor";
-import { installGates, markerOf, SOURCE_DIR } from "./gates";
-import { GATES, isSharedPart } from "./gates-contract";
+import { firstMarkerLine } from "./gate-marker";
+import { installGates, SOURCE_DIR } from "./gates";
+import { GATES, isGateName } from "./gates-contract";
 import { commit, refusalOf, removeScratchDirs, repo, scratchDir } from "./repo.test-support";
 
 const GITATTRIBUTES_V1 = "# agent-gate:githooks:1\n* linguist-generated\n";
@@ -52,11 +53,11 @@ describe("the gate registry", () => {
   test("marks each file with the part it belongs to, a shared part when several gates hold it", () => {
     for (const { source, part } of files) {
       const text = readFileSync(join(SOURCE_DIR, source), "utf8");
-      expect([source, markerOf(text)?.part]).toEqual([source, part]);
+      expect([source, firstMarkerLine(text)?.part]).toEqual([source, part]);
       const holders = Object.entries(GATES)
         .filter(([, held]) => held.some((file) => file.source === source))
         .map(([gate]) => gate);
-      const shared = isSharedPart(part);
+      const shared = !isGateName(part);
       expect([source, shared ? true : holders]).toEqual([source, shared ? true : [part]]);
     }
   });
@@ -71,7 +72,7 @@ describe("the gate registry", () => {
       const current = versions.at(-1);
       expect([source, current?.version, current?.sha256]).toEqual([
         source,
-        markerOf(text)?.version,
+        firstMarkerLine(text)?.version,
         createHash("sha256").update(text).digest("hex"),
       ]);
     }

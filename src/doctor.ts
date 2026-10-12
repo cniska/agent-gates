@@ -10,6 +10,7 @@ import {
   preCommitState,
 } from "./gates";
 import {
+  ADAPTER_FILES,
   type GateName,
   HOOKS_DIR,
   INSTALL_GATES,
@@ -93,7 +94,7 @@ function unusedHealth(language: Language): Health {
     name: noCommentsGate(language),
     state: "warn",
     detail: `installed, but the project tracks no file ${language} reads`,
-    fix: `delete ${HOOKS_DIR}/no-comments/${language}.cjs`,
+    fix: `delete ${ADAPTER_FILES[language].target}`,
   };
 }
 

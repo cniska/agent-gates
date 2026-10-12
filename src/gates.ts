@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { unreachable } from "./assert";
-import type { CodedError } from "./coded-error";
+import { type CodedError, refuser } from "./coded-error";
 import { copyAside } from "./file-backup";
 import { firstMarkerLine } from "./gate-marker";
 import {
@@ -12,15 +12,44 @@ import {
   type GateFile,
   type GateName,
   HOOKS_DIR,
+  INSTALL_GATES,
   isPart,
   type Part,
   PRE_COMMIT,
-  refuseGates,
 } from "./gates-contract";
 import { configValue, setConfig } from "./git";
 import { type PrepareState, prepareState } from "./package-manifest";
 
 export const SOURCE_DIR = resolve(import.meta.dir, "..", "gates");
+
+const refuseGates = refuser<{
+  readonly no_gates_chosen: { readonly root: string };
+  readonly hooks_path_occupied: { readonly root: string; readonly hooksPath: string };
+  readonly pre_commit_occupied: { readonly root: string };
+  readonly write_failed: { readonly path: string; readonly detail: string };
+}>({
+  no_gates_chosen: {
+    message: ({ root }) =>
+      `${root} has no gates installed and none were named, so there is nothing to install`,
+    resolve: () => `stop and ask the owner which gates the project runs, then ${INSTALL_GATES}`,
+  },
+  hooks_path_occupied: {
+    message: ({ root, hooksPath }) =>
+      `${root} runs its git hooks from ${hooksPath}, so the gates in ${HOOKS_DIR} would never run`,
+    resolve: ({ root }) =>
+      `stop and hand this error to the owner: ${root}'s hooks must move to ${HOOKS_DIR} before the gates install`,
+  },
+  pre_commit_occupied: {
+    message: ({ root }) =>
+      `${root} has its own ${HOOKS_DIR}/pre-commit, which the gates that run before a commit would replace`,
+    resolve: ({ root }) =>
+      `stop and hand this error to the owner: ${root}'s ${HOOKS_DIR}/pre-commit must move to ${HOOKS_DIR}/pre-commit.d/<name> before the gates install`,
+  },
+  write_failed: {
+    message: ({ path, detail }) => `${path} could not be written: ${detail}`,
+    resolve: ({ path }) => `stop and hand this error to the owner: ${path} must be writable`,
+  },
+});
 
 const EXECUTE_BITS = 0o111;
 
@@ -63,7 +92,7 @@ type GatesInstalled = {
   readonly prepare: Exclude<PrepareState["kind"], "occupied" | "unparseable">;
 };
 
-export function markerOf(text: string): Marker | null {
+function markerOf(text: string): Marker | null {
   const found = firstMarkerLine(text);
   if (found === null || !isPart(found.part)) return null;
   return { part: found.part, version: found.version };

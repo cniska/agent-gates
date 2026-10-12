@@ -1,5 +1,5 @@
-import { checkArity } from "./cli-args";
-import { type Command, refuseUsage } from "./cli-contract";
+import { checkArity, refuseUsage } from "./cli-args";
+import type { Command } from "./cli-contract";
 import { installGates } from "./gates";
 import { GATE_NAMES, isGateName } from "./gates-contract";
 import { checkoutRoot } from "./git";
