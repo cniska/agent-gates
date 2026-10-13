@@ -12,17 +12,24 @@ export type Reading =
 
 export type CommentsOf = (path: string, text: string) => Reading;
 
-type Routing = { readonly extensions: readonly string[]; readonly interpreters: readonly string[] };
+export type Adapter = { readonly comments: CommentsOf; readonly kept: readonly string[] };
 
-export const LANGUAGES: Readonly<Record<Language, Routing>> = {
+type LanguageEntry = {
+  readonly shown: string;
+  readonly extensions: readonly string[];
+  readonly interpreters: readonly string[];
+};
+
+export const LANGUAGES: Readonly<Record<Language, LanguageEntry>> = {
   javascript: {
+    shown: "JavaScript and TypeScript",
     extensions: [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"],
     interpreters: ["node", "bun", "deno"],
   },
-  dart: { extensions: [".dart"], interpreters: ["dart"] },
-  sql: { extensions: [".sql"], interpreters: [] },
-  shell: { extensions: [".sh", ".bash"], interpreters: ["sh", "bash", "dash", "zsh"] },
-  rust: { extensions: [".rs"], interpreters: [] },
+  dart: { shown: "Dart", extensions: [".dart"], interpreters: ["dart"] },
+  sql: { shown: "SQL", extensions: [".sql"], interpreters: [] },
+  shell: { shown: "shell", extensions: [".sh", ".bash"], interpreters: ["sh", "bash", "dash", "zsh"] },
+  rust: { shown: "Rust", extensions: [".rs"], interpreters: [] },
 };
 
 export function languageOf(path: string, firstLine: string): Language | null {

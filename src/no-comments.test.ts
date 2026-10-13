@@ -6,10 +6,12 @@ import { gatesDoctor } from "./doctor";
 import { bundled } from "./gate-bundles";
 import { installGates, SOURCE_DIR } from "./gates";
 import { ADAPTER_FILES, SCANNER_FILE } from "./gates-contract";
+import { ADAPTERS } from "./no-comments-adapters.test-support";
 import { comments as dartComments } from "./no-comments-dart";
 import { comments } from "./no-comments-javascript";
 import { type Comment, LANGUAGE_NAMES, LANGUAGES, languageOf, type Reading } from "./no-comments-languages";
 import { comments as rustComments } from "./no-comments-rust";
+import { SHARED_KEPT_SHOWN } from "./no-comments-scan";
 import { comments as shellComments } from "./no-comments-shell";
 import { comments as sqlComments } from "./no-comments-sql";
 import {
@@ -32,11 +34,14 @@ function unparsed(line: number, reason: string): Reading {
   return { kind: "unparsed", line, reason };
 }
 
-function refusalText(listing: readonly string[]): string {
+const KEPT_IN_JAVASCRIPT =
+  "kept in JavaScript and TypeScript: `@ts-`; `eslint-`; `biome-ignore`; `prettier-ignore`; `#__PURE__`; `@vitest-environment`; `/// <reference`; `/*!`; in plain JavaScript, JSDoc `@type`, `@typedef` and all-`@param` blocks; one `SPDX-License-Identifier:` line; a gate marker on a line of its own";
+
+function refusalText(listing: readonly string[], kept: readonly string[] = [KEPT_IN_JAVASCRIPT]): string {
   const count = listing.filter((line) => line.startsWith("  ")).length;
   const total = count === 1 ? "1 comment" : `${count} comments`;
   const header = `no-comments: this change adds ${total}. Remove each comment; a why belongs in a name, a test or the docs.`;
-  return [header, ...listing, ""].join("\n");
+  return [header, ...kept, ...listing, ""].join("\n");
 }
 
 function gated(files: Record<string, string> = {}): string {
@@ -699,6 +704,20 @@ describe("the rust adapter", () => {
   });
 });
 
+describe("the README", () => {
+  test("lists the forms each adapter keeps, and those every language keeps", () => {
+    const cell = (forms: readonly string[]) => (forms.length === 0 ? "none" : forms.join("; "));
+    const readme = readFileSync(join(import.meta.dir, "../README.md"), "utf8");
+    const rows = [
+      ...LANGUAGE_NAMES.map(
+        (language) => `| ${LANGUAGES[language].shown} | ${cell(ADAPTERS[language].kept)} |`,
+      ),
+      `| Every language | ${cell(SHARED_KEPT_SHOWN)} |`,
+    ];
+    expect(readme).toContain(["| Language | Kept comments |", "| --- | --- |", ...rows].join("\n"));
+  });
+});
+
 describe("the bundles", () => {
   test("leave the language table out of every adapter, so a new language changes only the scanner", async () => {
     for (const [source, text] of Object.entries(await bundled()))
@@ -837,16 +856,42 @@ describe("the pre-commit hook", () => {
     });
     expect(commit(dir)).toEqual({
       status: 1,
-      stderr: refusalText([
-        "bin/tool",
-        "  2  # why",
-        "db/a.sql",
-        "  1  -- why",
-        "lib/a.dart",
-        "  1  // why",
-        "src/a.rs",
-        '  1  #[doc = "why"]',
-      ]),
+      stderr: refusalText(
+        [
+          "bin/tool",
+          "  2  # why",
+          "db/a.sql",
+          "  1  -- why",
+          "lib/a.dart",
+          "  1  // why",
+          "src/a.rs",
+          '  1  #[doc = "why"]',
+        ],
+        [
+          "kept in Dart: `ignore:`; `ignore_for_file:`; `coverage:`; `@dart=`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
+          "kept in SQL: drizzle's `--> statement-breakpoint`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
+          "kept in shell: the first-line shebang; `shellcheck` directives; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
+          "kept in Rust: one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
+        ],
+      ),
+    });
+  });
+
+  test("keeps one SPDX-License-Identifier line in every language, and nothing more with it", () => {
+    const dir = repo();
+    installGates(dir, ["no-comments-javascript", "no-comments-sql", "no-comments-shell", "no-comments-rust"]);
+    writeFiles(dir, {
+      "a.ts":
+        "// SPDX-License-Identifier: MIT\n/* SPDX-License-Identifier: Apache-2.0 OR MIT */\nexport {};\n",
+      "b.ts":
+        "// SPDX-License-Identifier: MIT because\n/*\n * SPDX-License-Identifier: MIT\n */\nexport {};\n",
+      "a.sql": "-- SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0\nselect 1;\n",
+      "a.sh": "#!/bin/sh\n# SPDX-License-Identifier: LicenseRef-Own\n",
+      "a.rs": "// SPDX-License-Identifier: MIT\nfn f() {}\n",
+    });
+    expect(commit(dir)).toEqual({
+      status: 1,
+      stderr: refusalText(["b.ts", "  1  // SPDX-License-Identifier: MIT because", "  2  /*"]),
     });
   });
 
@@ -923,9 +968,14 @@ describe("the pre-commit hook", () => {
 
   test("exits 3 when an adapter returns what the scanner does not read", () => {
     const dir = gated();
-    writeFileSync(join(dir, ".githooks/no-comments/javascript.cjs"), "exports.comments = () => [];\n");
+    const adapter = join(dir, ".githooks/no-comments/javascript.cjs");
+    writeFileSync(adapter, "exports.comments = () => [];\n");
     writeFiles(dir, { "a.ts": "// why\n" });
     git(dir, ["add", "a.ts"]);
+    const unkept = scan(dir, []);
+    expect(unkept.status).toBe(3);
+    expect(unkept.stderr).toContain("javascript.cjs exports the comment forms it keeps");
+    writeFileSync(adapter, "exports.comments = () => [];\nexports.kept = [];\n");
     const run = scan(dir, []);
     expect(run.status).toBe(3);
     expect(run.stderr).toContain(
@@ -1093,7 +1143,7 @@ describe("the no-comments workflow", () => {
       "::error file=a.ts,line=3::// why",
     ]);
     expect(stdout).toEndWith("\n::error::no-comments: 291 more findings; the step's log lists them all\n");
-    expect(stderr.split("\n")).toHaveLength(303);
+    expect(stderr.split("\n")).toHaveLength(304);
   });
 
   test("annotates a pushed change for GitHub", () => {
@@ -1128,6 +1178,7 @@ describe("the no-comments workflow", () => {
       status: 1,
       stderr: [
         "no-comments: the tracked files hold 2 comments. Remove each comment; a why belongs in a name, a test or the docs.",
+        KEPT_IN_JAVASCRIPT,
         "a.ts",
         "  1  // old",
         "b.ts",

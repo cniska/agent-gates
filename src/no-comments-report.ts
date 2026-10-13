@@ -1,5 +1,8 @@
 import { invariant, unreachable } from "./assert";
+import { LANGUAGE_NAMES, LANGUAGES, type Language } from "./no-comments-languages";
 import type { FileFindings } from "./no-comments-scan";
+
+export type KeptOf = (language: Language) => readonly string[];
 
 export type Scope = "change" | "tracked";
 
@@ -7,7 +10,11 @@ type Shown = { readonly line: number; readonly text: string };
 
 type Block = { readonly path: string; readonly lines: readonly string[] };
 
-type Listing = { readonly blocks: readonly Block[]; readonly findingsFrom: readonly number[] };
+type Listing = {
+  readonly blocks: readonly Block[];
+  readonly findingsFrom: readonly number[];
+  readonly cheapestTailFrom: readonly number[];
+};
 
 export const REPLY_BYTES = 4_000;
 
@@ -59,6 +66,13 @@ function headerOf(found: readonly FileFindings[], scope: Scope): string {
   return `no-comments: ${counts.join(", and ")}. ${fixes.join(" ")}`;
 }
 
+function keptLines(found: readonly FileFindings[], keptOf: KeptOf): string[] {
+  const refused = new Set(found.flatMap((file) => (file.kind === "comments" ? [file.language] : [])));
+  return LANGUAGE_NAMES.filter((language) => refused.has(language)).map(
+    (language) => `kept in ${LANGUAGES[language].shown}: ${keptOf(language).join("; ")}`,
+  );
+}
+
 function shownBody(body: string): string {
   const characters = Array.from(body);
   if (characters.length <= BODY_CHARACTERS) return body;
@@ -88,6 +102,10 @@ function remainderLine(findings: number, files: number): string {
   return `${CUT} ${counted(findings, "more finding", "more findings")} in ${counted(files, "file", "files")}`;
 }
 
+function countLine(block: Block, unshown: number): string {
+  return `${block.path}: ${unshown} more`;
+}
+
 function listingOf(blocks: readonly Block[]): Listing {
   let left = blocks.reduce((sum, { lines }) => sum + lines.length, 0);
   const findingsFrom = blocks.map(({ lines }) => {
@@ -95,11 +113,20 @@ function listingOf(blocks: readonly Block[]): Listing {
     left -= lines.length;
     return from;
   });
-  return { blocks, findingsFrom: [...findingsFrom, 0] };
+  const cheapestTailFrom = [0];
+  for (let index = blocks.length - 1; index >= 0; index--) {
+    const block = blocks[index];
+    const findings = findingsFrom[index];
+    const after = cheapestTailFrom[0];
+    invariant(block !== undefined && findings !== undefined && after !== undefined, "each block is counted");
+    const named = lineBytes(countLine(block, block.lines.length)) + after;
+    cheapestTailFrom.unshift(Math.min(named, lineBytes(remainderLine(findings, blocks.length - index))));
+  }
+  return { blocks, findingsFrom: [...findingsFrom, 0], cheapestTailFrom };
 }
 
 function tailOf(
-  { blocks, findingsFrom }: Listing,
+  { blocks, findingsFrom, cheapestTailFrom }: Listing,
   at: number,
   shownOfFirst: number,
   room: number,
@@ -110,12 +137,15 @@ function tailOf(
   for (let index = at; index < blocks.length; index++) {
     const block = blocks[index];
     const restFindings = findingsFrom[index + 1];
-    invariant(block !== undefined && restFindings !== undefined, "a tail starts inside the blocks");
+    const reserve = cheapestTailFrom[index + 1];
+    invariant(
+      block !== undefined && restFindings !== undefined && reserve !== undefined,
+      "a tail starts inside the blocks",
+    );
     const unshown = block.lines.length - (index === at ? shownOfFirst : 0);
     if (unshown === 0) continue;
-    const line = `${block.path}: ${unshown} more`;
+    const line = countLine(block, unshown);
     const restFiles = blocks.length - index - 1;
-    const reserve = restFiles === 0 ? 0 : lineBytes(remainderLine(restFindings, restFiles));
     if (used + lineBytes(line) + reserve <= room) {
       tail.push(line);
       used += lineBytes(line);
@@ -127,9 +157,9 @@ function tailOf(
   return tail;
 }
 
-function capped(header: string, listing: Listing, maxBytes: number): string[] {
-  const shown = [header];
-  let used = lineBytes(header);
+function capped(header: readonly string[], listing: Listing, maxBytes: number): string[] {
+  const shown = [...header];
+  let used = header.reduce((sum, line) => sum + lineBytes(line), 0);
   for (const [at, block] of listing.blocks.entries()) {
     for (const [count, line] of block.lines.entries()) {
       const added = count === 0 ? [block.path, line] : [line];
@@ -150,11 +180,16 @@ function printed(lines: readonly string[]): string {
   return lines.map((line) => `${line}\n`).join("");
 }
 
-export function reply(found: readonly FileFindings[], scope: Scope, maxBytes: number | null): string {
+export function reply(
+  found: readonly FileFindings[],
+  scope: Scope,
+  keptOf: KeptOf,
+  maxBytes: number | null,
+): string {
   if (found.length === 0) return "";
-  const header = headerOf(found, scope);
+  const header = [headerOf(found, scope), ...keptLines(found, keptOf)];
   const blocks = found.map(blockOf);
-  const whole = [header, ...blocks.flatMap(({ path, lines }) => [path, ...lines])];
+  const whole = [...header, ...blocks.flatMap(({ path, lines }) => [path, ...lines])];
   const total = whole.reduce((sum, line) => sum + lineBytes(line), 0);
   const lines = maxBytes === null || total <= maxBytes ? whole : capped(header, listingOf(blocks), maxBytes);
   return printed(lines);

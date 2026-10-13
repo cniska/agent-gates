@@ -24,11 +24,11 @@ agent-gates doctor
 | Gate | Hook | Workflow | Refuses |
 | --- | --- | --- | --- |
 | `commit-subject` | `.githooks/commit-msg` | `commits.yml` | A subject that is not a Conventional Commit, over 50 characters or not ASCII, and a message with a body |
-| `no-comments-javascript` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment in a JavaScript or TypeScript file the commit changes, other than one a tool reads |
-| `no-comments-dart` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment in a Dart file the commit changes, other than one the analyzer reads |
-| `no-comments-sql` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment in a PostgreSQL file the commit changes, other than one a tool reads |
-| `no-comments-shell` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment in a shell script the commit changes, other than the shebang and a `shellcheck` directive |
-| `no-comments-rust` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment in a Rust file the commit changes, doc comments and `#[doc = …]` attributes included |
+| `no-comments-javascript` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment in a JavaScript or TypeScript file the commit changes, other than a [kept form](#kept-comments) |
+| `no-comments-dart` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment in a Dart file the commit changes, other than a [kept form](#kept-comments) |
+| `no-comments-sql` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment in a PostgreSQL file the commit changes, other than a [kept form](#kept-comments) |
+| `no-comments-shell` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment in a shell script the commit changes, other than a [kept form](#kept-comments) |
+| `no-comments-rust` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment in a Rust file the commit changes, other than a [kept form](#kept-comments) |
 
 ### Installed files
 
@@ -74,16 +74,20 @@ They need `node` on `PATH` and nothing installed in the project. A file with no 
 - binary files and symlinks
 - code embedded in another language, such as shell in a workflow's `run:` or SQL in a string, and mixed files such as `.vue`
 
+#### Kept comments
+
 A comment a tool reads stays:
 
 | Language | Kept comments |
 | --- | --- |
-| JavaScript, TypeScript | `@ts-`, `eslint-`, `biome-ignore`, `prettier-ignore`, `#__PURE__`, `/// <reference`, `/*!`, `@vitest-environment`; in plain JavaScript, the JSDoc `@type`, `@typedef` and all-`@param` blocks it types itself with |
-| Dart | `ignore:`, `ignore_for_file:`, `coverage:`, `@dart=` |
+| JavaScript and TypeScript | `@ts-`; `eslint-`; `biome-ignore`; `prettier-ignore`; `#__PURE__`; `@vitest-environment`; `/// <reference`; `/*!`; in plain JavaScript, JSDoc `@type`, `@typedef` and all-`@param` blocks |
+| Dart | `ignore:`; `ignore_for_file:`; `coverage:`; `@dart=` |
 | SQL | drizzle's `--> statement-breakpoint` |
-| Shell | the first-line shebang, `shellcheck` directives |
-| Rust | none; a first-line shebang is not a comment, and an attribute without doc text, such as `#[doc(hidden)]`, is code |
-| Every language | a gate marker on a line of its own, this tool's `agent-gate:<part>:<version>` or another's `<tool>-gate:[<part>:]<version>` |
+| shell | the first-line shebang; `shellcheck` directives |
+| Rust | none |
+| Every language | one `SPDX-License-Identifier:` line; a gate marker on a line of its own |
+
+A refusal names these forms for each language it refused a comment in, on a line of its own after its total. A gate marker is this tool's `agent-gate:<part>:<version>` or another's `<tool>-gate:[<part>:]<version>`. In Rust a first-line shebang is not a comment, and an attribute without doc text, such as `#[doc(hidden)]`, is code.
 
 How SQL, Dart, shell and Rust are read:
 

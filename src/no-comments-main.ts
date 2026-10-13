@@ -4,9 +4,9 @@ import { dirname, join } from "node:path";
 import { invariant, unreachable } from "./assert";
 import { EXIT_STATUS, recordOf, usageErrors } from "./coded-error";
 import { checkoutRoot } from "./git";
-import type { Comment, CommentsOf, Language, Reading } from "./no-comments-languages";
+import type { Adapter, Comment, Language, Reading } from "./no-comments-languages";
 import { annotations, REPLY_BYTES, reply, type Scope } from "./no-comments-report";
-import { type AdapterOf, findings, type Judged, judgedChange } from "./no-comments-scan";
+import { type AdapterOf, findings, type Judged, judgedChange, keptIn } from "./no-comments-scan";
 
 const SCANNER = "scan.cjs";
 
@@ -55,20 +55,30 @@ function isReading(value: unknown): value is Reading {
   }
 }
 
-function adapterAt(path: string, load: NodeJS.Require): CommentsOf | null {
+function isFormList(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.every((form) => typeof form === "string");
+}
+
+function adapterAt(path: string, load: NodeJS.Require): Adapter | null {
   if (!existsSync(path)) return null;
-  const comments: unknown = Reflect.get(Object(load(path)), "comments");
+  const module = Object(load(path));
+  const comments: unknown = Reflect.get(module, "comments");
+  const kept: unknown = Reflect.get(module, "kept");
   invariant(typeof comments === "function", `${path} exports comments()`);
-  return (file, text) => {
-    const reading: unknown = Reflect.apply(comments, undefined, [file, text]);
-    invariant(isReading(reading), `${path} returns the comments it read, or where the file stops parsing`);
-    return reading;
+  invariant(isFormList(kept), `${path} exports the comment forms it keeps`);
+  return {
+    comments: (file, text) => {
+      const reading: unknown = Reflect.apply(comments, undefined, [file, text]);
+      invariant(isReading(reading), `${path} returns the comments it read, or where the file stops parsing`);
+      return reading;
+    },
+    kept,
   };
 }
 
 function adaptersBeside(dir: string): AdapterOf {
   const load = createRequire(join(dir, SCANNER));
-  const loaded = new Map<Language, CommentsOf | null>();
+  const loaded = new Map<Language, Adapter | null>();
   return (language) => {
     const known = loaded.get(language);
     if (known !== undefined) return known;
@@ -117,14 +127,16 @@ function main(): number {
   if (call === null) throw scanUsageError("wrong_arguments", { got: args });
   const { judged, format } = call;
   const root = checkoutRoot(process.cwd());
-  const found = findings(judgedChange(root, judged), adaptersBeside(dirname(realpathSync(script))));
+  const adapterOf = adaptersBeside(dirname(realpathSync(script)));
+  const found = findings(judgedChange(root, judged), adapterOf);
+  const keptOf = (language: Language) => keptIn(adapterOf, language);
   switch (format) {
     case "text":
-      process.stderr.write(reply(found, scopeOf(judged), REPLY_BYTES));
+      process.stderr.write(reply(found, scopeOf(judged), keptOf, REPLY_BYTES));
       break;
     case "github":
       process.stdout.write(annotations(found));
-      process.stderr.write(reply(found, scopeOf(judged), null));
+      process.stderr.write(reply(found, scopeOf(judged), keptOf, null));
       break;
     default:
       unreachable(format);

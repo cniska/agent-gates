@@ -1,4 +1,5 @@
 import { bracketsOf } from "./no-comments-brackets";
+import { type KeptForm, shownOf } from "./no-comments-kept";
 import type { CommentsOf } from "./no-comments-languages";
 import {
   type Lexed,
@@ -6,6 +7,7 @@ import {
   nestedBlockEnd,
   refusedComments,
   type Span,
+  type Spanned,
   type Stopped,
   unexpected,
   unterminated,
@@ -92,8 +94,13 @@ function commentSpans(text: string): Lexed {
   return code(0, text.length) ?? { kind: "lexed", spans };
 }
 
-function isKept(text: string, { start, end }: Span): boolean {
-  return text.slice(start, end).trim() === DRIZZLE_STATEMENT_BREAKPOINT;
-}
+const KEPT: readonly KeptForm<Spanned>[] = [
+  {
+    shown: `drizzle's \`${DRIZZLE_STATEMENT_BREAKPOINT}\``,
+    keeps: ({ text, span: { start, end } }) => text.slice(start, end).trim() === DRIZZLE_STATEMENT_BREAKPOINT,
+  },
+];
 
-export const comments: CommentsOf = refusedComments(commentSpans, isKept);
+export const comments: CommentsOf = refusedComments(commentSpans, KEPT);
+
+export const kept = shownOf(KEPT);

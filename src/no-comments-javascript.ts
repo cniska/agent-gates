@@ -1,5 +1,6 @@
 import { type ParserPlugin, parse } from "@babel/parser";
 import { invariant } from "./assert";
+import { type KeptForm, keptBy, shownOf } from "./no-comments-kept";
 import type { Comment, CommentsOf, Reading } from "./no-comments-languages";
 import { interpreterOf, routeOf } from "./no-comments-route";
 
@@ -15,8 +16,6 @@ type Parsed = {
   readonly line: number;
   readonly source: string;
 };
-
-const TOOL_DIRECTIVE = /^(?:@ts-|eslint-|biome-ignore|prettier-ignore|[#@]__PURE__|@vitest-environment\b)/;
 
 const TRIPLE_SLASH_REFERENCE = /^\/\s*<reference\b/;
 
@@ -103,13 +102,34 @@ function typesPlainJavaScript({ type, value }: Parsed): boolean {
   return JSDOC_TYPE.test(first) || lines.every((line) => JSDOC_PARAM.test(line));
 }
 
-function isToolContract(comment: Parsed, dialect: Dialect): boolean {
-  const { type, value } = comment;
-  if (type === "CommentLine" && TRIPLE_SLASH_REFERENCE.test(value)) return true;
-  if (type === "CommentBlock" && value.startsWith("!")) return true;
-  if (TOOL_DIRECTIVE.test(value.replace(LEADING_STARS, ""))) return true;
-  return dialect.typedByJsdoc && typesPlainJavaScript(comment);
+type InDialect = { readonly comment: Parsed; readonly dialect: Dialect };
+
+function directive(shown: string, pattern: RegExp): KeptForm<InDialect> {
+  return { shown, keeps: ({ comment }) => pattern.test(comment.value.replace(LEADING_STARS, "")) };
 }
+
+const KEPT: readonly KeptForm<InDialect>[] = [
+  directive("`@ts-`", /^@ts-/),
+  directive("`eslint-`", /^eslint-/),
+  directive("`biome-ignore`", /^biome-ignore/),
+  directive("`prettier-ignore`", /^prettier-ignore/),
+  directive("`#__PURE__`", /^[#@]__PURE__/),
+  directive("`@vitest-environment`", /^@vitest-environment\b/),
+  {
+    shown: "`/// <reference`",
+    keeps: ({ comment: { type, value } }) => type === "CommentLine" && TRIPLE_SLASH_REFERENCE.test(value),
+  },
+  {
+    shown: "`/*!`",
+    keeps: ({ comment: { type, value } }) => type === "CommentBlock" && value.startsWith("!"),
+  },
+  {
+    shown: "in plain JavaScript, JSDoc `@type`, `@typedef` and all-`@param` blocks",
+    keeps: ({ comment, dialect }) => dialect.typedByJsdoc && typesPlainJavaScript(comment),
+  },
+];
+
+const isKept = keptBy(KEPT);
 
 function refused({ line, source }: Parsed): Comment {
   return { line, text: source };
@@ -121,6 +141,8 @@ export const comments: CommentsOf = (path, text) => {
   if (!Array.isArray(found)) return found;
   return {
     kind: "read",
-    comments: found.filter((comment) => !isToolContract(comment, dialect)).map(refused),
+    comments: found.filter((comment) => !isKept({ comment, dialect })).map(refused),
   };
 };
+
+export const kept = shownOf(KEPT);

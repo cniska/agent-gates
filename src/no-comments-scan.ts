@@ -1,7 +1,8 @@
 import { invariant, unreachable } from "./assert";
 import { markerLine } from "./gate-marker";
 import { blobsOf, gitOutput, mergeBase, nulFields } from "./git";
-import { type CommentsOf, type Language, languageOf, type Reading } from "./no-comments-languages";
+import { type KeptForm, keptBy, shownOf } from "./no-comments-kept";
+import { type Adapter, type Language, languageOf, type Reading } from "./no-comments-languages";
 import { outsideTheCode } from "./no-comments-skips";
 import { firstLine } from "./no-comments-spans";
 
@@ -29,10 +30,19 @@ type Pool = Map<string, number>;
 export type Refused = { readonly line: number; readonly body: string };
 
 export type FileFindings =
-  | { readonly kind: "comments"; readonly path: string; readonly comments: readonly [Refused, ...Refused[]] }
+  | {
+      readonly kind: "comments";
+      readonly path: string;
+      readonly language: Language;
+      readonly comments: readonly [Refused, ...Refused[]];
+    }
   | { readonly kind: "unparsed"; readonly path: string; readonly line: number; readonly reason: string };
 
-export type AdapterOf = (language: Language) => CommentsOf | null;
+export type AdapterOf = (language: Language) => Adapter | null;
+
+type Read = { readonly language: Language; readonly reading: Reading };
+
+type InSource = { readonly text: string; readonly sourceLine: string };
 
 const REGULAR_FILE_MODES = new Set(["100644", "100755"]);
 
@@ -47,6 +57,24 @@ const NUMSTAT_RECORD = /^([^\t]*\t[^\t]*\t)(.*)$/s;
 const BINARY = "-\t-\t";
 
 const WHITESPACE_RUN = /\s+/g;
+
+const LICENSE_ID = "[\\w.+\\-:()]+";
+
+const SPDX_LINE = new RegExp(
+  `^(?://+!?|#+|--+|/\\*+!?)[ \\t]*SPDX-License-Identifier:[ \\t]*${LICENSE_ID}(?:[ \\t]+(?:AND|OR|WITH)[ \\t]+${LICENSE_ID})*[ \\t]*(?:\\*+/)?$`,
+);
+
+const SHARED_KEPT: readonly KeptForm<InSource>[] = [
+  { shown: "one `SPDX-License-Identifier:` line", keeps: ({ text }) => SPDX_LINE.test(text.trim()) },
+  {
+    shown: "a gate marker on a line of its own",
+    keeps: ({ sourceLine }) => markerLine(sourceLine) !== null,
+  },
+];
+
+const isSharedKept = keptBy(SHARED_KEPT);
+
+export const SHARED_KEPT_SHOWN = shownOf(SHARED_KEPT);
 
 function emptyTree(root: string): string {
   return gitOutput(root, ["hash-object", "-t", "tree", "--stdin"], "").toString().trim();
@@ -142,15 +170,23 @@ export function judgedChange(root: string, judged: Judged): JudgedChange {
   return { heads, bases: files.slice(inTheCode.length) };
 }
 
-function readingOf({ path, text }: JudgedFile, adapterOf: AdapterOf): Reading | null {
+function readingOf({ path, text }: JudgedFile, adapterOf: AdapterOf): Read | null {
   const language = languageOf(path, firstLine(text));
-  const comments = language === null ? null : adapterOf(language);
-  if (comments === null) return null;
-  const reading = comments(path, text);
-  if (reading.kind === "unparsed") return reading;
+  const adapter = language === null ? null : adapterOf(language);
+  if (language === null || adapter === null) return null;
+  const reading = adapter.comments(path, text);
+  if (reading.kind === "unparsed") return { language, reading };
   const lines = text.split("\n");
-  const unmarked = reading.comments.filter(({ line }) => markerLine(lines[line - 1] ?? "") === null);
-  return { kind: "read", comments: unmarked };
+  const refused = reading.comments.filter(
+    (comment) => !isSharedKept({ text: comment.text, sourceLine: lines[comment.line - 1] ?? "" }),
+  );
+  return { language, reading: { kind: "read", comments: refused } };
+}
+
+export function keptIn(adapterOf: AdapterOf, language: Language): readonly string[] {
+  const adapter = adapterOf(language);
+  invariant(adapter !== null, `the ${language} adapter that refused a comment is loaded`);
+  return [...adapter.kept, ...SHARED_KEPT_SHOWN];
 }
 
 function identityOf(comment: string): string {
@@ -166,7 +202,7 @@ function added(pool: Pool, identity: string, count: number): void {
 
 function poolOf(base: JudgedFile, adapterOf: AdapterOf): Pool {
   const pool: Pool = new Map();
-  const reading = readingOf(base, adapterOf);
+  const reading = readingOf(base, adapterOf)?.reading;
   if (reading?.kind === "read") for (const { text } of reading.comments) added(pool, identityOf(text), 1);
   return pool;
 }
@@ -185,9 +221,10 @@ function takenFrom(pool: Pool, comment: string): boolean {
   return true;
 }
 
-function unmatchedIn(reading: Reading | null, own: Pool | null): Reading | null {
-  if (reading?.kind !== "read" || own === null) return reading;
-  return { kind: "read", comments: reading.comments.filter(({ text }) => !takenFrom(own, text)) };
+function unmatchedIn(read: Read | null, own: Pool | null): Read | null {
+  if (read?.reading.kind !== "read" || own === null) return read;
+  const comments = read.reading.comments.filter(({ text }) => !takenFrom(own, text));
+  return { language: read.language, reading: { kind: "read", comments } };
 }
 
 function byPath(a: FileFindings, b: FileFindings): number {
@@ -199,12 +236,13 @@ export function findings({ heads, bases }: JudgedChange, adapterOf: AdapterOf): 
   const pools = new Map(bases.map((base) => [base.path, poolOf(base, adapterOf)]));
   const unmatched = heads.map(({ file, base }) => {
     const own = base?.origin === "own" ? (pools.get(base.path) ?? null) : null;
-    return { file, reading: unmatchedIn(readingOf(file, adapterOf), own) };
+    return { file, read: unmatchedIn(readingOf(file, adapterOf), own) };
   });
   const leftovers = leftoversOf(pools.values());
   const found: FileFindings[] = [];
-  for (const { file, reading } of unmatched) {
-    if (reading === null) continue;
+  for (const { file, read } of unmatched) {
+    if (read === null) continue;
+    const { language, reading } = read;
     if (reading.kind === "unparsed") {
       found.push({ kind: "unparsed", path: file.path, line: reading.line, reason: reading.reason });
       continue;
@@ -213,7 +251,8 @@ export function findings({ heads, bases }: JudgedChange, adapterOf: AdapterOf): 
       .filter(({ text }) => !takenFrom(leftovers, text))
       .map(({ line, text }) => ({ line, body: firstLine(text).trim() }))
       .sort((a, b) => a.line - b.line);
-    if (first !== undefined) found.push({ kind: "comments", path: file.path, comments: [first, ...rest] });
+    if (first !== undefined)
+      found.push({ kind: "comments", path: file.path, language, comments: [first, ...rest] });
   }
   return found.sort(byPath);
 }

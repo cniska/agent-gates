@@ -1,6 +1,9 @@
+import { type KeptForm, keptBy } from "./no-comments-kept";
 import type { Comment, CommentsOf } from "./no-comments-languages";
 
 export type Span = { readonly start: number; readonly end: number };
+
+export type Spanned = { readonly text: string; readonly span: Span };
 
 export type Stopped = { readonly kind: "stopped"; readonly at: number; readonly reason: string };
 
@@ -52,14 +55,15 @@ function lineCounter(text: string): (offset: number) => number {
 
 export function refusedComments(
   commentSpans: (text: string) => Lexed,
-  isKept: (text: string, span: Span) => boolean,
+  forms: readonly KeptForm<Spanned>[],
 ): CommentsOf {
+  const isKept = keptBy(forms);
   return (_path, text) => {
     const lexed = commentSpans(text);
     const lineAt = lineCounter(text);
     if (lexed.kind === "stopped") return { kind: "unparsed", line: lineAt(lexed.at), reason: lexed.reason };
     const comments: Comment[] = lexed.spans
-      .filter((span) => !isKept(text, span))
+      .filter((span) => !isKept({ text, span }))
       .map(({ start, end }) => ({ line: lineAt(start), text: text.slice(start, end) }));
     return { kind: "read", comments };
   };

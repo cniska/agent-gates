@@ -1,3 +1,4 @@
+import { type KeptForm, shownOf } from "./no-comments-kept";
 import type { CommentsOf } from "./no-comments-languages";
 import { SHEBANG_PREFIX } from "./no-comments-route";
 import {
@@ -6,6 +7,7 @@ import {
   nestedBlockEnd,
   refusedComments,
   type Span,
+  type Spanned,
   type Stopped,
   unterminated,
 } from "./no-comments-spans";
@@ -247,8 +249,8 @@ function commentSpans(text: string): Lexed {
   return code(false) ?? { kind: "lexed", spans };
 }
 
-function isKept(): boolean {
-  return false;
-}
+const KEPT: readonly KeptForm<Spanned>[] = [];
 
-export const comments: CommentsOf = refusedComments(commentSpans, isKept);
+export const comments: CommentsOf = refusedComments(commentSpans, KEPT);
+
+export const kept = shownOf(KEPT);

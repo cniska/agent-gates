@@ -1,4 +1,5 @@
 import { bracketsOf } from "./no-comments-brackets";
+import { type KeptForm, shownOf } from "./no-comments-kept";
 import type { CommentsOf } from "./no-comments-languages";
 import { SHEBANG_PREFIX } from "./no-comments-route";
 import {
@@ -7,11 +8,10 @@ import {
   nestedBlockEnd,
   refusedComments,
   type Span,
+  type Spanned,
   type Stopped,
   unterminated,
 } from "./no-comments-spans";
-
-const ANALYZER_DIRECTIVE = /^(?:ignore:|ignore_for_file:|coverage:|@dart\s*=)/;
 
 const LINE_COMMENT = "//";
 
@@ -87,10 +87,28 @@ function commentSpans(text: string): Lexed {
   return code(false) ?? { kind: "lexed", spans };
 }
 
-function isKept(text: string, { start, end }: Span): boolean {
-  if (!text.startsWith(LINE_COMMENT, start)) return false;
-  const body = text.slice(start + LINE_COMMENT.length, end).replace(DOC_SLASH_AND_SPACE, "");
-  return ANALYZER_DIRECTIVE.test(body);
+function directiveOf({ text, span: { start, end } }: Spanned): string | null {
+  if (!text.startsWith(LINE_COMMENT, start)) return null;
+  return text.slice(start + LINE_COMMENT.length, end).replace(DOC_SLASH_AND_SPACE, "");
 }
 
-export const comments: CommentsOf = refusedComments(commentSpans, isKept);
+function analyzerDirective(shown: string, directive: RegExp): KeptForm<Spanned> {
+  return {
+    shown,
+    keeps: (comment) => {
+      const body = directiveOf(comment);
+      return body !== null && directive.test(body);
+    },
+  };
+}
+
+const KEPT: readonly KeptForm<Spanned>[] = [
+  analyzerDirective("`ignore:`", /^ignore:/),
+  analyzerDirective("`ignore_for_file:`", /^ignore_for_file:/),
+  analyzerDirective("`coverage:`", /^coverage:/),
+  analyzerDirective("`@dart=`", /^@dart\s*=/),
+];
+
+export const comments: CommentsOf = refusedComments(commentSpans, KEPT);
+
+export const kept = shownOf(KEPT);

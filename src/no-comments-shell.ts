@@ -1,3 +1,4 @@
+import { type KeptForm, shownOf } from "./no-comments-kept";
 import type { CommentsOf } from "./no-comments-languages";
 import { SHEBANG_PREFIX } from "./no-comments-route";
 import {
@@ -5,6 +6,7 @@ import {
   lineEnd,
   refusedComments,
   type Span,
+  type Spanned,
   type Stopped,
   unterminated,
 } from "./no-comments-spans";
@@ -407,9 +409,17 @@ function commentSpans(text: string): Lexed {
   return code(false) ?? { kind: "lexed", spans };
 }
 
-function isKept(text: string, { start, end }: Span): boolean {
-  const body = text.slice(start, end);
-  return (start === 0 && body.startsWith(SHEBANG_PREFIX)) || SHELLCHECK_DIRECTIVE.test(body);
-}
+const KEPT: readonly KeptForm<Spanned>[] = [
+  {
+    shown: "the first-line shebang",
+    keeps: ({ text, span: { start } }) => start === 0 && text.startsWith(SHEBANG_PREFIX),
+  },
+  {
+    shown: "`shellcheck` directives",
+    keeps: ({ text, span: { start, end } }) => SHELLCHECK_DIRECTIVE.test(text.slice(start, end)),
+  },
+];
 
-export const comments: CommentsOf = refusedComments(commentSpans, isKept);
+export const comments: CommentsOf = refusedComments(commentSpans, KEPT);
+
+export const kept = shownOf(KEPT);
