@@ -106,16 +106,24 @@ function formAt(text: string, start: number): DocForm {
   return OUTER_DOC.test(text) ? "outer" : "none";
 }
 
-function commentSpans(text: string): Lexed<DocSpan, null> {
-  const spans: FormSpan[] = [];
-  const awaitingItem: number[] = [];
-  const documentsPublicItem = new Set<number>();
-  const braces: Brace[] = [];
-  let previous = "";
-  let carriesDocText = false;
-  let exported = false;
-  let insideAttribute = 0;
-  let header: Header = NO_HEADER;
+type CodeKind = "word" | "number" | "lifetime" | "literal" | "punct";
+
+type Lexeme = { readonly kind: CodeKind; readonly stopped: Stopped | null };
+
+type Token =
+  | {
+      readonly kind: "comment";
+      readonly start: number;
+      readonly end: number;
+      readonly style: "line" | "block";
+      readonly form: DocForm;
+    }
+  | { readonly kind: CodeKind; readonly start: number; readonly end: number };
+
+type Tokenized = { readonly kind: "tokenized"; readonly tokens: readonly Token[] } | Stopped;
+
+function tokensOf(text: string): Tokenized {
+  const tokens: Token[] = [];
   let at = shebangEnd(text);
 
   const charAt = (index: number): string => {
@@ -137,66 +145,6 @@ function commentSpans(text: string): Lexed<DocSpan, null> {
   function suffixed(stopped: Stopped | null): Stopped | null {
     if (stopped === null && isIdentifierStart(at)) word();
     return stopped;
-  }
-
-  function found(start: number, end: number, form: DocForm, style: Style): void {
-    const bodyStart = style === "attribute" ? start : start + (form === "none" ? PLAIN_OPENER : DOC_OPENER);
-    const bodyEnd = style === "block" ? end - BLOCK_CLOSER : end;
-    spans.push({ start, end, bodyStart, bodyEnd, style, form });
-    if (form === "outer" && insideAttribute === 0) awaitingItem.push(start);
-  }
-
-  function lineComment(): void {
-    const start = at;
-    at = lineEnd(text, at);
-    found(start, at, formAt(text, start), "line");
-  }
-
-  function blockComment(): Stopped | null {
-    const end = nestedBlockEnd(text, at, text.length);
-    if (end === null) return unterminated(at, "comment");
-    found(at, end, formAt(text, at), "block");
-    at = end;
-    return null;
-  }
-
-  function isWordAt(index: number, expected: string): boolean {
-    return text.startsWith(expected, index) && !isIdentifierContinue(index + expected.length);
-  }
-
-  function startsBarePublic(index: number): boolean {
-    return isWordAt(index, PUBLIC) && text[afterTrivia(index + PUBLIC.length)] !== "(";
-  }
-
-  function sawWord(start: number): void {
-    if (insideAttribute > 0) return;
-    if (header.item === "none")
-      header = { item: startsBarePublic(start) ? "public" : "other", opensPublicBody: false };
-    if (header.item === "public" && ITEMS_WITH_PUBLIC_BODIES.has(text.slice(start, at)))
-      header = { item: "public", opensPublicBody: true };
-  }
-
-  function itemEnded(): void {
-    header = NO_HEADER;
-  }
-
-  function braceOpened(): Brace {
-    const brace: Brace = BLOCK_AFTER.has(previous)
-      ? { kind: "block", interrupts: header }
-      : { kind: header.opensPublicBody ? "public-body" : "body" };
-    itemEnded();
-    return brace;
-  }
-
-  function itemStarts(): void {
-    if (exported || braces.at(-1)?.kind === "public-body" || startsBarePublic(at))
-      for (const start of awaitingItem) documentsPublicItem.add(start);
-    awaitingItem.length = 0;
-    exported = false;
-  }
-
-  function isTrivia(): boolean {
-    return WHITESPACE_CHAR.test(text[at] ?? "") || text.startsWith("//", at) || text.startsWith("/*", at);
   }
 
   function quoted(): Stopped | null {
@@ -243,59 +191,17 @@ function commentSpans(text: string): Lexed<DocSpan, null> {
     return unterminated(start, "character");
   }
 
-  function lifetimeOrChar(): Stopped | null {
+  function lifetimeOrChar(): Lexeme {
     const first = charAt(at + 1);
     const second = charAt(at + 1 + first.length);
     const canBeLifetime = second !== "'" && (IDENTIFIER_START.test(first) || DIGIT.test(first));
-    if (!canBeLifetime) return suffixed(singleQuoted());
+    if (!canBeLifetime) return { kind: "literal", stopped: suffixed(singleQuoted()) };
     at++;
     if (first === "r" && second === "#" && isIdentifierStart(at + 2)) at += 2;
     bump();
     word();
     if (text[at] === "'") at++;
-    return null;
-  }
-
-  function literal(prefix: string): Stopped | null {
-    at += prefix.length;
-    if (prefix.endsWith("r")) return suffixed(rawQuoted());
-    return suffixed(text[at] === "'" ? singleQuoted() : quoted());
-  }
-
-  function identifier(): Stopped | null {
-    if (text[at] === "r" && text[at + 1] === "#" && isIdentifierStart(at + 2)) {
-      const start = at;
-      at += 2;
-      word();
-      sawWord(start);
-      return null;
-    }
-    const prefix = STRING_PREFIXES.find((candidate) => opensLiteral(candidate));
-    if (prefix !== undefined) return literal(prefix);
-    const start = at;
-    word();
-    sawWord(start);
-    if (text.slice(start, at) === DOC_TEXT_WORD && isSingleEquals(afterTrivia(at))) carriesDocText = true;
-    return null;
-  }
-
-  function isSingleEquals(index: number): boolean {
-    return text[index] === "=" && text[index + 1] !== "=" && text[index + 1] !== ">";
-  }
-
-  function afterTrivia(from: number): number {
-    let index = from;
-    while (index < text.length) {
-      if (WHITESPACE_CHAR.test(text[index] ?? "")) index++;
-      else if (text.startsWith("//", index)) index = lineEnd(text, index);
-      else if (!text.startsWith("/*", index)) return index;
-      else {
-        const end = nestedBlockEnd(text, index, text.length);
-        if (end === null) return index;
-        index = end;
-      }
-    }
-    return index;
+    return { kind: "lifetime", stopped: null };
   }
 
   function opensLiteral(prefix: string): boolean {
@@ -305,96 +211,208 @@ function commentSpans(text: string): Lexed<DocSpan, null> {
     return next === '"' || (prefix === "b" && next === "'");
   }
 
-  function opensAttribute(): boolean {
-    let index = afterTrivia(at + 1);
-    if (text[index] === "!") index = afterTrivia(index + 1);
-    return text[index] === "[";
+  function literal(prefix: string): Stopped | null {
+    at += prefix.length;
+    if (prefix.endsWith("r")) return suffixed(rawQuoted());
+    return suffixed(text[at] === "'" ? singleQuoted() : quoted());
   }
 
-  function attribute(): Stopped | null {
+  function identifier(): Lexeme {
+    if (text[at] === "r" && text[at + 1] === "#" && isIdentifierStart(at + 2)) {
+      at += 2;
+      word();
+      return { kind: "word", stopped: null };
+    }
+    const prefix = STRING_PREFIXES.find((candidate) => opensLiteral(candidate));
+    if (prefix !== undefined) return { kind: "literal", stopped: literal(prefix) };
+    const kind = DIGIT.test(text[at] ?? "") ? "number" : "word";
+    word();
+    return { kind, stopped: null };
+  }
+
+  function codeToken(char: string): Lexeme {
+    if (char === '"') return { kind: "literal", stopped: suffixed(quoted()) };
+    if (char === "'") return lifetimeOrChar();
+    if (isIdentifierStart(at) || isEmoji(at) || DIGIT.test(char)) return identifier();
+    bump();
+    return { kind: "punct", stopped: null };
+  }
+
+  while (at < text.length) {
     const start = at;
+    const char = text[at] ?? "";
+    if (WHITESPACE_CHAR.test(char)) {
+      at++;
+      continue;
+    }
+    if (text.startsWith("//", at)) {
+      at = lineEnd(text, at);
+      tokens.push({ kind: "comment", start, end: at, style: "line", form: formAt(text, start) });
+      continue;
+    }
+    if (text.startsWith("/*", at)) {
+      const end = nestedBlockEnd(text, at, text.length);
+      if (end === null) return unterminated(at, "comment");
+      at = end;
+      tokens.push({ kind: "comment", start, end, style: "block", form: formAt(text, start) });
+      continue;
+    }
+    const { kind, stopped } = codeToken(char);
+    if (stopped !== null) return stopped;
+    tokens.push({ kind, start, end: at });
+  }
+  return { kind: "tokenized", tokens };
+}
+
+function docSpans(text: string, tokens: readonly Token[]): DocSpan[] {
+  const spans: FormSpan[] = [];
+  const awaitingItem: number[] = [];
+  const documentsPublicItem = new Set<number>();
+  const braces: Brace[] = [];
+  let previous = "";
+  let carriesDocText = false;
+  let exported = false;
+  let insideAttribute = 0;
+  let header: Header = NO_HEADER;
+  let index = 0;
+
+  const textOf = (at: number): string => {
+    const token = tokens[at];
+    return token === undefined ? "" : text.slice(token.start, token.end);
+  };
+  const isPunct = (at: number, char: string) => tokens[at]?.kind === "punct" && textOf(at) === char;
+  const isWord = (at: number, word: string) => tokens[at]?.kind === "word" && textOf(at) === word;
+
+  function nextCode(from: number): number {
+    let at = from;
+    while (tokens[at]?.kind === "comment") at++;
+    return at;
+  }
+
+  function found(start: number, end: number, form: DocForm, style: Style): void {
+    const bodyStart = style === "attribute" ? start : start + (form === "none" ? PLAIN_OPENER : DOC_OPENER);
+    const bodyEnd = style === "block" ? end - BLOCK_CLOSER : end;
+    spans.push({ start, end, bodyStart, bodyEnd, style, form });
+    if (form === "outer" && insideAttribute === 0) awaitingItem.push(start);
+  }
+
+  function startsBarePublic(at: number): boolean {
+    return isWord(at, PUBLIC) && !isPunct(nextCode(at + 1), "(");
+  }
+
+  function isSingleEquals(at: number): boolean {
+    const token = tokens[at];
+    if (token === undefined || !isPunct(at, "=")) return false;
+    const joined = tokens[at + 1]?.start === token.end;
+    return !(joined && (isPunct(at + 1, "=") || isPunct(at + 1, ">")));
+  }
+
+  function sawWord(at: number): void {
+    if (insideAttribute > 0) return;
+    if (header.item === "none")
+      header = { item: startsBarePublic(at) ? "public" : "other", opensPublicBody: false };
+    if (header.item === "public" && ITEMS_WITH_PUBLIC_BODIES.has(textOf(at)))
+      header = { item: "public", opensPublicBody: true };
+  }
+
+  function itemEnded(): void {
+    header = NO_HEADER;
+  }
+
+  function braceOpened(): Brace {
+    const brace: Brace = BLOCK_AFTER.has(previous)
+      ? { kind: "block", interrupts: header }
+      : { kind: header.opensPublicBody ? "public-body" : "body" };
+    itemEnded();
+    return brace;
+  }
+
+  function itemStarts(at: number): void {
+    if (exported || braces.at(-1)?.kind === "public-body" || startsBarePublic(at))
+      for (const start of awaitingItem) documentsPublicItem.add(start);
+    awaitingItem.length = 0;
+    exported = false;
+  }
+
+  function visit(at: number): void {
+    const token = tokens[at];
+    if (token === undefined) return;
+    if (token.kind === "comment") found(token.start, token.end, token.form, token.style);
+    if (token.kind === "word" || token.kind === "number") sawWord(at);
+    if (token.kind === "word" && textOf(at) === DOC_TEXT_WORD && isSingleEquals(nextCode(at + 1)))
+      carriesDocText = true;
+  }
+
+  function bracketAfterHash(hash: number): number | null {
+    let next = nextCode(hash + 1);
+    if (isPunct(next, "!")) next = nextCode(next + 1);
+    return isPunct(next, "[") ? next : null;
+  }
+
+  function attribute(hash: number, bracket: number): void {
+    const start = tokens[hash]?.start ?? text.length;
     const firstInside = spans.length;
     const outerCarriesDocText = carriesDocText;
-    const form = text[afterTrivia(at + 1)] === "!" ? "inner" : "outer";
+    const form = isPunct(nextCode(hash + 1), "!") ? "inner" : "outer";
     carriesDocText = false;
-    at++;
     insideAttribute++;
-    while (text[at] !== "[") {
-      const stopped = token();
-      if (stopped !== null) return stopped;
-    }
-    at++;
-    if (insideAttribute === 1 && isWordAt(afterTrivia(at), MACRO_EXPORT)) exported = true;
-    const stopped = code(true);
+    for (let at = hash + 1; at < bracket; at++) visit(at);
+    index = bracket + 1;
+    if (insideAttribute === 1 && isWord(nextCode(index), MACRO_EXPORT)) exported = true;
+    const closed = code(true);
     insideAttribute--;
-    if (stopped !== null) return stopped;
     if (carriesDocText) {
       spans.splice(firstInside, Infinity);
-      found(start, at, form, "attribute");
+      found(start, closed ? (tokens[index - 1]?.end ?? text.length) : text.length, form, "attribute");
     }
     carriesDocText ||= outerCarriesDocText;
-    return null;
   }
 
-  function token(): Stopped | null {
-    const char = text[at];
-    if (text.startsWith("//", at)) lineComment();
-    else if (text.startsWith("/*", at)) return blockComment();
-    else if (char === '"') return suffixed(quoted());
-    else if (char === "'") return lifetimeOrChar();
-    else if (isIdentifierStart(at) || isEmoji(at) || DIGIT.test(char ?? "")) return identifier();
-    else bump();
-    return null;
-  }
-
-  function code(closesBracket: boolean): Stopped | null {
+  function code(closesBracket: boolean): boolean {
     let depth = 0;
-    while (at < text.length) {
-      const char = text[at];
-      let stopped: Stopped | null = null;
-      if (char === "#" && opensAttribute()) {
-        stopped = attribute();
-        if (stopped !== null) return stopped;
+    while (index < tokens.length) {
+      const token = tokens[index];
+      if (token === undefined) return false;
+      const bracket = isPunct(index, "#") ? bracketAfterHash(index) : null;
+      if (bracket !== null) {
+        attribute(index, bracket);
         continue;
       }
       const atItemLevel = insideAttribute === 0;
-      const significant = atItemLevel && !isTrivia();
-      if (significant) itemStarts();
-      if (char === "[") {
-        depth++;
-        at++;
-      } else if (char === "]") {
-        at++;
-        if (closesBracket && depth === 0) return null;
+      const significant = atItemLevel && token.kind !== "comment";
+      if (significant) itemStarts(index);
+      const char = token.kind === "punct" ? textOf(index) : "";
+      if (char === "[") depth++;
+      else if (char === "]") {
+        if (closesBracket && depth === 0) {
+          index++;
+          return true;
+        }
         depth--;
-      } else if (atItemLevel && char === "{") {
-        braces.push(braceOpened());
-        at++;
-      } else if (atItemLevel && char === "}") {
+      } else if (atItemLevel && char === "{") braces.push(braceOpened());
+      else if (atItemLevel && char === "}") {
         const closed = braces.pop();
         header = closed?.kind === "block" ? closed.interrupts : NO_HEADER;
-        at++;
-      } else if (atItemLevel && char === ";" && depth === 0) {
-        itemEnded();
-        at++;
-      } else stopped = token();
-      if (stopped !== null) return stopped;
-      if (significant) previous = char ?? "";
+      } else if (atItemLevel && char === ";" && depth === 0) itemEnded();
+      else visit(index);
+      index++;
+      if (significant) previous = text[token.start] ?? "";
     }
-    return null;
+    return false;
   }
 
-  const stopped = code(false);
-  if (stopped !== null) return stopped;
+  code(false);
   const docOf = (form: DocForm, start: number): Doc => {
     if (form !== "outer") return form;
     return documentsPublicItem.has(start) ? "public" : "other";
   };
-  return {
-    kind: "lexed",
-    spans: spans.map(({ form, ...span }) => ({ ...span, doc: docOf(form, span.start) })),
-    facts: null,
-  };
+  return spans.map(({ form, ...span }) => ({ ...span, doc: docOf(form, span.start) }));
+}
+
+function commentSpans(text: string): Lexed<DocSpan, null> {
+  const tokenized = tokensOf(text);
+  if (tokenized.kind === "stopped") return tokenized;
+  return { kind: "lexed", spans: docSpans(text, tokenized.tokens), facts: null };
 }
 
 function placementOf(path: string, tracked: Tracked): Placement {
