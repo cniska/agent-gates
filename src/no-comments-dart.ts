@@ -1,30 +1,24 @@
-import {
-  adapter,
-  type CommentRead,
-  directive,
-  type KeptForm,
-  type Lexed,
-  type Span,
-} from "./no-comments-adapter";
+import { adapter, type CommentRead, type KeptForm, type Lexed, type Span } from "./no-comments-adapter";
 import { bracketsOf } from "./no-comments-brackets";
 import { SHEBANG_PREFIX } from "./no-comments-route";
 import { lineEnd, nestedBlockEnd, type Stopped, unterminated } from "./no-comments-spans";
 
 const OPENER = 2;
 
-const DOC_SLASH_AND_SPACE = /^\/?\s*/;
-
 const IDENTIFIER_CHAR = /[A-Za-z0-9_$]/;
-
-const DIAGNOSTIC = "[A-Za-z][A-Za-z0-9_]*(?:/[A-Za-z][A-Za-z0-9_]*)?";
-
-const IGNORE = new RegExp(`ignore(?:_for_file)?:\\s*${DIAGNOSTIC}(?:\\s*,\\s*${DIAGNOSTIC})*`);
 
 const LANGUAGE_VERSION = /^\s*@dart\s*=\s*\d+\.\d+\s*$/;
 
-function commentSpans(text: string): Lexed<Span, null> {
+const WHITESPACE = /\s/;
+
+const NO_DIRECTIVES = /^/;
+
+type DartSpan = Span & { readonly leading: boolean };
+
+function commentSpans(text: string): Lexed<DartSpan, null> {
   const spans: Span[] = [];
   let at = text.startsWith(SHEBANG_PREFIX) ? lineEnd(text, 0) : 0;
+  let codeStart = text.length;
 
   function lineComment(): void {
     const start = at;
@@ -69,6 +63,8 @@ function commentSpans(text: string): Lexed<Span, null> {
       const char = text[at] ?? "";
       const next = text[at + 1];
       let stopped: Stopped | null = null;
+      const startsComment = char === "/" && (next === "/" || next === "*");
+      if (codeStart === text.length && !startsComment && !WHITESPACE.test(char)) codeStart = at;
       if (char === "/" && next === "/") lineComment();
       else if (char === "/" && next === "*") stopped = blockComment();
       else if (char === "'" || char === '"') stopped = string(false);
@@ -87,28 +83,25 @@ function commentSpans(text: string): Lexed<Span, null> {
     return brackets.unclosed() ?? (closesInterpolation ? unterminated(start, "interpolation") : null);
   }
 
-  return code(false) ?? { kind: "lexed", spans, facts: null };
+  const stopped = code(false);
+  if (stopped !== null) return stopped;
+  return {
+    kind: "lexed",
+    spans: spans.map((span) => ({ ...span, leading: span.start < codeStart })),
+    facts: null,
+  };
 }
 
-function isLine({ span }: CommentRead): boolean {
-  return span.style === "line";
-}
-
-const KEPT: readonly KeptForm<CommentRead<Span, null, null>>[] = [
-  directive("`ignore:` and `ignore_for_file:` naming only diagnostics", {
-    pattern: IGNORE,
-    reason: "alone",
-    where: isLine,
-  }),
+const KEPT: readonly KeptForm<CommentRead<DartSpan, null, null>>[] = [
   {
-    shown: "`// @dart = x.y` alone",
-    keeps: (read) => isLine(read) && LANGUAGE_VERSION.test(read.body),
+    shown: "`// @dart = x.y` alone, before any code",
+    keeps: ({ span, body }) => span.style === "line" && span.leading && LANGUAGE_VERSION.test(body),
   },
 ];
 
 export const { comments, kept } = adapter({
   contextOf: () => null,
   lex: commentSpans,
-  directiveLead: DOC_SLASH_AND_SPACE,
+  directiveLead: NO_DIRECTIVES,
   kept: KEPT,
 });

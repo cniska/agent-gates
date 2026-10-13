@@ -326,38 +326,31 @@ describe("the dart adapter", () => {
     expect(dartComments("a.dart", text)).toEqual(read([]));
   });
 
-  test("keeps the comments the analyzer reads", () => {
-    const text = [
-      "// ignore_for_file: avoid_print",
-      "// ignore: unused_element",
-      "/// ignore: unused_element",
-      "// ignore: unused_element, dead_code",
-      "// ignore:UNUSED_IMPORT",
-      "// ignore: custom_lint/my_rule",
-      "// ignore_for_file: avoid_print , dead_code",
-      "// @dart=3.0",
-      "// @dart = 3.0",
-      "void f() {}",
-    ].join("\n");
-    expect(dartComments("a.dart", text)).toEqual(read([]));
+  test("keeps a language version before any code", () => {
+    const text = ["#!/usr/bin/env dart", "// @dart=3.0", "/* a */ // @dart = 3.0", "", "void f() {}"].join(
+      "\n",
+    );
+    expect(dartComments("a.dart", text)).toEqual(read([{ line: 3, text: "/* a */" }]));
   });
 
-  test("refuses coverage directives, a language version that is not alone, and an ignore that names no diagnostic", () => {
+  test("refuses every analyzer suppression and setting, and a language version after code or not alone", () => {
     const refused = [
+      "// ignore_for_file: avoid_print",
+      "// ignore: unused_element",
+      "// ignore: unused_element, dead_code",
+      "// ignore: custom_lint/my_rule",
       "// coverage:ignore-line",
       "/// @dart = 3.0",
       "// @dart = 3.0 for the records",
       "// @dart = 3",
       "// ignore: type=lint",
-      "// ignore_for_file: type=lint",
-      "// ignore: because the api is weird",
-      "// ignore: unused_element, kept for the plugin API",
       "// ignore:",
-      "// ignore: custom_lint/",
-      "// ignore: custom_lint /my_rule",
     ];
-    expect(dartComments("a.dart", [...refused, "void f() {}"].join("\n"))).toEqual(
-      read(refused.map((text, index) => ({ line: index + 1, text }))),
+    expect(dartComments("a.dart", [...refused, "void f() {}", "// @dart = 3.0"].join("\n"))).toEqual(
+      read([
+        ...refused.map((text, index) => ({ line: index + 1, text })),
+        { line: refused.length + 2, text: "// @dart = 3.0" },
+      ]),
     );
   });
 
@@ -1361,7 +1354,7 @@ describe("the pre-commit hook", () => {
           '  1  #[doc = "why"]',
         ],
         [
-          "kept in Dart: `ignore:` and `ignore_for_file:` naming only diagnostics; `// @dart = x.y` alone; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
+          "kept in Dart: `// @dart = x.y` alone, before any code; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
           "kept in SQL: drizzle's `--> statement-breakpoint`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
           "kept in shell: the first-line shebang; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
           KEPT_IN_RUST,
