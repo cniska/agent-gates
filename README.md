@@ -69,7 +69,7 @@ The gates stop the comment count from growing; they do not drive it to zero. `no
 
 #### Kept comments
 
-A comment a tool reads stays:
+A comment stays only when the compiler, interpreter, bundler or runtime reads it, so that deleting it changes what is produced. Every doc comment, suppression, formatter hint and tool setting is refused: fix the code, or put the setting in the tool's config file, where a reason can live.
 
 | Language | Kept comments |
 | --- | --- |
@@ -78,11 +78,11 @@ A comment a tool reads stays:
 | SQL | drizzle's `--> statement-breakpoint` |
 | shell | the first-line shebang |
 | Rust | none |
-| Go | in library code, a doc or trailing comment `go doc` shows: on the package, or on an exported name, its fields and its methods; `//go:` directives at column 1 (`build`, `generate`, `embed`, `linkname`, `noinline`, `nosplit`, `noescape`, `norace`, `nocheckptr`, `uintptrescapes`, `uintptrkeepalive`, `wasmimport`, `wasmexport`, `debug`, `fix`), with `//go:build` only before `package` and `//go:embed` only above a `var`; `// +build` before `package`; `//line file:N` at column 1, and `/*line file:N*/`; `//export Name` above the top-level func `Name`, in a file that imports `"C"`; the cgo preamble above `import "C"`, but no line of it that starts a C `//` comment; `//nolint:` naming linters, never `all`; `//lint:ignore` and `//lint:file-ignore` naming checks, with a reason; `// Code generated … DO NOT EDIT.` before `package`; in a `_test.go` file outside packages `main` and `main_test`, an `Example` func's doc and its closing `// Output:` comment; `// want` in a file under `testdata` |
+| Go | `//go:build` and `//go:debug` with their argument, before `package`; `//go:embed` with its patterns, above a `var`; `//go:generate`, `//go:linkname`, `//go:wasmimport`, `//go:wasmexport` and `//go:fix` with their arguments, and `//go:noinline`, `//go:nosplit`, `//go:noescape`, `//go:norace`, `//go:nocheckptr`, `//go:uintptrescapes` and `//go:uintptrkeepalive` alone, at column 1; `//line file:N` at column 1, and `/*line file:N*/`; `//export Name` above the top-level func `Name`, in a file that imports `"C"`; the cgo preamble above `import "C"`, holding no C comment |
 | Every language | one `SPDX-License-Identifier:` line; a gate marker on a line of its own |
 
-- A form may carry a reason on the same line, unless it is marked "alone". A directive in a block comment that spans lines is refused.
-- Every TypeScript, ESLint and Biome suppression is refused, `@ts-expect-error` included, and so are `prettier-ignore`, `@ts-check` and `@vitest-environment`; their settings belong in `tsconfig.json`, the linter's config, `.prettierignore` and the Vitest config. Every `shellcheck` directive is refused; its settings belong in `.shellcheckrc`. Every Dart `ignore:` and `ignore_for_file:` is refused; the analyzer's settings belong in `analysis_options.yaml`. Tool configuration in a comment is refused too: `eslint-env`, `/* eslint … */`, `/* global */`, Dart's `coverage:`.
+- Every kept form stands alone in its comment: no reason, no trailing text. A directive in a block comment that spans lines is refused.
+- Every TypeScript, ESLint and Biome suppression is refused, `@ts-expect-error` included, and so are `prettier-ignore`, `@ts-check` and `@vitest-environment`; their settings belong in `tsconfig.json`, the linter's config, `.prettierignore` and the Vitest config. Every `shellcheck` directive is refused; its settings belong in `.shellcheckrc`. Every Dart `ignore:` and `ignore_for_file:` is refused; the analyzer's settings belong in `analysis_options.yaml`. Tool configuration in a comment is refused too: `eslint-env`, `/* eslint … */`, `/* global */`, Dart's `coverage:`. Go's `//nolint`, `//lint:ignore`, `// +build`, `// Code generated … DO NOT EDIT.`, Example `// Output:` and analysis `// want` comments are refused too; mark generated files `linguist-generated` instead.
 - A gate marker is `agent-gate:<part>:<version>`, or another tool's `<tool>-gate:[<part>:]<version>`.
 - A refusal lists the kept forms of each language it refused a comment in.
 
@@ -92,7 +92,7 @@ How each language is read:
 - **SQL** as PostgreSQL, with dollar quotes and `E''` strings. A dollar-quoted body that parses as SQL is judged as code; one that does not is text.
 - **Dart, shell, Rust and Go** by lexers that find the comments the language's own tokenizer finds. Shell treats `#` as a comment only where a word starts.
 - **Rust** reads an attribute carrying `doc = …` anywhere, such as `#[cfg_attr(docsrs, doc = …)]`, as a doc comment; `#[doc(hidden)]` is code.
-- **Go library code** is a file outside package `main` whose name does not end in `_test.go`. Its comments are grouped as `go/parser` groups them, and a doc is the group that ends on the line above its declaration. What `go doc` shows follows `go/doc`'s filter: an exported name starts with an upper-case letter, a method needs an exported receiver type, and a field or interface method needs an exported name or embedded type. A directive line inside a doc, such as `//nolint:all`, is not doc, as `go doc` leaves it out; it and a `// nolint` line are judged as directives.
+- **Go** groups comments as `go/parser` does, so `//go:embed` and `//export` count only in the group on the line above their declaration, and the cgo preamble is the group above `import "C"`.
 
 ## Commands
 

@@ -1,4 +1,3 @@
-import { basename } from "node:path/posix";
 import { invariant } from "./assert";
 import {
   adapter,
@@ -68,60 +67,17 @@ const OPENERS = new Set(["(", "[", "{"]);
 
 const CLOSERS = new Set([")", "]", "}"]);
 
-const PREDECLARED_TYPES = new Set([
-  "any",
-  "bool",
-  "byte",
-  "comparable",
-  "complex64",
-  "complex128",
-  "error",
-  "float32",
-  "float64",
-  "int",
-  "int8",
-  "int16",
-  "int32",
-  "int64",
-  "rune",
-  "string",
-  "uint",
-  "uint8",
-  "uint16",
-  "uint32",
-  "uint64",
-  "uintptr",
-]);
-
-const EXPORTED = /^\p{Lu}/u;
-
-const EXAMPLE = /^Example(?!\p{Ll})/u;
-
-const EXAMPLE_OUTPUT = /^\s*(unordered )?output:/i;
-
 const IMPORT_C = '"C"';
 
 const EXPORT_PREFIX = "//export ";
-
-const C_LINE_COMMENT = "//";
-
-const MAIN_PACKAGES = new Set(["main", "main_test"]);
-
-const LIBRARY_EXCLUDED_PACKAGE = "main";
-
-const TEST_SUFFIX = "_test.go";
-
-const TESTDATA = "testdata";
 
 const PACKAGE = "package";
 
 const NO_LEAD = /^/;
 
-const TOOLCHAIN_NAMES = [
-  "build",
-  "generate",
-  "embed",
-  "linkname",
+const ARGUMENT = "[ \\t]+\\S+";
+
+const FLAG_PRAGMAS = [
   "noinline",
   "nosplit",
   "noescape",
@@ -129,31 +85,41 @@ const TOOLCHAIN_NAMES = [
   "nocheckptr",
   "uintptrescapes",
   "uintptrkeepalive",
-  "wasmimport",
-  "wasmexport",
-  "debug",
-  "fix",
 ] as const;
 
-const TOOLCHAIN = new RegExp(`go:(?:${TOOLCHAIN_NAMES.join("|")})`);
+type Pragma = { readonly name: string; readonly arguments: string };
 
-const LINTER = "(?!all(?![\\w-]))[\\w-]+";
+const ARGUMENT_PRAGMAS: readonly Pragma[] = [
+  { name: "generate", arguments: "[ \\t]\\S.*" },
+  { name: "linkname", arguments: `${ARGUMENT}(?:${ARGUMENT})?` },
+  { name: "wasmimport", arguments: `${ARGUMENT}${ARGUMENT}` },
+  { name: "wasmexport", arguments: ARGUMENT },
+  { name: "fix", arguments: "[ \\t]+inline" },
+];
 
-const NOLINT = new RegExp(`nolint:${LINTER}(?:,${LINTER})*(?![\\w,-])`);
+const HEADER_PRAGMAS: readonly Pragma[] = [
+  { name: "build", arguments: "[ \\t]+(?:[A-Za-z0-9_.]+|!|&&|\\|\\||\\(|\\)|[ \\t])+" },
+  { name: "debug", arguments: "[ \\t]+[\\w.]+=\\S+" },
+];
 
-const STATICCHECK_IGNORE = /lint:(?:file-)?ignore[ \t]+[\w*]+(?:,[\w*]+)*[ \t]+\S.*/;
+function pragmaPattern(pragmas: readonly Pragma[], flags: readonly string[] = []): RegExp {
+  return new RegExp(
+    `go:(?:${[...flags, ...pragmas.map(({ name, arguments: shape }) => name + shape)].join("|")})`,
+  );
+}
 
-const PLUS_BUILD = /[ \t]*\+build/;
+function pragmaNames(names: readonly string[]): string {
+  const shown = names.map((name) => `\`//go:${name}\``);
+  return shown.length < 2 ? shown.join("") : `${shown.slice(0, -1).join(", ")} and ${shown.at(-1)}`;
+}
 
-const LINE_DIRECTIVE = /line .*:\d+(?::\d+)?/;
+const EMBED = /go:embed(?:[ \t]+(?:"(?:[^"\\]|\\.)*"|`[^`]*`|[^ \t"`]+))+/;
 
-const GENERATED = / Code generated .* DO NOT EDIT\./;
+const LINE_DIRECTIVE = /line \S*:\d+(?::\d+)?/;
 
-const WANT = /^\s*want(?:\s|$)/;
+const C_LITERAL = /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g;
 
-const GO_DIRECTIVE = /^(?:line |extern |export |[a-z0-9]+:[a-z0-9])/;
-
-const ANY_NOLINT = /^\s*nolint(?![\w-])/;
+const C_COMMENT = /\/\/|\/\*/;
 
 type CodeKind = "word" | "string" | "rune" | "number" | "punct";
 
@@ -164,7 +130,7 @@ type Token =
       readonly end: number;
       readonly style: "line" | "block";
     }
-  | { readonly kind: "semicolon"; readonly start: number; readonly end: number; readonly explicit: boolean }
+  | { readonly kind: "semicolon"; readonly start: number; readonly end: number }
   | { readonly kind: CodeKind; readonly start: number; readonly end: number };
 
 type CodeToken = Exclude<Token, { readonly kind: "comment" }>;
@@ -174,35 +140,20 @@ type Tokenized = { readonly kind: "tokenized"; readonly tokens: readonly Token[]
 type Documents =
   | { readonly kind: "none" }
   | { readonly kind: "var" }
-  | { readonly kind: "func"; readonly name: string; readonly example: boolean }
+  | { readonly kind: "func"; readonly name: string }
   | { readonly kind: "import-c" };
 
-type GoSpan = Span & {
-  readonly shown: boolean;
-  readonly beforePackage: boolean;
-  readonly documents: Documents;
-  readonly exampleOutput: boolean;
-};
+type GoSpan = Span & { readonly beforePackage: boolean; readonly documents: Documents };
 
-type Facts = { readonly packageName: string | null; readonly importsC: boolean };
-
-type Placement = { readonly test: boolean; readonly testdata: boolean };
-
-type Filter = "exported" | "none";
+type Facts = { readonly importsC: boolean };
 
 type Group = number;
 
-type Coded = { readonly token: CodeToken; readonly lead: Group | null; readonly trail: Group | null };
+type Coded = { readonly token: CodeToken; readonly lead: Group | null };
 
-type MemberFound = { readonly kept: boolean; readonly doc: boolean };
+type Grouped = { readonly groupOf: ReadonlyMap<number, Group>; readonly code: readonly Coded[] };
 
-type Grouped = {
-  readonly groups: readonly (readonly number[])[];
-  readonly groupOf: ReadonlyMap<number, Group>;
-  readonly code: readonly Coded[];
-};
-
-type SpecFound = { readonly exported: boolean; readonly importsC: boolean; readonly doc: Group | null };
+type SpecFound = { readonly importsC: boolean; readonly doc: Group | null };
 
 const NOT_DOCUMENTING: Documents = { kind: "none" };
 
@@ -217,7 +168,7 @@ function tokensOf(text: string): Tokenized {
   };
 
   function semicolon(start: number): void {
-    tokens.push({ kind: "semicolon", start, end: start, explicit: false });
+    tokens.push({ kind: "semicolon", start, end: start });
     endsStatement = false;
   }
 
@@ -307,7 +258,7 @@ function tokensOf(text: string): Tokenized {
     }
     if (char === ";") {
       at++;
-      tokens.push({ kind: "semicolon", start, end: at, explicit: true });
+      tokens.push({ kind: "semicolon", start, end: at });
       endsStatement = false;
       continue;
     }
@@ -323,11 +274,9 @@ function commentGroups(text: string, tokens: readonly Token[]): Grouped {
   const lineAt = lineCounter(text);
   const lines = tokens.map(({ start }) => lineAt(start));
   const endOfFileLine = lineAt(text.length);
-  const groups: number[][] = [];
   const groupOf = new Map<number, Group>();
-  const codeTokens: CodeToken[] = [];
-  const lead: (Group | null)[] = [];
-  const trail: (Group | null)[] = [];
+  const code: Coded[] = [];
+  let groups = 0;
 
   const isComment = (index: number) => tokens[index]?.kind === "comment";
   const lineOf = (index: number) => lines[index] ?? endOfFileLine;
@@ -339,55 +288,38 @@ function commentGroups(text: string, tokens: readonly Token[]): Grouped {
 
   let next = 0;
   function consumeGroup(gap: number): { readonly group: Group; readonly endLine: number } {
-    const members: number[] = [];
-    const group = groups.length;
+    const group = groups++;
     let endLine = lineOf(next);
     while (isComment(next) && lineOf(next) <= endLine + gap) {
-      members.push(next);
       groupOf.set(next, group);
       endLine = endLineOf(next);
       next++;
     }
-    groups.push(members);
     return { group, endLine };
   }
 
   let previousLine = 0;
   for (;;) {
-    let leadGroup: Group | null = null;
-    let trailGroup: Group | null = null;
+    let lead: Group | null = null;
     if (isComment(next)) {
-      if (lineOf(next) === previousLine) {
-        const { group, endLine } = consumeGroup(0);
-        if (lineOf(next) !== endLine || tokens[next]?.kind === "semicolon" || next === tokens.length)
-          trailGroup = group;
-      }
+      if (lineOf(next) === previousLine) consumeGroup(0);
       let endLine = -1;
       let last: Group | null = null;
       while (isComment(next)) ({ group: last, endLine } = consumeGroup(1));
-      if (endLine + 1 === lineOf(next)) leadGroup = last;
+      if (endLine + 1 === lineOf(next)) lead = last;
     }
-    lead.push(leadGroup);
-    trail.push(trailGroup);
     const token = tokens[next];
     if (token === undefined || token.kind === "comment") break;
-    codeTokens.push(token);
+    code.push({ token, lead });
     previousLine = lineOf(next);
     next++;
   }
-  const code = codeTokens.map((token, index): Coded => {
-    const ending = token.kind === "semicolon" ? (token.explicit ? trail[index + 1] : trail[index]) : null;
-    return { token, lead: lead[index] ?? null, trail: ending ?? null };
-  });
-  return { groups, groupOf, code };
+  return { groupOf, code };
 }
 
 function targetSpans(text: string, tokens: readonly Token[]): Lexed<GoSpan, Facts> {
-  const { groups, groupOf, code } = commentGroups(text, tokens);
-  const shown = new Set<Group>();
+  const { groupOf, code } = commentGroups(text, tokens);
   const documents = new Map<Group, Documents>();
-  const outputs = new Set<Group>();
-  let packageName: string | null = null;
   let packageStart: number | null = null;
   let importsC = false;
   let at = 0;
@@ -409,12 +341,6 @@ function targetSpans(text: string, tokens: readonly Token[]): Lexed<GoSpan, Fact
   const isString = (index: number) => tokenAt(index)?.kind === "string";
   const isOpener = (index: number) => tokenAt(index)?.kind === "punct" && OPENERS.has(textOf(index));
   const isCloser = (index: number) => tokenAt(index)?.kind === "punct" && CLOSERS.has(textOf(index));
-  const isExported = (name: string | null) => name !== null && EXPORTED.test(name);
-  const keeps = (filter: Filter, exported: boolean) => filter === "exported" && exported;
-
-  function show(group: Group | null): void {
-    if (group !== null) shown.add(group);
-  }
 
   function skipBalanced(): void {
     let depth = 0;
@@ -426,204 +352,19 @@ function targetSpans(text: string, tokens: readonly Token[]): Lexed<GoSpan, Fact
     }
   }
 
-  function skipToItemEnd(): void {
+  function skipItem(): void {
     while (at < code.length && !isSemicolon(at) && !isCloser(at)) {
       if (isOpener(at)) skipBalanced();
       else at++;
     }
-  }
-
-  function itemEnd(): Group | null {
-    const ending = code[at];
-    if (ending?.token.kind !== "semicolon") return null;
-    at++;
-    return ending.trail;
-  }
-
-  function qualifiedName(): string | null {
-    let name = nameAt(at);
-    if (name === null) return null;
-    at++;
-    if (isPunct(at, ".")) {
-      name = nameAt(at + 1);
-      at += 2;
-    }
-    if (isPunct(at, "[")) skipBalanced();
-    return name;
-  }
-
-  function parameters(filter: Filter): void {
-    at++;
-    while (at < code.length && !isPunct(at, ")")) {
-      const before = at;
-      const startsType = !isPunct(at + 1, ",") && !isPunct(at + 1, ")") && !isPunct(at + 1, ".");
-      if (nameAt(at) !== null && startsType) at++;
-      if (isPunct(at, "...")) at++;
-      type(filter);
-      if (isPunct(at, ",")) at++;
-      if (at === before) at++;
-    }
-    at++;
-  }
-
-  function result(filter: Filter): void {
-    if (isPunct(at, "(")) parameters(filter);
-    else type(filter);
-  }
-
-  function signature(filter: Filter): void {
-    if (isPunct(at, "(")) parameters(filter);
-    result(filter);
-  }
-
-  function type(filter: Filter): void {
-    const word = wordAt(at);
-    if (word === "struct" || word === "interface") {
-      at++;
-      if (isPunct(at, "{")) members(filter, word === "struct" ? field : element);
-      return;
-    }
-    if (word === "map") {
-      at++;
-      if (isPunct(at, "[")) {
-        at++;
-        type(filter);
-        if (isPunct(at, "]")) at++;
-      }
-      type(filter);
-      return;
-    }
-    if (word === "chan" || isPunct(at, "<-")) {
-      at++;
-      if (isPunct(at, "<-") || wordAt(at) === "chan") at++;
-      type(filter);
-      return;
-    }
-    if (word === "func") {
-      at++;
-      signature(filter);
-      return;
-    }
-    if (isPunct(at, "*") || isPunct(at, "~")) {
-      at++;
-      type(filter);
-      return;
-    }
-    if (isPunct(at, "(")) {
-      at++;
-      type(filter);
-      if (isPunct(at, ")")) at++;
-      return;
-    }
-    if (isPunct(at, "[")) {
-      skipBalanced();
-      type(filter);
-      return;
-    }
-    if (nameAt(at) !== null) qualifiedName();
-  }
-
-  function members(filter: Filter, member: (filter: Filter) => MemberFound) {
-    at++;
-    while (at < code.length && !isPunct(at, "}")) {
-      const before = at;
-      if (isSemicolon(at)) {
-        at++;
-        continue;
-      }
-      const doc = leadAt(at);
-      const found = member(filter);
-      skipToItemEnd();
-      const comment = itemEnd();
-      if (found.kept) {
-        if (found.doc) show(doc);
-        show(comment);
-      }
-      if (at === before) at++;
-    }
-    at++;
-  }
-
-  function field(filter: Filter): MemberFound {
-    const first = nameAt(at);
-    if (isPunct(at, "*")) {
-      at++;
-      return { kept: keeps(filter, isExported(qualifiedName())), doc: true };
-    }
-    if (first === null) return { kept: false, doc: true };
-    const embeddedEnd = (index: number) => isString(index) || isSemicolon(index) || isPunct(index, "}");
-    if (isPunct(at + 1, ".") || embeddedEnd(at + 1))
-      return { kept: keeps(filter, isExported(qualifiedName())), doc: true };
-    at++;
-    if (isPunct(at, "[")) {
-      skipBalanced();
-      const kept = keeps(filter, isExported(first));
-      if (!embeddedEnd(at)) type(kept ? filter : "none");
-      return { kept, doc: true };
-    }
-    const names: (string | null)[] = [first];
-    while (isPunct(at, ",")) {
-      names.push(nameAt(at + 1));
-      at += 2;
-    }
-    const kept = keeps(filter, names.some(isExported));
-    type(kept ? filter : "none");
-    return { kept, doc: true };
-  }
-
-  function element(filter: Filter): MemberFound {
-    const name = nameAt(at);
-    if (name !== null && isPunct(at + 1, "(")) {
-      at++;
-      const kept = keeps(filter, isExported(name));
-      signature(kept ? filter : "none");
-      return { kept, doc: true };
-    }
-    const qualified = name !== null && isPunct(at + 1, ".");
-    const base = qualified ? nameAt(at + 2) : name;
-    type(filter);
-    let union = false;
-    while (isPunct(at, "|")) {
-      union = true;
-      at++;
-      type(filter);
-    }
-    const named = base !== null && !union;
-    const exported = isExported(base) || (!qualified && base !== null && PREDECLARED_TYPES.has(base));
-    return { kept: keeps(filter, !named || exported), doc: name !== null };
+    if (isSemicolon(at)) at++;
   }
 
   function spec(keyword: string, doc: Group | null): SpecFound {
-    if (keyword === "import") {
-      if (wordAt(at) !== null || isPunct(at, ".")) at++;
-      const path = isString(at) ? textOf(at) : "";
-      skipToItemEnd();
-      itemEnd();
-      return { exported: false, importsC: path === IMPORT_C, doc };
-    }
-    const names: (string | null)[] = [];
-    if (keyword === "type") {
-      names.push(nameAt(at));
-      at++;
-      if (isPunct(at, "[")) skipBalanced();
-      if (isPunct(at, "=")) at++;
-    } else {
-      names.push(nameAt(at));
-      at++;
-      while (isPunct(at, ",")) {
-        names.push(nameAt(at + 1));
-        at += 2;
-      }
-    }
-    const exported = names.some(isExported);
-    if (!isPunct(at, "=") && !isSemicolon(at) && !isCloser(at)) type(exported ? "exported" : "none");
-    skipToItemEnd();
-    const comment = itemEnd();
-    if (exported) {
-      show(doc);
-      show(comment);
-    }
-    return { exported, importsC: false, doc };
+    if (keyword === "import" && (nameAt(at) !== null || isPunct(at, "."))) at++;
+    const importsC = keyword === "import" && isString(at) && textOf(at) === IMPORT_C;
+    skipItem();
+    return { importsC, doc };
   }
 
   function genDecl(keyword: string): void {
@@ -639,9 +380,8 @@ function targetSpans(text: string, tokens: readonly Token[]): Lexed<GoSpan, Fact
         if (at === before) at++;
       }
       at++;
-      itemEnd();
+      if (isSemicolon(at)) at++;
     } else specs.push(spec(keyword, null));
-    if (specs.some(({ exported }) => exported)) show(doc);
     if (keyword === "var")
       for (const group of [doc, ...specs.map((found) => found.doc)])
         if (group !== null) documents.set(group, { kind: "var" });
@@ -653,85 +393,22 @@ function targetSpans(text: string, tokens: readonly Token[]): Lexed<GoSpan, Fact
     }
   }
 
-  function receiverBase(): string | null {
-    let base: string | null = null;
-    let brackets = 0;
-    const open = at;
-    skipBalanced();
-    for (let index = open + 1; index < at - 1; index++) {
-      if (isPunct(index, "[")) brackets++;
-      else if (isPunct(index, "]")) brackets--;
-      else if (brackets === 0 && nameAt(index) !== null) base = nameAt(index);
-    }
-    return base;
-  }
-
-  function groupStart(group: Group): number {
-    return tokens[groups[group]?.[0] ?? -1]?.start ?? text.length;
-  }
-
-  function lastGroupWithin(open: number, close: number): Group | null {
-    let low = 0;
-    let high = groups.length;
-    while (low < high) {
-      const middle = (low + high) >> 1;
-      if (groupStart(middle) < close) low = middle + 1;
-      else high = middle;
-    }
-    const last = low - 1;
-    return last >= 0 && groupStart(last) > open ? last : null;
-  }
-
-  function groupText(group: Group): string {
-    return (groups[group] ?? [])
-      .map((member) => {
-        const token = tokens[member];
-        if (token?.kind !== "comment") return "";
-        const end = token.style === "block" ? token.end - CLOSER : token.end;
-        return text.slice(token.start + OPENER, end);
-      })
-      .join("\n");
-  }
-
   function funcDecl(): void {
     const doc = leadAt(at);
     at++;
     const method = isPunct(at, "(");
-    const base = method ? receiverBase() : null;
+    if (method) skipBalanced();
     const name = nameAt(at);
-    at++;
-    if (isPunct(at, "[")) skipBalanced();
-    const noParameters = isPunct(at, "(") && isPunct(at + 1, ")");
-    if (isPunct(at, "(")) parameters("none");
-    const noResults = isPunct(at, "{") || isSemicolon(at);
-    if (!noResults) result("none");
-    let body: { readonly open: number; readonly close: number } | null = null;
-    if (isPunct(at, "{")) {
-      const open = tokenAt(at)?.start ?? text.length;
-      skipBalanced();
-      body = { open, close: tokenAt(at - 1)?.start ?? text.length };
-    }
-    skipToItemEnd();
-    itemEnd();
-    if (isExported(name) && (!method || isExported(base))) show(doc);
-    if (method || name === null) return;
-    const example = EXAMPLE.test(name) && noParameters && noResults && body !== null;
-    if (doc !== null) documents.set(doc, { kind: "func", name, example });
-    if (!example || body === null) return;
-    const output = lastGroupWithin(body.open, body.close);
-    if (output !== null && EXAMPLE_OUTPUT.test(groupText(output))) outputs.add(output);
+    skipItem();
+    if (!method && name !== null && doc !== null) documents.set(doc, { kind: "func", name });
   }
 
   if (wordAt(at) === PACKAGE) {
     packageStart = tokenAt(at)?.start ?? null;
-    show(leadAt(at));
-    at++;
-    packageName = nameAt(at);
-    skipToItemEnd();
-    itemEnd();
+    skipItem();
     while (at < code.length) {
       const word = wordAt(at);
-      if (word === "import" || word === "var" || word === "const" || word === "type") genDecl(word);
+      if (word === "import" || word === "var") genDecl(word);
       else if (word === "func") funcDecl();
       else if (isOpener(at)) skipBalanced();
       else at++;
@@ -742,23 +419,19 @@ function targetSpans(text: string, tokens: readonly Token[]): Lexed<GoSpan, Fact
     if (token.kind !== "comment") return [];
     const group = groupOf.get(index);
     invariant(group !== undefined, "commentGroups puts every comment in a group");
-    const bodyEnd = token.style === "block" ? token.end - CLOSER : token.end;
-    const directive = token.style === "line" && GO_DIRECTIVE.test(text.slice(token.start + OPENER, bodyEnd));
     return [
       {
         start: token.start,
         end: token.end,
         bodyStart: token.start + OPENER,
-        bodyEnd,
+        bodyEnd: token.style === "block" ? token.end - CLOSER : token.end,
         style: token.style,
-        shown: shown.has(group) && !directive,
         beforePackage: packageStart !== null && token.start < packageStart,
         documents: documents.get(group) ?? NOT_DOCUMENTING,
-        exampleOutput: outputs.has(group),
       },
     ];
   });
-  return { kind: "lexed", spans, facts: { packageName, importsC } };
+  return { kind: "lexed", spans, facts: { importsC } };
 }
 
 function commentSpans(text: string): Lexed<GoSpan, Facts> {
@@ -767,11 +440,7 @@ function commentSpans(text: string): Lexed<GoSpan, Facts> {
   return targetSpans(text, tokenized.tokens);
 }
 
-function placementOf(path: string): Placement {
-  return { test: basename(path).endsWith(TEST_SUFFIX), testdata: path.split("/").includes(TESTDATA) };
-}
-
-type GoRead = CommentRead<GoSpan, Placement, Facts>;
+type GoRead = CommentRead<GoSpan, null, Facts>;
 
 function isLine({ span }: GoRead): boolean {
   return span.style === "line";
@@ -781,41 +450,28 @@ function atLineStart(read: GoRead): boolean {
   return isLine(read) && read.column === 0;
 }
 
-function isLibrary({ file }: GoRead): boolean {
-  const { packageName } = file.facts;
-  return !file.context.test && packageName !== null && packageName !== LIBRARY_EXCLUDED_PACKAGE;
-}
-
-function toolchainPlaced(read: GoRead): boolean {
-  if (!atLineStart(read)) return false;
-  if (read.directive.startsWith("go:build")) return read.span.beforePackage;
-  if (read.directive.startsWith("go:embed")) return read.span.documents.kind === "var";
-  return true;
-}
-
-function isNolint(read: GoRead): boolean {
-  return isLine(read) && ANY_NOLINT.test(read.body);
-}
-
-function startsCComment(line: string): boolean {
-  return line.trimStart().startsWith(C_LINE_COMMENT);
+function holdsNoCComment(body: string): boolean {
+  return !body.split("\n").some((line) => C_COMMENT.test(line.replace(C_LITERAL, "")));
 }
 
 const KEPT: readonly KeptForm<GoRead>[] = [
-  {
-    shown:
-      "in library code, a doc or trailing comment `go doc` shows: on the package, or on an exported name, its fields and its methods",
-    keeps: (read) => read.span.shown && isLibrary(read) && !isNolint(read),
-  },
   directive(
-    `\`//go:\` directives at column 1 (${TOOLCHAIN_NAMES.map((name) => `\`${name}\``).join(", ")}), with \`//go:build\` only before \`package\` and \`//go:embed\` only above a \`var\``,
-    { pattern: TOOLCHAIN, reason: "allowed", where: toolchainPlaced },
+    `${pragmaNames(HEADER_PRAGMAS.map(({ name }) => name))} with their argument, before \`package\``,
+    {
+      pattern: pragmaPattern(HEADER_PRAGMAS),
+      reason: "alone",
+      where: (read) => atLineStart(read) && read.span.beforePackage,
+    },
   ),
-  directive("`// +build` before `package`", {
-    pattern: PLUS_BUILD,
-    reason: "allowed",
-    where: (read) => isLine(read) && read.span.beforePackage,
+  directive("`//go:embed` with its patterns, above a `var`", {
+    pattern: EMBED,
+    reason: "alone",
+    where: (read) => isLine(read) && read.span.documents.kind === "var",
   }),
+  directive(
+    `${pragmaNames(ARGUMENT_PRAGMAS.map(({ name }) => name))} with their arguments, and ${pragmaNames(FLAG_PRAGMAS)} alone, at column 1`,
+    { pattern: pragmaPattern(ARGUMENT_PRAGMAS, FLAG_PRAGMAS), reason: "alone", where: atLineStart },
+  ),
   directive("`//line file:N` at column 1, and `/*line file:N*/`", {
     pattern: LINE_DIRECTIVE,
     reason: "alone",
@@ -831,37 +487,13 @@ const KEPT: readonly KeptForm<GoRead>[] = [
       text.slice(EXPORT_PREFIX.length).trim() === span.documents.name,
   },
   {
-    shown: 'the cgo preamble above `import "C"`, but no line of it that starts a C `//` comment',
-    keeps: ({ span, body }) => span.documents.kind === "import-c" && !body.split("\n").some(startsCComment),
-  },
-  directive("`//nolint:` naming linters, never `all`", { pattern: NOLINT, reason: "allowed", where: isLine }),
-  directive("`//lint:ignore` and `//lint:file-ignore` naming checks, with a reason", {
-    pattern: STATICCHECK_IGNORE,
-    reason: "alone",
-    where: isLine,
-  }),
-  directive("`// Code generated … DO NOT EDIT.` before `package`", {
-    pattern: GENERATED,
-    reason: "alone",
-    where: (read) => isLine(read) && read.span.beforePackage,
-  }),
-  {
-    shown:
-      "in a `_test.go` file outside packages `main` and `main_test`, an `Example` func's doc and its closing `// Output:` comment",
-    keeps: ({ span, file }) =>
-      file.context.test &&
-      file.facts.packageName !== null &&
-      !MAIN_PACKAGES.has(file.facts.packageName) &&
-      ((span.documents.kind === "func" && span.documents.example) || span.exampleOutput),
-  },
-  {
-    shown: "`// want` in a file under `testdata`",
-    keeps: ({ body, file }) => file.context.testdata && WANT.test(body),
+    shown: 'the cgo preamble above `import "C"`, holding no C comment',
+    keeps: ({ span, body }) => span.documents.kind === "import-c" && holdsNoCComment(body),
   },
 ];
 
 export const { comments, kept } = adapter({
-  contextOf: (path) => placementOf(path),
+  contextOf: () => null,
   lex: commentSpans,
   directiveLead: NO_LEAD,
   kept: KEPT,
