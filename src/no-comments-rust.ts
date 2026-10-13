@@ -202,7 +202,7 @@ function tokensOf(text: string): Tokenized {
   return { kind: "tokenized", tokens };
 }
 
-function attributeSpans(text: string, tokens: readonly Token[]): Span[] {
+function spansOf(text: string, tokens: readonly Token[]): Span[] {
   const spans: Span[] = [];
   let carriesDocText = false;
   let index = 0;
@@ -289,7 +289,7 @@ function attributeSpans(text: string, tokens: readonly Token[]): Span[] {
 function commentSpans(text: string): Lexed<Span, null> {
   const tokenized = tokensOf(text);
   if (tokenized.kind === "stopped") return tokenized;
-  return { kind: "lexed", spans: attributeSpans(text, tokenized.tokens), facts: null };
+  return { kind: "lexed", spans: spansOf(text, tokenized.tokens), facts: null };
 }
 
 export const { comments, kept } = adapter({

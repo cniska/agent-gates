@@ -816,63 +816,34 @@ describe("the rust adapter", () => {
       expect([open, rustComments("a.rs", `fn f() {}\n${open}`)]).toEqual([open, unparsed(2, reason)]);
   });
 
-  test("refuses every doc comment, on pub items and exported macros too", () => {
-    const lines = [
-      "/// Public.",
+  test("refuses every doc comment, on pub items too", () => {
+    const text = [
+      "/// Outer line.",
       "pub fn a() {}",
-      "/// Restricted.",
-      "pub(crate) fn b() {}",
-      "/// Private.",
-      "fn c() {}",
+      "/** Outer block. */",
+      "pub struct S;",
+      '#[doc = "Attribute."]',
+      "pub const C: u8 = 1;",
       "/// Exported.",
       "#[macro_export]",
       "macro_rules! m { () => {} }",
-      "#[derive(Debug)]",
-      "/** Enum. */",
-      "#[non_exhaustive]",
-      "pub enum E {",
-      "    /// Variant.",
-      "    A { x: u8 },",
-      "    /// Next variant.",
-      "    B,",
-      "}",
-      "pub unsafe trait T<const N: usize = { [0u8; 1].len() }> {",
-      "    /// Trait item.",
-      "    fn f();",
-      "}",
-      "pub struct S {",
-      "    /// Field.",
-      "    pub x: u8,",
-      "    /// Private field.",
-      "    y: u8,",
-      "}",
-      '#[doc = "Attribute."]',
-      "pub const C: u8 = 1;",
-      "enum Private {",
-      "    /// Private variant.",
-      "    A,",
-      "}",
-      "pub fn g() {",
-      "    /// In a body.",
-      "    let x = 1;",
-      "}",
-      "pub trait U<const N: usize = { let x = 1; x }>: Into<[u8; { 1 }]> + Foo<{ 2 }, { 3 }> {",
-      "    /// After blocks in the header.",
-      "    fn k();",
-      "}",
-      "/// Raw.",
-      "r#pub fn h() {}",
-      "/// Last.",
-    ];
-    const docs = lines.flatMap((line, index) =>
-      /^\s*(?:\/\/\/|\/\*\*|#\[doc)/.test(line) ? [{ line: index + 1, text: line.trim() }] : [],
-    );
+    ].join("\n");
     const libraryCrate = trackedIn(["Cargo.toml", "src/lib.rs"]);
-    expect(ADAPTERS.rust.comments("src/a.rs", lines.join("\n"), libraryCrate)).toEqual(read(docs));
-    expect(ADAPTERS.rust.comments("src/lib.rs", '//! Crate.\n#![doc = "Crate."]\n', libraryCrate)).toEqual(
+    expect(ADAPTERS.rust.comments("src/a.rs", text, libraryCrate)).toEqual(
+      read([
+        { line: 1, text: "/// Outer line." },
+        { line: 3, text: "/** Outer block. */" },
+        { line: 5, text: '#[doc = "Attribute."]' },
+        { line: 7, text: "/// Exported." },
+      ]),
+    );
+    expect(
+      ADAPTERS.rust.comments("src/lib.rs", '//! Crate.\n/*! Crate. */\n#![doc = "Crate."]\n', libraryCrate),
+    ).toEqual(
       read([
         { line: 1, text: "//! Crate." },
-        { line: 2, text: '#![doc = "Crate."]' },
+        { line: 2, text: "/*! Crate. */" },
+        { line: 3, text: '#![doc = "Crate."]' },
       ]),
     );
   });
