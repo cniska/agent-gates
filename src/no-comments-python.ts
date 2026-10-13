@@ -46,13 +46,16 @@ const COMPOUND_KEYWORDS = new Set([
   "finally",
   "for",
   "if",
-  "match",
   "try",
   "while",
   "with",
 ]);
 
 const LAMBDA = "lambda";
+
+const SOFT_COMPOUND = "case";
+
+const NAME_USES = new Set([":", ".", "="]);
 
 const BLANK_LINE = /^[ \t\f]*(?:[#\r\n]|$)/;
 
@@ -93,9 +96,11 @@ function tokensOf(text: string): Tokenized {
   let statementStart = true;
   let compound = false;
   let lambdas = 0;
+  let softKeyword = false;
 
   function push(kind: Code["kind"], start: number, end: number): void {
     code.push({ kind, start, end });
+    softKeyword = false;
     const boundary = STATEMENT_BOUNDARIES.has(kind);
     if (boundary) {
       compound = false;
@@ -234,14 +239,18 @@ function tokensOf(text: string): Tokenized {
       continue;
     }
     if (IDENTIFIER_START.test(char)) {
-      const prefix = word().toLowerCase();
+      const name = word();
+      const prefix = name.toLowerCase();
       if (STRING_PREFIXES.has(prefix) && (text[at] === "'" || text[at] === '"')) {
         const stopped = string(start, prefix);
         if (stopped !== null) return stopped;
       } else {
-        if (brackets.length === 0 && statementStart && COMPOUND_KEYWORDS.has(prefix)) compound = true;
-        if (brackets.length === 0 && compound && prefix === LAMBDA) lambdas++;
+        const topLevel = brackets.length === 0;
+        const opens = topLevel && statementStart && COMPOUND_KEYWORDS.has(name);
+        if (topLevel && compound && name === LAMBDA) lambdas++;
         push("other", start, at);
+        if (opens) compound = true;
+        softKeyword = opens && name === SOFT_COMPOUND;
       }
       continue;
     }
@@ -252,6 +261,7 @@ function tokensOf(text: string): Tokenized {
     }
     at += char.length;
     const topLevel = brackets.length === 0;
+    if (softKeyword && NAME_USES.has(char)) compound = false;
     if (BRACKET_NAMES.has(char)) {
       brackets.push({ at: start, open: char });
       push("open", start, at);

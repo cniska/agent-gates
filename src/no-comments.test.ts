@@ -1137,6 +1137,12 @@ describe("the python adapter", () => {
       "y: 'T'",
       "g = lambda: 's'",
       "if n := 1: 'after a walrus'",
+      "case: 'T'",
+      "match.x: 'T'",
+      "match x:",
+      "    case 1: 'after a case pattern'",
+      "    case .5: 'after a float pattern'",
+      "Class: 'T'",
     ];
     expect(pythonComments("a.py", lines.join("\n"))).toEqual(
       read([
@@ -1146,6 +1152,17 @@ describe("the python adapter", () => {
         { line: 5, text: "'after a lambda in brackets'" },
         { line: 6, text: "'after a top-level lambda'" },
         { line: 10, text: "'after a walrus'" },
+        { line: 14, text: "'after a case pattern'" },
+        { line: 15, text: "'after a float pattern'" },
+      ]),
+    );
+  });
+
+  test("reads `case` followed by a bracket as a case pattern, since only the enclosing match block tells them apart", () => {
+    expect(pythonComments("a.py", "case[0]: 'T'\ncase (a): 'U'\n")).toEqual(
+      read([
+        { line: 1, text: "'T'" },
+        { line: 2, text: "'U'" },
       ]),
     );
   });
