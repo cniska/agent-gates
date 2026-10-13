@@ -119,13 +119,13 @@ const SHARED_REFUSED: readonly Lookalike[] = [
 ];
 
 function refusedByAdapter({ language, path, text }: Lookalike): number {
-  const reading = ADAPTERS[language].comments(path, text, () => false);
+  const reading = ADAPTERS[language].comments(path, text);
   expect([text, reading.kind]).toEqual([text, "read"]);
   return reading.kind === "read" ? reading.comments.length : -1;
 }
 
 function refusedByScan({ path, text }: Lookalike): number {
-  const file = { path, text, tracked: () => false };
+  const file = { path, text };
   const found = findings({ heads: [{ file, base: null }], bases: [] }, (language) => ADAPTERS[language]);
   return found.reduce((sum, finding) => sum + (finding.kind === "comments" ? finding.comments.length : 1), 0);
 }

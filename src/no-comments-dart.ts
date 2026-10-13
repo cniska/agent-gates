@@ -1,4 +1,12 @@
-import { adapter, type CommentRead, type KeptForm, type Lexed, type Span } from "./no-comments-adapter";
+import {
+  adapter,
+  type CommentRead,
+  directive,
+  type KeptForm,
+  type LeadingSpan,
+  type Lexed,
+  type Span,
+} from "./no-comments-adapter";
 import { bracketsOf } from "./no-comments-brackets";
 import { SHEBANG_PREFIX } from "./no-comments-route";
 import { lineEnd, nestedBlockEnd, type Stopped, unterminated } from "./no-comments-spans";
@@ -7,15 +15,11 @@ const OPENER = 2;
 
 const IDENTIFIER_CHAR = /[A-Za-z0-9_$]/;
 
-const LANGUAGE_VERSION = /^\s*@dart\s*=\s*\d+\.\d+\s*$/;
+const LANGUAGE_VERSION = /\s*@dart\s*=\s*\d+\.\d+/;
 
 const WHITESPACE = /\s/;
 
-const NO_DIRECTIVES = /^/;
-
-type DartSpan = Span & { readonly leading: boolean };
-
-function commentSpans(text: string): Lexed<DartSpan, null> {
+function commentSpans(text: string): Lexed<LeadingSpan, null> {
   const spans: Span[] = [];
   let at = text.startsWith(SHEBANG_PREFIX) ? lineEnd(text, 0) : 0;
   let codeStart = text.length;
@@ -87,21 +91,21 @@ function commentSpans(text: string): Lexed<DartSpan, null> {
   if (stopped !== null) return stopped;
   return {
     kind: "lexed",
-    spans: spans.map((span) => ({ ...span, leading: span.start < codeStart })),
+    spans: spans.map((span) => ({ ...span, leading: span.end <= codeStart })),
     facts: null,
   };
 }
 
-const KEPT: readonly KeptForm<CommentRead<DartSpan, null, null>>[] = [
-  {
-    shown: "`// @dart = x.y` alone, before any code",
-    keeps: ({ span, body }) => span.style === "line" && span.leading && LANGUAGE_VERSION.test(body),
-  },
+type Read = CommentRead<LeadingSpan, null>;
+
+const KEPT: readonly KeptForm<Read>[] = [
+  directive("`// @dart = x.y` alone, before any code", {
+    pattern: LANGUAGE_VERSION,
+    where: ({ span }) => span.style === "line" && span.leading,
+  }),
 ];
 
 export const { comments, kept } = adapter({
-  contextOf: () => null,
   lex: commentSpans,
-  directiveLead: NO_DIRECTIVES,
   kept: KEPT,
 });

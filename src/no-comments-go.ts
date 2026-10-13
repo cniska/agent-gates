@@ -73,8 +73,6 @@ const EXPORT_PREFIX = "//export ";
 
 const PACKAGE = "package";
 
-const NO_LEAD = /^/;
-
 const ARGUMENT = "[ \\t]+\\S+";
 
 const FLAG_PRAGMAS = [
@@ -440,7 +438,7 @@ function commentSpans(text: string): Lexed<GoSpan, Facts> {
   return targetSpans(text, tokenized.tokens);
 }
 
-type GoRead = CommentRead<GoSpan, null, Facts>;
+type GoRead = CommentRead<GoSpan, Facts>;
 
 function isLine({ span }: GoRead): boolean {
   return span.style === "line";
@@ -459,22 +457,19 @@ const KEPT: readonly KeptForm<GoRead>[] = [
     `${pragmaNames(HEADER_PRAGMAS.map(({ name }) => name))} with their argument, before \`package\``,
     {
       pattern: pragmaPattern(HEADER_PRAGMAS),
-      reason: "alone",
       where: (read) => atLineStart(read) && read.span.beforePackage,
     },
   ),
   directive("`//go:embed` with its patterns, above a `var`", {
     pattern: EMBED,
-    reason: "alone",
     where: (read) => isLine(read) && read.span.documents.kind === "var",
   }),
   directive(
     `${pragmaNames(ARGUMENT_PRAGMAS.map(({ name }) => name))} with their arguments, and ${pragmaNames(FLAG_PRAGMAS)} alone, at column 1`,
-    { pattern: pragmaPattern(ARGUMENT_PRAGMAS, FLAG_PRAGMAS), reason: "alone", where: atLineStart },
+    { pattern: pragmaPattern(ARGUMENT_PRAGMAS, FLAG_PRAGMAS), where: atLineStart },
   ),
   directive("`//line file:N` at column 1, and `/*line file:N*/`", {
     pattern: LINE_DIRECTIVE,
-    reason: "alone",
     where: (read) => atLineStart(read) || read.span.style === "block",
   }),
   {
@@ -493,8 +488,6 @@ const KEPT: readonly KeptForm<GoRead>[] = [
 ];
 
 export const { comments, kept } = adapter({
-  contextOf: () => null,
   lex: commentSpans,
-  directiveLead: NO_LEAD,
   kept: KEPT,
 });

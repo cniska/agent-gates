@@ -1,4 +1,11 @@
-import { adapter, type CommentRead, type KeptForm, type Lexed, type Span } from "./no-comments-adapter";
+import {
+  adapter,
+  type CommentRead,
+  directive,
+  type KeptForm,
+  type Lexed,
+  type Span,
+} from "./no-comments-adapter";
 import { bracketsOf } from "./no-comments-brackets";
 import { lineEnd, nestedBlockEnd, type Stopped, unexpected, unterminated } from "./no-comments-spans";
 
@@ -16,9 +23,7 @@ const OPENER = 2;
 
 const LINE_OPENER = "--";
 
-const DRIZZLE_STATEMENT_BREAKPOINT = "> statement-breakpoint";
-
-const LEADING_BLANKS = /^\s*/;
+const DRIZZLE_STATEMENT_BREAKPOINT = /> statement-breakpoint/;
 
 function commentSpans(text: string): Lexed<Span, null> {
   const spans: Span[] = [];
@@ -89,16 +94,14 @@ function commentSpans(text: string): Lexed<Span, null> {
   return code(0, text.length) ?? { kind: "lexed", spans, facts: null };
 }
 
-const KEPT: readonly KeptForm<CommentRead<Span, null, null>>[] = [
-  {
-    shown: `drizzle's \`${LINE_OPENER}${DRIZZLE_STATEMENT_BREAKPOINT}\``,
-    keeps: ({ opener, body }) => opener === LINE_OPENER && body.trimEnd() === DRIZZLE_STATEMENT_BREAKPOINT,
-  },
+const KEPT: readonly KeptForm<CommentRead<Span, null>>[] = [
+  directive("drizzle's `--> statement-breakpoint`", {
+    pattern: DRIZZLE_STATEMENT_BREAKPOINT,
+    where: ({ opener }) => opener === LINE_OPENER,
+  }),
 ];
 
 export const { comments, kept } = adapter({
-  contextOf: () => null,
   lex: commentSpans,
-  directiveLead: LEADING_BLANKS,
   kept: KEPT,
 });

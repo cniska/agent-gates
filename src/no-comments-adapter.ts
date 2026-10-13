@@ -7,9 +7,7 @@ export type Reading =
   | { readonly kind: "read"; readonly comments: readonly Comment[] }
   | { readonly kind: "unparsed"; readonly line: number; readonly reason: string };
 
-export type Tracked = (path: string) => boolean;
-
-export type CommentsOf = (path: string, text: string, tracked: Tracked) => Reading;
+export type CommentsOf = (path: string, text: string) => Reading;
 
 export type Adapter = { readonly comments: CommentsOf; readonly kept: readonly string[] };
 
@@ -23,40 +21,33 @@ export type Span = {
   readonly style: Style;
 };
 
+export type LeadingSpan = Span & { readonly leading: boolean };
+
 export type Lexed<S extends Span, F> =
   | { readonly kind: "lexed"; readonly spans: readonly S[]; readonly facts: F }
   | Stopped;
 
-export type CommentRead<S extends Span = Span, C = unknown, F = unknown> = {
+export type CommentRead<S extends Span = Span, F = unknown> = {
   readonly span: S;
   readonly text: string;
   readonly opener: string;
   readonly body: string;
-  readonly directive: string;
   readonly column: number;
   readonly ownLine: boolean;
   readonly multiline: boolean;
-  readonly file: { readonly context: C; readonly facts: F };
+  readonly file: { readonly facts: F };
 };
 
 export type KeptForm<R> = { readonly shown: string; readonly keeps: (read: R) => boolean };
 
-type AdapterSpec<S extends Span, C, F> = {
-  readonly contextOf: (path: string, text: string, tracked: Tracked) => C;
-  readonly lex: (text: string, context: C) => Lexed<S, F>;
-  readonly directiveLead: RegExp;
-  readonly kept: readonly KeptForm<CommentRead<S, C, F>>[];
+type AdapterSpec<S extends Span, F> = {
+  readonly lex: (text: string, path: string) => Lexed<S, F>;
+  readonly kept: readonly KeptForm<CommentRead<S, F>>[];
 };
 
-type Directive<R> = {
-  readonly pattern: RegExp;
-  readonly reason: "allowed" | "alone";
-  readonly where?: (read: R) => boolean;
-};
+type Directive<R> = { readonly pattern: RegExp; readonly where?: (read: R) => boolean };
 
 const BLANK = /^[ \t]*$/;
-
-const WORD_BOUNDARY = "(?:(?<![\\w-])|(?![\\w-]))";
 
 const LICENSE_ID = "[\\w.+\\-:()]+";
 
@@ -68,15 +59,12 @@ const MARKER_OPENERS = ["#", "//", "--"];
 
 export function directive<R extends CommentRead>(
   shown: string,
-  { pattern, reason, where }: Directive<R>,
+  { pattern, where }: Directive<R>,
 ): KeptForm<R> {
-  const anchored = new RegExp(
-    reason === "alone" ? `^(?:${pattern.source})$` : `^(?:${pattern.source})${WORD_BOUNDARY}`,
-    pattern.flags,
-  );
+  const anchored = new RegExp(`^(?:${pattern.source})$`, pattern.flags);
   return {
     shown,
-    keeps: (read) => !read.multiline && (where?.(read) ?? true) && anchored.test(read.directive),
+    keeps: (read) => !read.multiline && (where?.(read) ?? true) && anchored.test(read.body.trimEnd()),
   };
 }
 
@@ -102,12 +90,7 @@ function lineStart(text: string, offset: number): number {
   return Math.max(text.lastIndexOf("\n", offset - 1) + 1, textStart(text));
 }
 
-function readOf<S extends Span, C, F>(
-  text: string,
-  span: S,
-  directiveLead: RegExp,
-  file: { readonly context: C; readonly facts: F },
-): CommentRead<S, C, F> {
+function readOf<S extends Span, F>(text: string, span: S, file: { readonly facts: F }): CommentRead<S, F> {
   const from = lineStart(text, span.start);
   const body = text.slice(span.bodyStart, span.bodyEnd);
   const raw = text.slice(span.start, span.end);
@@ -116,7 +99,6 @@ function readOf<S extends Span, C, F>(
     text: raw,
     opener: text.slice(span.start, span.bodyStart),
     body,
-    directive: body.replace(directiveLead, "").trimEnd(),
     column: span.start - from,
     ownLine:
       BLANK.test(text.slice(from, span.start)) && BLANK.test(text.slice(span.end, lineEnd(text, span.end))),
@@ -125,17 +107,16 @@ function readOf<S extends Span, C, F>(
   };
 }
 
-export function adapter<S extends Span, C, F>(spec: AdapterSpec<S, C, F>): Adapter {
-  const forms: readonly KeptForm<CommentRead<S, C, F>>[] = [...spec.kept, ...SHARED_FORMS];
-  const comments: CommentsOf = (path, text, tracked) => {
-    const context = spec.contextOf(path, text, tracked);
-    const lexed = spec.lex(text, context);
+export function adapter<S extends Span, F>(spec: AdapterSpec<S, F>): Adapter {
+  const forms: readonly KeptForm<CommentRead<S, F>>[] = [...spec.kept, ...SHARED_FORMS];
+  const comments: CommentsOf = (path, text) => {
+    const lexed = spec.lex(text, path);
     const lineAt = lineCounter(text);
     if (lexed.kind === "stopped") return { kind: "unparsed", line: lineAt(lexed.at), reason: lexed.reason };
-    const file = { context, facts: lexed.facts };
+    const file = { facts: lexed.facts };
     const refused: Comment[] = [];
     for (const span of lexed.spans) {
-      const read = readOf(text, span, spec.directiveLead, file);
+      const read = readOf(text, span, file);
       if (!forms.some(({ keeps }) => keeps(read)))
         refused.push({ line: lineAt(span.start), text: read.text });
     }

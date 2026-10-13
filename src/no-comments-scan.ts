@@ -1,6 +1,6 @@
 import { invariant, unreachable } from "./assert";
 import { blobsOf, gitOutput, mergeBase, nulFields } from "./git";
-import type { Adapter, Reading, Tracked } from "./no-comments-adapter";
+import type { Adapter, Reading } from "./no-comments-adapter";
 import { type Language, languageOf } from "./no-comments-languages";
 import { outsideTheCode } from "./no-comments-skips";
 import { firstLine } from "./no-comments-spans";
@@ -18,19 +18,11 @@ type Base = { readonly origin: Origin; readonly path: string };
 
 type Change = { readonly head: Side; readonly base: (Base & { readonly blob: string }) | null };
 
-type Sides = {
-  readonly diff: readonly string[];
-  readonly base: readonly string[];
-  readonly head: readonly string[];
-};
-
 type FileText = { readonly path: string; readonly text: string };
 
-type JudgedFile = FileText & { readonly tracked: Tracked };
+type JudgedHead = { readonly file: FileText; readonly base: Base | null };
 
-type JudgedHead = { readonly file: JudgedFile; readonly base: Base | null };
-
-type JudgedChange = { readonly heads: readonly JudgedHead[]; readonly bases: readonly JudgedFile[] };
+type JudgedChange = { readonly heads: readonly JudgedHead[]; readonly bases: readonly FileText[] };
 
 type Pool = ReadonlyMap<string, number>;
 
@@ -51,10 +43,6 @@ export type AdapterOf = (language: Language) => Adapter | null;
 
 type LanguageReading = { readonly language: Language; readonly reading: Reading };
 
-const HEAD = "HEAD";
-
-const INDEX_PATHS = ["ls-files", "--cached", "-z"];
-
 const REGULAR_FILE_MODES = new Set(["100644", "100755"]);
 
 const CHANGES = ["-M", "-C", "--diff-filter=AMTRC", "-z"];
@@ -73,33 +61,17 @@ function emptyTree(root: string): string {
   return gitOutput(root, ["hash-object", "-t", "tree", "--stdin"], "").toString().trim();
 }
 
-function pathsIn(tree: string): readonly string[] {
-  return ["ls-tree", "-r", "--name-only", "-z", tree];
-}
-
-function sidesOf(root: string, judged: Judged): Sides {
+function diffOf(root: string, judged: Judged): readonly string[] {
   switch (judged.kind) {
     case "staged":
-      return { diff: ["diff", "--cached"], base: pathsIn(HEAD), head: INDEX_PATHS };
-    case "pushed": {
-      const base = mergeBase(root, judged.base, judged.head) ?? emptyTree(root);
-      return { diff: ["diff", base, judged.head], base: pathsIn(base), head: pathsIn(judged.head) };
-    }
-    case "all": {
-      const base = emptyTree(root);
-      return { diff: ["diff", "--cached", base], base: pathsIn(base), head: INDEX_PATHS };
-    }
+      return ["diff", "--cached"];
+    case "pushed":
+      return ["diff", mergeBase(root, judged.base, judged.head) ?? emptyTree(root), judged.head];
+    case "all":
+      return ["diff", "--cached", emptyTree(root)];
     default:
       return unreachable(judged);
   }
-}
-
-function trackedIn(root: string, listing: readonly string[]): Tracked {
-  let paths: ReadonlySet<string> | null = null;
-  return (path) => {
-    paths ??= new Set(nulFields(gitOutput(root, listing)));
-    return paths.has(path);
-  };
 }
 
 function changesIn(fields: readonly string[]): Change[] {
@@ -155,7 +127,7 @@ export function filesOf(root: string, sides: readonly Side[]): FileText[] {
 }
 
 export function changesInTheCode(root: string, judged: Judged): Change[] {
-  return codeChangesIn(root, sidesOf(root, judged).diff);
+  return codeChangesIn(root, diffOf(root, judged));
 }
 
 function codeChangesIn(root: string, diff: readonly string[]): Change[] {
@@ -171,28 +143,25 @@ function codeChangesIn(root: string, diff: readonly string[]): Change[] {
 }
 
 export function judgedChange(root: string, judged: Judged): JudgedChange {
-  const sides = sidesOf(root, judged);
-  const inTheCode = codeChangesIn(root, sides.diff);
+  const inTheCode = codeChangesIn(root, diffOf(root, judged));
   const bases = new Map(inTheCode.flatMap(({ base }) => (base === null ? [] : [[base.path, base]])));
   const files = filesOf(root, [...inTheCode.map(({ head }) => head), ...bases.values()]);
-  const trackedAtHead = trackedIn(root, sides.head);
-  const trackedAtBase = trackedIn(root, sides.base);
   const heads = inTheCode.map(({ base }, index) => {
     const file = files[index];
     invariant(file !== undefined, "each change's head is read");
     return {
-      file: { ...file, tracked: trackedAtHead },
+      file,
       base: base === null ? null : { origin: base.origin, path: base.path },
     };
   });
-  return { heads, bases: files.slice(inTheCode.length).map((file) => ({ ...file, tracked: trackedAtBase })) };
+  return { heads, bases: files.slice(inTheCode.length) };
 }
 
-function readingOf({ path, text, tracked }: JudgedFile, adapterOf: AdapterOf): LanguageReading | null {
+function readingOf({ path, text }: FileText, adapterOf: AdapterOf): LanguageReading | null {
   const language = languageOf(path, firstLine(text));
   const adapter = language === null ? null : adapterOf(language);
   if (language === null || adapter === null) return null;
-  return { language, reading: adapter.comments(path, text, tracked) };
+  return { language, reading: adapter.comments(path, text) };
 }
 
 export function keptIn(adapterOf: AdapterOf, language: Language): readonly string[] {
@@ -212,7 +181,7 @@ function added(pool: Counts, identity: string, count: number): void {
   pool.set(identity, (pool.get(identity) ?? 0) + count);
 }
 
-function poolOf(base: JudgedFile, adapterOf: AdapterOf): Pool {
+function poolOf(base: FileText, adapterOf: AdapterOf): Pool {
   const pool: Counts = new Map();
   const reading = readingOf(base, adapterOf)?.reading;
   if (reading?.kind === "read") for (const { text } of reading.comments) added(pool, identityOf(text), 1);
@@ -247,7 +216,7 @@ function byPath(a: FileFindings, b: FileFindings): number {
   return a.path < b.path ? -1 : 1;
 }
 
-type Unmatched = { readonly file: JudgedFile; readonly read: LanguageReading | null };
+type Unmatched = { readonly file: FileText; readonly read: LanguageReading | null };
 
 type OwnMatch = { readonly unmatched: readonly Unmatched[]; readonly leftovers: Pool };
 

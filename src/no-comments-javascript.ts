@@ -5,29 +5,25 @@ import {
   type CommentRead,
   directive,
   type KeptForm,
+  type LeadingSpan,
   type Lexed,
-  type Span,
 } from "./no-comments-adapter";
 import { interpreterOf, routeOf } from "./no-comments-route";
 import type { Stopped } from "./no-comments-spans";
 
 type Dialect = { readonly syntax: ParserPlugin[] };
 
-type JavaScriptSpan = Span & { readonly leading: boolean };
-
-type Read = CommentRead<JavaScriptSpan, Dialect, null>;
+type Read = CommentRead<LeadingSpan, null>;
 
 const REFERENCE_VALUE = `\\s*=\\s*(?:'[^']*'|"[^"]*")`;
 
 const TRIPLE_SLASH_REFERENCE = new RegExp(
-  `^\\/\\s*<reference\\s+(?:types|lib|path|no-default-lib)${REFERENCE_VALUE}(?:\\s+(?:resolution-mode|preserve)${REFERENCE_VALUE})*\\s*\\/>$`,
+  `\\/\\s*<reference\\s+(?:types|lib|path|no-default-lib)${REFERENCE_VALUE}(?:\\s+(?:resolution-mode|preserve)${REFERENCE_VALUE})*\\s*\\/>`,
 );
 
 const PLAIN_JAVASCRIPT = [".js", ".jsx", ".mjs", ".cjs"];
 
 const PLAIN_INTERPRETERS = ["node"];
-
-const LEADING_STARS = /^[\s*]*/;
 
 const OPENER = 2;
 
@@ -56,7 +52,7 @@ function rejected(error: SyntaxError): Stopped {
   return { kind: "stopped", at, reason: error.message.replace(BABEL_POSITION, "") };
 }
 
-function parsedWith(text: string, plugins: ParserPlugin[]): Lexed<JavaScriptSpan, null> {
+function parsedWith(text: string, plugins: ParserPlugin[]): Lexed<LeadingSpan, null> {
   try {
     const file = parse(text, {
       sourceType: "unambiguous",
@@ -70,7 +66,7 @@ function parsedWith(text: string, plugins: ParserPlugin[]): Lexed<JavaScriptSpan
     const [firstCode] = [...file.program.directives, ...file.program.body];
     const codeStart = firstCode === undefined ? text.length : firstCode.start;
     invariant(typeof codeStart === "number", "Babel locates each statement");
-    const spans = (file.comments ?? []).map(({ type, start, end }): JavaScriptSpan => {
+    const spans = (file.comments ?? []).map(({ type, start, end }): LeadingSpan => {
       invariant(start !== undefined && end !== undefined, "Babel locates each comment");
       const block = type === "CommentBlock";
       return {
@@ -89,7 +85,7 @@ function parsedWith(text: string, plugins: ParserPlugin[]): Lexed<JavaScriptSpan
   }
 }
 
-function lexed(text: string, dialect: Dialect): Lexed<JavaScriptSpan, null> {
+function lexed(text: string, dialect: Dialect): Lexed<LeadingSpan, null> {
   const stageThree = parsedWith(text, [...dialect.syntax, ...STAGE_THREE_DECORATORS]);
   if (stageThree.kind === "lexed") return stageThree;
   const legacy = parsedWith(text, [...dialect.syntax, ...LEGACY_DECORATORS]);
@@ -102,16 +98,14 @@ function leadingLine({ span }: Read): boolean {
 }
 
 const KEPT: readonly KeptForm<Read>[] = [
-  directive("`#__PURE__` or `@__PURE__` alone", { pattern: /[#@]__PURE__/, reason: "alone" }),
-  {
-    shown: "a leading `/// <reference …/>` holding only its attributes",
-    keeps: (read) => leadingLine(read) && TRIPLE_SLASH_REFERENCE.test(read.body.trimEnd()),
-  },
+  directive("`#__PURE__` or `@__PURE__` alone", { pattern: /[\s*]*[#@]__PURE__/ }),
+  directive("a leading `/// <reference …/>` holding only its attributes", {
+    pattern: TRIPLE_SLASH_REFERENCE,
+    where: leadingLine,
+  }),
 ];
 
 export const { comments, kept } = adapter({
-  contextOf: dialectOf,
-  lex: lexed,
-  directiveLead: LEADING_STARS,
+  lex: (text, path) => lexed(text, dialectOf(path, text)),
   kept: KEPT,
 });

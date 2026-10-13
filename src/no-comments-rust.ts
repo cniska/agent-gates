@@ -26,8 +26,6 @@ const OPENER = 2;
 
 const BLOCK_CLOSER = 2;
 
-const NO_DIRECTIVES = /^/;
-
 function shebangEnd(text: string): number {
   if (!text.startsWith(SHEBANG_PREFIX)) return 0;
   let at = SHEBANG_PREFIX.length;
@@ -293,8 +291,6 @@ function commentSpans(text: string): Lexed<Span, null> {
 }
 
 export const { comments, kept } = adapter({
-  contextOf: () => null,
   lex: commentSpans,
-  directiveLead: NO_DIRECTIVES,
   kept: [],
 });

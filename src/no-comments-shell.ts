@@ -5,8 +5,6 @@ const SHEBANG_BODY = "!";
 
 const OPENER = 1;
 
-const NO_DIRECTIVES = /^/;
-
 const BLANKS = new Set([" ", "\t"]);
 
 const WORD_ENDS = new Set([" ", "\t", "\n", ";", "&", "|", "(", ")", "<", ">"]);
@@ -407,7 +405,7 @@ function commentSpans(text: string): Lexed<Span, null> {
   return code(false) ?? { kind: "lexed", spans, facts: null };
 }
 
-const KEPT: readonly KeptForm<CommentRead<Span, null, null>>[] = [
+const KEPT: readonly KeptForm<CommentRead<Span, null>>[] = [
   {
     shown: "the first-line shebang",
     keeps: ({ span, body }) => span.start === 0 && body.startsWith(SHEBANG_BODY),
@@ -415,8 +413,6 @@ const KEPT: readonly KeptForm<CommentRead<Span, null, null>>[] = [
 ];
 
 export const { comments, kept } = adapter({
-  contextOf: () => null,
   lex: commentSpans,
-  directiveLead: NO_DIRECTIVES,
   kept: KEPT,
 });

@@ -6,7 +6,7 @@ import { gatesDoctor } from "./doctor";
 import { bundled } from "./gate-bundles";
 import { installGates, SOURCE_DIR } from "./gates";
 import { ADAPTER_FILES, SCANNER_FILE } from "./gates-contract";
-import { type Comment, type CommentsOf, type Reading, SHARED_SHOWN } from "./no-comments-adapter";
+import { type Comment, type Reading, SHARED_SHOWN } from "./no-comments-adapter";
 import { ADAPTERS } from "./no-comments-adapters.test-support";
 import { LANGUAGE_NAMES, LANGUAGES, type Language, languageOf } from "./no-comments-languages";
 import {
@@ -21,26 +21,17 @@ import {
   writeFiles,
 } from "./repo.test-support";
 
-function trackedIn(paths: readonly string[]): (path: string) => boolean {
-  const tracked = new Set(paths);
-  return (path) => tracked.has(path);
-}
+const comments = ADAPTERS.javascript.comments;
 
-function untracked(of: CommentsOf): (path: string, text: string) => Reading {
-  return (path, text) => of(path, text, trackedIn([]));
-}
+const dartComments = ADAPTERS.dart.comments;
 
-const comments = untracked(ADAPTERS.javascript.comments);
+const sqlComments = ADAPTERS.sql.comments;
 
-const dartComments = untracked(ADAPTERS.dart.comments);
+const shellComments = ADAPTERS.shell.comments;
 
-const sqlComments = untracked(ADAPTERS.sql.comments);
+const rustComments = ADAPTERS.rust.comments;
 
-const shellComments = untracked(ADAPTERS.shell.comments);
-
-const rustComments = untracked(ADAPTERS.rust.comments);
-
-const goComments = untracked(ADAPTERS.go.comments);
+const goComments = ADAPTERS.go.comments;
 
 function read(comments: readonly Comment[]): Reading {
   return { kind: "read", comments };
@@ -828,8 +819,7 @@ describe("the rust adapter", () => {
       "#[macro_export]",
       "macro_rules! m { () => {} }",
     ].join("\n");
-    const libraryCrate = trackedIn(["Cargo.toml", "src/lib.rs"]);
-    expect(ADAPTERS.rust.comments("src/a.rs", text, libraryCrate)).toEqual(
+    expect(rustComments("src/a.rs", text)).toEqual(
       read([
         { line: 1, text: "/// Outer line." },
         { line: 3, text: "/** Outer block. */" },
@@ -837,9 +827,7 @@ describe("the rust adapter", () => {
         { line: 7, text: "/// Exported." },
       ]),
     );
-    expect(
-      ADAPTERS.rust.comments("src/lib.rs", '//! Crate.\n/*! Crate. */\n#![doc = "Crate."]\n', libraryCrate),
-    ).toEqual(
+    expect(rustComments("src/lib.rs", '//! Crate.\n/*! Crate. */\n#![doc = "Crate."]\n')).toEqual(
       read([
         { line: 1, text: "//! Crate." },
         { line: 2, text: "/*! Crate. */" },

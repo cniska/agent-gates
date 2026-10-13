@@ -104,6 +104,7 @@ export const SCANNER_FILE: GateFile = {
     { version: 22, sha256: "722964462b7354334fe7fa3e0c505afb2424970a934593f3727d0f8d55a276c7" },
     { version: 23, sha256: "037e445e2ca241466bcbd98900bd5dbbd765ecf6d736880c71066d97ec913f7c" },
     { version: 24, sha256: "c4ecbb358448d994394f7a6eadc24d0e3d72588b801cc0615bb1325fc55e90a3" },
+    { version: 25, sha256: "66c4de011c1abb5c22bf3cbbc89f9beaca9e7588ea47c45e2e62d189405f82fd" },
   ],
 };
 
@@ -155,6 +156,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 9, sha256: "7bff8371e1a4854a7e9795b82bd8f747f6644d08c3ee7904604a530af83467ea" },
     { version: 10, sha256: "6cf4f5d0899d9b8cb98749cda81c55fc5af97d6b0ed47ed1bf7cc0a40dea71c7" },
     { version: 11, sha256: "35abc16be9bbec3195f4e4ecaaead440c1f2dc5bfb0e0a14dbbc030ccee3335e" },
+    { version: 12, sha256: "7a2e760147894b13c592647e434450e01b3dc82c14c610c66a6577a2bd8d6aae" },
   ]),
   dart: adapterFile("dart", [
     { version: 1, sha256: "25cc760fcd6ef317da0c52457e79e84926f4b87f81e67630b40dfd666f0feb2a" },
@@ -170,6 +172,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 11, sha256: "3c358c5a449fc59f0f497134eae44f247f79b9e44195b31649eeac3250e5873a" },
     { version: 12, sha256: "6df5549070cb145ceb765334315a0d107fcf124f224410785f1a34f59e83c33a" },
     { version: 13, sha256: "f0187d5816e381edc9181b7f10243dfda243fe2424bb2c41035e45ae303a3c8d" },
+    { version: 14, sha256: "0d6cc04825fbd9045975e67ad36e7b3cf1884a0382bd0d9244deb0c810199c2b" },
   ]),
   sql: adapterFile("sql", [
     { version: 1, sha256: "261cd8dc159c4222234bd5bc2796723b803ecf0cf448a7d417471faea8c3ef13" },
@@ -185,6 +188,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 11, sha256: "49094c80b6328b34b838db26a3b44193fe08a26fcc99a7b218d91d82e8611000" },
     { version: 12, sha256: "32c7669079422f0b024417044d002c3d5cad502ff8211272c54b0be9defeff18" },
     { version: 13, sha256: "8dc6894ee942a61a0e47667554580944c4fbef5b2a370d8ce9c6ece5b8229f62" },
+    { version: 14, sha256: "249edf26452c328c7bd583fb685d7790a388da5c2cc1981a02d7d626ef97c304" },
   ]),
   shell: adapterFile("shell", [
     { version: 1, sha256: "89a9bdde90915a96d5110890ac7dd715a098676cf44976c0bc2301b4012ab1b2" },
@@ -200,6 +204,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 11, sha256: "44df1bb7c417b2cae6be77209ba1e818df257c09d568dd8ed0202088408c8ecd" },
     { version: 12, sha256: "2020535dc6549c536d1e7bd9219c7abd35fef944a9ce61a38a8217ebaf09e8ea" },
     { version: 13, sha256: "9d09cb3ad8cbcd9708518cb46292d959eb6014420830e2b1e194e7a498cccb68" },
+    { version: 14, sha256: "9d3c9e344cbb0a2fa6eedfb22937fb4360e621985d88c127b0800396fdf642b0" },
   ]),
   rust: adapterFile("rust", [
     { version: 1, sha256: "f7d0dd77af2f515cca76525640e20f72984a24e995031360b190b31478634daa" },
@@ -214,6 +219,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 10, sha256: "587f80d13aa723c2e2e24f7cfdea45c608535baaf1c1fafc88988e0a4bc1f109" },
     { version: 11, sha256: "a42e2cc7b173d74cba2e8c6619add1b98f717cdf25b273d415d185440d48b6ad" },
     { version: 12, sha256: "0dd70404c4efe5800d7b1ae0f10b38c5f5727bfbb511a0b9455ddb270881c857" },
+    { version: 13, sha256: "bc2048b6439126a4cabdc24f84433cc87d76e835854f77b64be23bf49ff94065" },
   ]),
   go: adapterFile("go", [
     { version: 1, sha256: "7636aedbafc041c6b38c608ef83f156d51f636b0aaacb7c766721b6f1ccde18e" },
@@ -221,6 +227,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 3, sha256: "22595c7c3387ffd3662f6208d1a7b6c0ad8d2eb61f4a3add157697544960badf" },
     { version: 4, sha256: "a8fd7728338fce537810ce89694fead897bb6e0e2178998b76d932c37a32baa2" },
     { version: 5, sha256: "230db5b3b69b5eae86b6b596fe0356e92f8c944269d403ef91c55852841eade1" },
+    { version: 6, sha256: "b828403db8d89b62217db7baf6ec9071571af20ad0f284145232b02f7dd5e732" },
   ]),
 };
 

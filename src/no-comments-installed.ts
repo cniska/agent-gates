@@ -47,8 +47,8 @@ function adapterAt(path: string, load: NodeJS.Require): Adapter | null {
   invariant(typeof comments === "function", `${path} exports comments()`);
   invariant(isFormList(kept), `${path} exports the comment forms it keeps`);
   return {
-    comments: (file, text, tracked) => {
-      const reading: unknown = Reflect.apply(comments, undefined, [file, text, tracked]);
+    comments: (file, text) => {
+      const reading: unknown = Reflect.apply(comments, undefined, [file, text]);
       invariant(isReading(reading), `${path} returns the comments it read, or where the file stops parsing`);
       return reading;
     },
