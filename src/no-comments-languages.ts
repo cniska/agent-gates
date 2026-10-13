@@ -10,7 +10,9 @@ export type Reading =
   | { readonly kind: "read"; readonly comments: readonly Comment[] }
   | { readonly kind: "unparsed"; readonly line: number; readonly reason: string };
 
-export type CommentsOf = (path: string, text: string) => Reading;
+export type Tracked = (path: string) => boolean;
+
+export type CommentsOf = (path: string, text: string, tracked: Tracked) => Reading;
 
 export type Adapter = { readonly comments: CommentsOf; readonly kept: readonly string[] };
 

@@ -1,5 +1,6 @@
+import { dirname, join, relative } from "node:path/posix";
 import { type KeptForm, shownOf } from "./no-comments-kept";
-import type { CommentsOf } from "./no-comments-languages";
+import type { CommentsOf, Tracked } from "./no-comments-languages";
 import { SHEBANG_PREFIX } from "./no-comments-route";
 import {
   type Lexed,
@@ -32,6 +33,49 @@ const SHEBANG_TRIVIA = new RegExp(`${WHITESPACE}+|//(?![!/])[^\\n]*|////[^\\n]*`
 
 const PLAIN_BLOCK_COMMENT = /\/\*(?!!)(?!\*(?![*/]))/y;
 
+const INNER_DOC = /\/\/!|\/\*!/y;
+
+const OUTER_DOC = /\/\/\/(?!\/)|\/\*\*(?![*/])/y;
+
+const PUBLIC = "pub";
+
+const MACRO_EXPORT = "macro_export";
+
+const ITEMS_WITH_PUBLIC_BODIES = new Set(["enum", "trait"]);
+
+const BLOCK_AFTER = new Set(["<", ",", "=", ";"]);
+
+const NO_HEADER = { item: "none", opensPublicBody: false } as const;
+
+const MANIFEST = "Cargo.toml";
+
+const LIBRARY_ROOT = "src/lib.rs";
+
+const SOURCE_DIR = "src/";
+
+const BINARY_ROOT = "src/main.rs";
+
+const BINARIES_DIR = "src/bin/";
+
+type Doc = "none" | "inner" | "public" | "other";
+
+type DocForm = "none" | "inner" | "outer";
+
+type DocSpan = Span & { readonly doc: Doc };
+
+type FormSpan = Span & { readonly form: DocForm };
+
+type Item = "none" | "public" | "other";
+
+type Header = { readonly item: Item; readonly opensPublicBody: boolean };
+
+type Brace =
+  | { readonly kind: "public-body" }
+  | { readonly kind: "body" }
+  | { readonly kind: "block"; readonly interrupts: Header };
+
+type Placement = "crate-root" | "library" | "elsewhere";
+
 function shebangEnd(text: string): number {
   if (!text.startsWith(SHEBANG_PREFIX)) return 0;
   let at = SHEBANG_PREFIX.length;
@@ -49,9 +93,23 @@ function shebangEnd(text: string): number {
   return text[at] === "[" ? 0 : lineEnd(text, 0);
 }
 
-function commentSpans(text: string): Lexed {
-  const spans: Span[] = [];
+function formAt(text: string, start: number): DocForm {
+  INNER_DOC.lastIndex = start;
+  if (INNER_DOC.test(text)) return "inner";
+  OUTER_DOC.lastIndex = start;
+  return OUTER_DOC.test(text) ? "outer" : "none";
+}
+
+function commentSpans(text: string): Lexed<DocSpan> {
+  const spans: FormSpan[] = [];
+  const awaitingItem: number[] = [];
+  const documentsPublicItem = new Set<number>();
+  const braces: Brace[] = [];
+  let previous = "";
   let carriesDocText = false;
+  let exported = false;
+  let insideAttribute = 0;
+  let header: Header = NO_HEADER;
   let at = shebangEnd(text);
 
   const charAt = (index: number): string => {
@@ -75,18 +133,62 @@ function commentSpans(text: string): Lexed {
     return stopped;
   }
 
+  function found(start: number, end: number, form: DocForm): void {
+    spans.push({ start, end, form });
+    if (form === "outer" && insideAttribute === 0) awaitingItem.push(start);
+  }
+
   function lineComment(): void {
     const start = at;
     at = lineEnd(text, at);
-    spans.push({ start, end: at });
+    found(start, at, formAt(text, start));
   }
 
   function blockComment(): Stopped | null {
     const end = nestedBlockEnd(text, at, text.length);
     if (end === null) return unterminated(at, "comment");
-    spans.push({ start: at, end });
+    found(at, end, formAt(text, at));
     at = end;
     return null;
+  }
+
+  function isWordAt(index: number, expected: string): boolean {
+    return text.startsWith(expected, index) && !isIdentifierContinue(index + expected.length);
+  }
+
+  function startsBarePublic(index: number): boolean {
+    return isWordAt(index, PUBLIC) && text[afterTrivia(index + PUBLIC.length)] !== "(";
+  }
+
+  function sawWord(start: number): void {
+    if (insideAttribute > 0) return;
+    if (header.item === "none")
+      header = { item: startsBarePublic(start) ? "public" : "other", opensPublicBody: false };
+    if (header.item === "public" && ITEMS_WITH_PUBLIC_BODIES.has(text.slice(start, at)))
+      header = { item: "public", opensPublicBody: true };
+  }
+
+  function itemEnded(): void {
+    header = NO_HEADER;
+  }
+
+  function braceOpened(): Brace {
+    const brace: Brace = BLOCK_AFTER.has(previous)
+      ? { kind: "block", interrupts: header }
+      : { kind: header.opensPublicBody ? "public-body" : "body" };
+    itemEnded();
+    return brace;
+  }
+
+  function itemStarts(): void {
+    if (exported || braces.at(-1)?.kind === "public-body" || startsBarePublic(at))
+      for (const start of awaitingItem) documentsPublicItem.add(start);
+    awaitingItem.length = 0;
+    exported = false;
+  }
+
+  function isTrivia(): boolean {
+    return WHITESPACE_CHAR.test(text[at] ?? "") || text.startsWith("//", at) || text.startsWith("/*", at);
   }
 
   function quoted(): Stopped | null {
@@ -154,14 +256,17 @@ function commentSpans(text: string): Lexed {
 
   function identifier(): Stopped | null {
     if (text[at] === "r" && text[at + 1] === "#" && isIdentifierStart(at + 2)) {
+      const start = at;
       at += 2;
       word();
+      sawWord(start);
       return null;
     }
     const prefix = STRING_PREFIXES.find((candidate) => opensLiteral(candidate));
     if (prefix !== undefined) return literal(prefix);
     const start = at;
     word();
+    sawWord(start);
     if (text.slice(start, at) === DOC_TEXT_WORD && isSingleEquals(afterTrivia(at))) carriesDocText = true;
     return null;
   }
@@ -202,16 +307,23 @@ function commentSpans(text: string): Lexed {
     const start = at;
     const firstInside = spans.length;
     const outerCarriesDocText = carriesDocText;
+    const form = text[afterTrivia(at + 1)] === "!" ? "inner" : "outer";
     carriesDocText = false;
     at++;
+    insideAttribute++;
     while (text[at] !== "[") {
       const stopped = token();
       if (stopped !== null) return stopped;
     }
     at++;
+    if (insideAttribute === 1 && isWordAt(afterTrivia(at), MACRO_EXPORT)) exported = true;
     const stopped = code(true);
+    insideAttribute--;
     if (stopped !== null) return stopped;
-    if (carriesDocText) spans.splice(firstInside, Infinity, { start, end: at });
+    if (carriesDocText) {
+      spans.splice(firstInside, Infinity);
+      found(start, at, form);
+    }
     carriesDocText ||= outerCarriesDocText;
     return null;
   }
@@ -232,24 +344,75 @@ function commentSpans(text: string): Lexed {
     while (at < text.length) {
       const char = text[at];
       let stopped: Stopped | null = null;
-      if (char === "#" && opensAttribute()) stopped = attribute();
-      else if (char === "[") {
+      if (char === "#" && opensAttribute()) {
+        stopped = attribute();
+        if (stopped !== null) return stopped;
+        continue;
+      }
+      const atItemLevel = insideAttribute === 0;
+      const significant = atItemLevel && !isTrivia();
+      if (significant) itemStarts();
+      if (char === "[") {
         depth++;
         at++;
       } else if (char === "]") {
         at++;
         if (closesBracket && depth === 0) return null;
         depth--;
+      } else if (atItemLevel && char === "{") {
+        braces.push(braceOpened());
+        at++;
+      } else if (atItemLevel && char === "}") {
+        const closed = braces.pop();
+        header = closed?.kind === "block" ? closed.interrupts : NO_HEADER;
+        at++;
+      } else if (atItemLevel && char === ";" && depth === 0) {
+        itemEnded();
+        at++;
       } else stopped = token();
       if (stopped !== null) return stopped;
+      if (significant) previous = char ?? "";
     }
     return null;
   }
 
-  return code(false) ?? { kind: "lexed", spans };
+  const stopped = code(false);
+  if (stopped !== null) return stopped;
+  const docOf = (form: DocForm, start: number): Doc => {
+    if (form !== "outer") return form;
+    return documentsPublicItem.has(start) ? "public" : "other";
+  };
+  return {
+    kind: "lexed",
+    spans: spans.map(({ start, end, form }) => ({ start, end, doc: docOf(form, start) })),
+  };
 }
 
-const KEPT: readonly KeptForm<Spanned>[] = [];
+function placementOf(path: string, tracked: Tracked): Placement {
+  let crate = dirname(path);
+  while (!tracked(join(crate, MANIFEST))) {
+    if (crate === ".") return "elsewhere";
+    crate = dirname(crate);
+  }
+  if (!tracked(join(crate, LIBRARY_ROOT))) return "elsewhere";
+  const inCrate = relative(crate, path);
+  if (inCrate === LIBRARY_ROOT) return "crate-root";
+  if (!inCrate.startsWith(SOURCE_DIR) || inCrate === BINARY_ROOT || inCrate.startsWith(BINARIES_DIR))
+    return "elsewhere";
+  return "library";
+}
+
+const KEPT: readonly KeptForm<Spanned<DocSpan>>[] = [
+  {
+    shown:
+      "in library code, an outer doc comment (`///`, `/** */`, `#[doc]`) on a `pub` item, a `#[macro_export]` macro, or a variant or item of a `pub` enum or trait",
+    keeps: ({ span, path, tracked }) => span.doc === "public" && placementOf(path, tracked) !== "elsewhere",
+  },
+  {
+    shown: "an inner doc comment (`//!`, `/*! */`, `#![doc]`) in a library's `src/lib.rs`",
+    keeps: ({ span, path, tracked }) => span.doc === "inner" && placementOf(path, tracked) === "crate-root",
+  },
+];
 
 export const comments: CommentsOf = refusedComments(commentSpans, KEPT);
 
