@@ -1,4 +1,5 @@
 import { isMarkerBody } from "./gate-marker";
+import { SHEBANG_PREFIX } from "./no-comments-route";
 import { lineCounter, lineEnd, type Stopped, textStart } from "./no-comments-spans";
 
 export type Comment = { readonly line: number; readonly text: string };
@@ -83,6 +84,11 @@ const SHARED_FORMS: readonly KeptForm<CommentRead>[] = [
       isMarkerBody(body),
   },
 ];
+
+export const SHEBANG: KeptForm<CommentRead> = {
+  shown: "the first-line shebang",
+  keeps: ({ span, text }) => span.start === 0 && text.startsWith(SHEBANG_PREFIX),
+};
 
 export const SHARED_SHOWN: readonly string[] = SHARED_FORMS.map(({ shown }) => shown);
 

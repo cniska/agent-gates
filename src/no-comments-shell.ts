@@ -1,7 +1,5 @@
-import { adapter, type CommentRead, type KeptForm, type Lexed, type Span } from "./no-comments-adapter";
+import { adapter, type Lexed, SHEBANG, type Span } from "./no-comments-adapter";
 import { lineEnd, type Stopped, unterminated } from "./no-comments-spans";
-
-const SHEBANG_BODY = "!";
 
 const OPENER = 1;
 
@@ -405,14 +403,7 @@ function commentSpans(text: string): Lexed<Span, null> {
   return code(false) ?? { kind: "lexed", spans, facts: null };
 }
 
-const KEPT: readonly KeptForm<CommentRead<Span, null>>[] = [
-  {
-    shown: "the first-line shebang",
-    keeps: ({ span, body }) => span.start === 0 && body.startsWith(SHEBANG_BODY),
-  },
-];
-
 export const { comments, kept } = adapter({
   lex: commentSpans,
-  kept: KEPT,
+  kept: [SHEBANG],
 });
