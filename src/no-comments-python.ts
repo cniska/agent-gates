@@ -75,6 +75,8 @@ type Code = {
   readonly end: number;
 };
 
+const STATEMENT_BOUNDARIES: ReadonlySet<Code["kind"]> = new Set(["newline", "semicolon", "header"]);
+
 type Range = { readonly start: number; readonly end: number };
 
 type Tokenized =
@@ -94,7 +96,7 @@ function tokensOf(text: string): Tokenized {
 
   function push(kind: Code["kind"], start: number, end: number): void {
     code.push({ kind, start, end });
-    const boundary = kind === "newline" || kind === "semicolon" || kind === "header";
+    const boundary = STATEMENT_BOUNDARIES.has(kind);
     if (boundary) {
       compound = false;
       lambdas = 0;
@@ -274,8 +276,7 @@ function loneStrings(code: readonly Code[]): Range[] {
   let index = 0;
   while (index < code.length) {
     const previous = code[index - 1]?.kind;
-    const lineStart =
-      index === 0 || previous === "newline" || previous === "semicolon" || previous === "header";
+    const lineStart = index === 0 || (previous !== undefined && STATEMENT_BOUNDARIES.has(previous));
     const first = code[index];
     if (!lineStart || first === undefined) {
       index++;
