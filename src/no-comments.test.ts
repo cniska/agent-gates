@@ -35,7 +35,7 @@ function unparsed(line: number, reason: string): Reading {
 }
 
 const KEPT_IN_JAVASCRIPT =
-  "kept in JavaScript and TypeScript: `@ts-`; `eslint-`; `biome-ignore`; `prettier-ignore`; `#__PURE__`; `@vitest-environment`; `/// <reference`; `/*!`; in plain JavaScript, JSDoc `@type`, `@typedef` and all-`@param` blocks; one `SPDX-License-Identifier:` line; a gate marker on a line of its own";
+  "kept in JavaScript and TypeScript: `@ts-expect-error`; a leading `// @ts-check` in plain JavaScript; `eslint-disable-line` and `eslint-disable-next-line` naming rules; `/* eslint-disable */` and `/* eslint-enable */` naming rules; `biome-ignore`, `-all`, `-start` and `-end` naming only rules or `format`; `prettier-ignore` alone; `#__PURE__` or `@__PURE__` alone; `@vitest-environment <env>` alone; a leading `/// <reference`; in plain JavaScript, JSDoc blocks holding only `@type {…}`, `@typedef {…} Name` and `@param {…} name`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own";
 
 function refusalText(listing: readonly string[], kept: readonly string[] = [KEPT_IN_JAVASCRIPT]): string {
   const count = listing.filter((line) => line.startsWith("  ")).length;
@@ -124,39 +124,109 @@ describe("the javascript adapter", () => {
     );
   });
 
-  test("keeps the comments a tool reads", () => {
+  test("keeps the comments a tool reads, with a reason on the same line", () => {
     const kept = [
+      '/// <reference types="bun" />',
       "// @ts-expect-error",
+      "// @ts-expect-error: the fixture is malformed on purpose",
+      "/* @ts-expect-error */",
       "// eslint-disable-next-line no-console",
-      "// biome-ignore lint: x",
+      "// eslint-disable-line no-console, no-alert -- prints the banner",
+      "/* eslint-disable-next-line no-console */",
+      "/* eslint-disable no-console */",
+      "/* eslint-enable no-console */",
+      "// biome-ignore lint/style/useConst: x",
+      "// biome-ignore lint/correctness/noUnusedVariables(foo): x",
+      "// biome-ignore format: x",
+      "// biome-ignore-all lint/suspicious/noConsole: x",
+      "/* biome-ignore-start lint/suspicious/noConsole: x */",
+      "// biome-ignore-end lint/suspicious/noConsole",
       "// prettier-ignore",
       "/* #__PURE__ */",
       "/* @__PURE__ */",
-      '/// <reference types="bun" />',
-      "/*! license */",
       "/** @vitest-environment jsdom */",
     ];
     expect(comments("a.ts", `#!/usr/bin/env node\n${kept.join("\nf();\n")}\n`)).toEqual(read([]));
   });
 
+  test("refuses a directive that silences everything, configures a tool, or spans lines", () => {
+    const refused = [
+      "// @ts-ignore",
+      "// @ts-nocheck",
+      "// @ts-expect-errors",
+      "// eslint-disable",
+      "/* eslint-disable */",
+      "// eslint-disable-next-line -- reason",
+      "// eslint-disable no-console",
+      "// eslint-enable no-console",
+      "/* eslint-enable */",
+      "/* eslint-env node */",
+      "/* eslint no-console: off */",
+      "/* global window */",
+      "/*! license */",
+      "// biome-ignore",
+      "// biome-ignore lint: x",
+      "// biome-ignore lint/style: x",
+      "// biome-ignore-all lint: x",
+      "// biome-ignore lint/style/useConst lint: x",
+      "// biome-ignore format lint: x",
+      "// prettier-ignore because",
+      "/* #__PURE__ call */",
+      "/** @vitest-environment */",
+      "/**\n * @ts-expect-error\n */",
+      "/* eslint-disable\n   no-console */",
+    ];
+    let line = 1;
+    const listed = refused.map((text) => {
+      const at = line;
+      line += text.split("\n").length + 1;
+      return { line: at, text };
+    });
+    expect(comments("a.ts", `${refused.join("\nf();\n")}\n`)).toEqual(read(listed));
+  });
+
+  test("keeps `@ts-check` and `/// <reference` only in the leading line comments TypeScript reads them from", () => {
+    const leading = '// @ts-check\n/// <reference types="bun" />\n"use strict";\n';
+    expect(comments("a.js", `${leading}f();\n// @ts-check\n/// <reference types="node" />\n`)).toEqual(
+      read([
+        { line: 5, text: "// @ts-check" },
+        { line: 6, text: '/// <reference types="node" />' },
+      ]),
+    );
+    expect(comments("a.js", "/* @ts-check */\nf();\n")).toEqual(read([{ line: 1, text: "/* @ts-check */" }]));
+    expect(comments("a.ts", '// / <reference types="bun" />\nf();\n')).toEqual(
+      read([{ line: 1, text: '// / <reference types="bun" />' }]),
+    );
+    expect(comments("a.ts", "// @ts-check\nf();\n")).toEqual(read([{ line: 1, text: "// @ts-check" }]));
+  });
+
   test("keeps JSDoc types only where plain JavaScript needs them", () => {
     const typed =
-      "/** @type {number} */\nlet a;\n/**\n * @param {string} x\n * @param y\n */\nfunction f(x, y) {}\n";
+      "/** @type {number} */\nlet a;\n/**\n * @param {string} x\n * @param {{ n: number }} [y=1]\n */\nfunction f(x, y) {}\n";
     expect(comments("a.js", typed)).toEqual(read([]));
-    expect(comments("a.mjs", "/**\n * @param x the input\n * Adds one.\n */\nfunction f(x) {}\n")).toEqual(
-      read([{ line: 1, text: "/**\n * @param x the input\n * Adds one.\n */" }]),
-    );
+    expect(comments("a.cjs", "/** @typedef {{ n: number }} Point */\n")).toEqual(read([]));
+    expect(comments("a.jsx", `${typed}const b = <div />;\n`)).toEqual(read([]));
+    for (const described of [
+      "/**\n * @param {number} x the input\n */",
+      "/**\n * @param {number} x\n * Adds one.\n */",
+      "/** @param x */",
+      "/** @type {number} the count */",
+      "/** @typedef {object} Point\n * @property {number} n */",
+    ])
+      expect(comments("a.mjs", `${described}\nfunction f(x) {}\n`)).toEqual(
+        read([{ line: 1, text: described }]),
+      );
     expect(comments("a.ts", typed)).toEqual(
       read([
         { line: 1, text: "/** @type {number} */" },
-        { line: 3, text: "/**\n * @param {string} x\n * @param y\n */" },
+        { line: 3, text: "/**\n * @param {string} x\n * @param {{ n: number }} [y=1]\n */" },
       ]),
     );
     expect(comments("bin/tool", `#!/usr/bin/env node\n${typed}const b = <div />;\n`)).toEqual(read([]));
     expect(comments("bin/tool", `#!/usr/bin/env bun\n${typed}const b: number = 1;\n`)).toEqual(
       read([
         { line: 2, text: "/** @type {number} */" },
-        { line: 4, text: "/**\n * @param {string} x\n * @param y\n */" },
+        { line: 4, text: "/**\n * @param {string} x\n * @param {{ n: number }} [y=1]\n */" },
       ]),
     );
   });
@@ -228,12 +298,30 @@ describe("the dart adapter", () => {
       "// ignore_for_file: avoid_print",
       "// ignore: unused_element",
       "/// ignore: unused_element",
-      "// coverage:ignore-line",
+      "// ignore: unused_element, kept for the plugin API",
       "// @dart=3.0",
       "// @dart = 3.0",
       "void f() {}",
     ].join("\n");
     expect(dartComments("a.dart", text)).toEqual(read([]));
+  });
+
+  test("refuses coverage directives and a language version that is not alone", () => {
+    const text = [
+      "// coverage:ignore-line",
+      "/// @dart = 3.0",
+      "// @dart = 3.0 for the records",
+      "// @dart = 3",
+      "void f() {}",
+    ].join("\n");
+    expect(dartComments("a.dart", text)).toEqual(
+      read([
+        { line: 1, text: "// coverage:ignore-line" },
+        { line: 2, text: "/// @dart = 3.0" },
+        { line: 3, text: "// @dart = 3.0 for the records" },
+        { line: 4, text: "// @dart = 3" },
+      ]),
+    );
   });
 
   test("names the line where a string, comment or interpolation that never closes opens", () => {
@@ -383,9 +471,25 @@ describe("the shell adapter", () => {
     );
   });
 
-  test("keeps the shebang and shellcheck's directives, and only those", () => {
-    const text = "#!/bin/sh\n# shellcheck disable=SC2034\nx=1\n  # shellcheck source=lib.sh\n#!/bin/sh\n";
-    expect(shellComments("a.sh", text)).toEqual(read([{ line: 5, text: "#!/bin/sh" }]));
+  test("keeps the shebang and shellcheck's directives that are not suppressions, and only those", () => {
+    const text = [
+      "#!/bin/sh",
+      "# shellcheck shell=bash",
+      "x=1",
+      "  # shellcheck source=lib.sh source-path=SCRIPTDIR external-sources=true # sourced at runtime",
+      "# shellcheck enable=require-variable-braces",
+      "# shellcheck disable=SC2034",
+      "# shellcheck source=lib.sh disable=SC1090",
+      "#!/bin/sh",
+      "",
+    ].join("\n");
+    expect(shellComments("a.sh", text)).toEqual(
+      read([
+        { line: 6, text: "# shellcheck disable=SC2034" },
+        { line: 7, text: "# shellcheck source=lib.sh disable=SC1090" },
+        { line: 8, text: "#!/bin/sh" },
+      ]),
+    );
     expect(shellComments("a.sh", "# shellchecked by hand\n")).toEqual(
       read([{ line: 1, text: "# shellchecked by hand" }]),
     );
@@ -868,9 +972,9 @@ describe("the pre-commit hook", () => {
           '  1  #[doc = "why"]',
         ],
         [
-          "kept in Dart: `ignore:`; `ignore_for_file:`; `coverage:`; `@dart=`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
+          "kept in Dart: `ignore:`; `ignore_for_file:`; `// @dart = x.y` alone; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
           "kept in SQL: drizzle's `--> statement-breakpoint`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
-          "kept in shell: the first-line shebang; `shellcheck` directives; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
+          "kept in shell: the first-line shebang; `shellcheck` directives of `source=`, `source-path=`, `shell=`, `external-sources=` and `enable=`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
           "kept in Rust: one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
         ],
       ),

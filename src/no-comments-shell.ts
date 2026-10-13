@@ -11,7 +11,8 @@ import {
   unterminated,
 } from "./no-comments-spans";
 
-const SHELLCHECK_DIRECTIVE = /^#\s*shellcheck\s/;
+const SHELLCHECK_DIRECTIVE =
+  /^#\s*shellcheck(?:\s+(?:source|source-path|shell|external-sources|enable)=\S+)+\s*(?:#.*)?$/;
 
 const BLANKS = new Set([" ", "\t"]);
 
@@ -415,7 +416,8 @@ const KEPT: readonly KeptForm<Spanned>[] = [
     keeps: ({ text, span: { start } }) => start === 0 && text.startsWith(SHEBANG_PREFIX),
   },
   {
-    shown: "`shellcheck` directives",
+    shown:
+      "`shellcheck` directives of `source=`, `source-path=`, `shell=`, `external-sources=` and `enable=`",
     keeps: ({ text, span: { start, end } }) => SHELLCHECK_DIRECTIVE.test(text.slice(start, end)),
   },
 ];

@@ -19,6 +19,8 @@ const DOC_SLASH_AND_SPACE = /^\/?\s*/;
 
 const IDENTIFIER_CHAR = /[A-Za-z0-9_$]/;
 
+const LANGUAGE_VERSION = /^\/\/\s*@dart\s*=\s*\d+\.\d+\s*$/;
+
 function commentSpans(text: string): Lexed {
   const spans: Span[] = [];
   let at = text.startsWith(SHEBANG_PREFIX) ? lineEnd(text, 0) : 0;
@@ -105,8 +107,10 @@ function analyzerDirective(shown: string, directive: RegExp): KeptForm<Spanned> 
 const KEPT: readonly KeptForm<Spanned>[] = [
   analyzerDirective("`ignore:`", /^ignore:/),
   analyzerDirective("`ignore_for_file:`", /^ignore_for_file:/),
-  analyzerDirective("`coverage:`", /^coverage:/),
-  analyzerDirective("`@dart=`", /^@dart\s*=/),
+  {
+    shown: "`// @dart = x.y` alone",
+    keeps: ({ text, span: { start, end } }) => LANGUAGE_VERSION.test(text.slice(start, end)),
+  },
 ];
 
 export const comments: CommentsOf = refusedComments(commentSpans, KEPT);

@@ -4,7 +4,7 @@ import { type KeptForm, keptBy, shownOf } from "./no-comments-kept";
 import type { Comment, CommentsOf, Reading } from "./no-comments-languages";
 import { interpreterOf, routeOf } from "./no-comments-route";
 
-type Dialect = { readonly syntax: ParserPlugin[]; readonly typedByJsdoc: boolean };
+type Dialect = { readonly syntax: ParserPlugin[]; readonly plainJavaScript: boolean };
 
 type Unparsed = Extract<Reading, { readonly kind: "unparsed" }>;
 
@@ -15,19 +15,20 @@ type Parsed = {
   readonly value: string;
   readonly line: number;
   readonly source: string;
+  readonly leading: boolean;
 };
 
 const TRIPLE_SLASH_REFERENCE = /^\/\s*<reference\b/;
 
 const PLAIN_JAVASCRIPT = [".js", ".jsx", ".mjs", ".cjs"];
 
-const TYPED_BY_JSDOC = [".js", ".mjs", ".cjs"];
-
 const PLAIN_INTERPRETERS = ["node"];
 
-const JSDOC_TYPE = /^@(?:type|typedef)\b/;
-
-const JSDOC_PARAM = /^@param\b/;
+const JSDOC_TYPE_ONLY = [
+  /^@type\s+\{.*\}$/,
+  /^@typedef\s+\{.*\}\s+[\w$.]+$/,
+  /^@param\s+\{.*\}\s+\[?[\w$.]+(?:=[^\]]*)?\]?$/,
+];
 
 const LEADING_STARS = /^[\s*]*/;
 
@@ -42,13 +43,12 @@ function dialectOf(path: string, text: string): Dialect {
   if (route.kind === "first-line") {
     const interpreter = interpreterOf(text);
     return interpreter !== null && PLAIN_INTERPRETERS.includes(interpreter)
-      ? { syntax: ["jsx"], typedByJsdoc: true }
-      : { syntax: ["typescript"], typedByJsdoc: false };
+      ? { syntax: ["jsx"], plainJavaScript: true }
+      : { syntax: ["typescript"], plainJavaScript: false };
   }
-  if (route.extension === ".tsx") return { syntax: ["typescript", "jsx"], typedByJsdoc: false };
-  if (PLAIN_JAVASCRIPT.includes(route.extension))
-    return { syntax: ["jsx"], typedByJsdoc: TYPED_BY_JSDOC.includes(route.extension) };
-  return { syntax: ["typescript"], typedByJsdoc: false };
+  if (route.extension === ".tsx") return { syntax: ["typescript", "jsx"], plainJavaScript: false };
+  if (PLAIN_JAVASCRIPT.includes(route.extension)) return { syntax: ["jsx"], plainJavaScript: true };
+  return { syntax: ["typescript"], plainJavaScript: false };
 }
 
 function rejected(error: SyntaxError): Rejected {
@@ -74,9 +74,13 @@ function parsedWith(text: string, plugins: ParserPlugin[]): Parsed[] | Rejected 
       allowSuperOutsideMethod: true,
       allowUndeclaredExports: true,
     });
-    return (file.comments ?? []).flatMap(({ type, value, loc, start, end }) =>
-      loc ? [{ type, value, line: loc.start.line, source: text.slice(start, end) }] : [],
-    );
+    const [firstCode] = [...file.program.directives, ...file.program.body];
+    const codeStart = firstCode === undefined ? text.length : firstCode.start;
+    invariant(typeof codeStart === "number", "Babel locates each statement");
+    return (file.comments ?? []).map(({ type, value, loc, start, end }) => {
+      invariant(loc !== undefined && end !== undefined, "Babel locates each comment");
+      return { type, value, line: loc.start.line, source: text.slice(start, end), leading: end <= codeStart };
+    });
   } catch (error) {
     if (error instanceof SyntaxError) return rejected(error);
     throw error;
@@ -97,35 +101,74 @@ function typesPlainJavaScript({ type, value }: Parsed): boolean {
     .split("\n")
     .map((line) => line.replace(LEADING_STARS, "").trim())
     .filter((line) => line !== "");
-  const [first] = lines;
-  if (first === undefined) return false;
-  return JSDOC_TYPE.test(first) || lines.every((line) => JSDOC_PARAM.test(line));
+  return lines.length > 0 && lines.every((line) => JSDOC_TYPE_ONLY.some((tag) => tag.test(line)));
 }
 
 type InDialect = { readonly comment: Parsed; readonly dialect: Dialect };
 
-function directive(shown: string, pattern: RegExp): KeptForm<InDialect> {
-  return { shown, keeps: ({ comment }) => pattern.test(comment.value.replace(LEADING_STARS, "")) };
+function anywhere(): boolean {
+  return true;
+}
+
+function inBlock({ comment }: InDialect): boolean {
+  return comment.type === "CommentBlock";
+}
+
+function leadingLine({ comment }: InDialect): boolean {
+  return comment.type === "CommentLine" && comment.leading;
+}
+
+function leadingLineInPlainJavaScript(read: InDialect): boolean {
+  return read.dialect.plainJavaScript && leadingLine(read);
+}
+
+function directive(
+  shown: string,
+  pattern: RegExp,
+  readWhere: (read: InDialect) => boolean = anywhere,
+): KeptForm<InDialect> {
+  return {
+    shown,
+    keeps: (read) => {
+      const { value } = read.comment;
+      return (
+        readWhere(read) && !value.includes("\n") && pattern.test(value.replace(LEADING_STARS, "").trim())
+      );
+    },
+  };
 }
 
 const KEPT: readonly KeptForm<InDialect>[] = [
-  directive("`@ts-`", /^@ts-/),
-  directive("`eslint-`", /^eslint-/),
-  directive("`biome-ignore`", /^biome-ignore/),
-  directive("`prettier-ignore`", /^prettier-ignore/),
-  directive("`#__PURE__`", /^[#@]__PURE__/),
-  directive("`@vitest-environment`", /^@vitest-environment\b/),
+  directive("`@ts-expect-error`", /^@ts-expect-error(?![\w-])/),
+  directive(
+    "a leading `// @ts-check` in plain JavaScript",
+    /^@ts-check(?![\w-])/,
+    leadingLineInPlainJavaScript,
+  ),
+  directive(
+    "`eslint-disable-line` and `eslint-disable-next-line` naming rules",
+    /^eslint-disable-(?:next-)?line\s+(?!--)\S/,
+  ),
+  directive(
+    "`/* eslint-disable */` and `/* eslint-enable */` naming rules",
+    /^eslint-(?:disable|enable)\s+(?!--)\S/,
+    inBlock,
+  ),
+  directive(
+    "`biome-ignore`, `-all`, `-start` and `-end` naming only rules or `format`",
+    /^biome-ignore(?:-all|-start|-end)?(?:\s+(?:(?:lint|assist|syntax)\/\w+\/\w+(?:\([^)]*\))?|format))+\s*(?::|$)/,
+  ),
+  directive("`prettier-ignore` alone", /^prettier-ignore$/),
+  directive("`#__PURE__` or `@__PURE__` alone", /^[#@]__PURE__$/),
+  directive("`@vitest-environment <env>` alone", /^@vitest-environment\s+\S+$/),
   {
-    shown: "`/// <reference`",
-    keeps: ({ comment: { type, value } }) => type === "CommentLine" && TRIPLE_SLASH_REFERENCE.test(value),
+    shown: "a leading `/// <reference`",
+    keeps: (read) => leadingLine(read) && TRIPLE_SLASH_REFERENCE.test(read.comment.value),
   },
   {
-    shown: "`/*!`",
-    keeps: ({ comment: { type, value } }) => type === "CommentBlock" && value.startsWith("!"),
-  },
-  {
-    shown: "in plain JavaScript, JSDoc `@type`, `@typedef` and all-`@param` blocks",
-    keeps: ({ comment, dialect }) => dialect.typedByJsdoc && typesPlainJavaScript(comment),
+    shown:
+      "in plain JavaScript, JSDoc blocks holding only `@type {…}`, `@typedef {…} Name` and `@param {…} name`",
+    keeps: ({ comment, dialect }) => dialect.plainJavaScript && typesPlainJavaScript(comment),
   },
 ];
 

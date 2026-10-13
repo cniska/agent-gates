@@ -80,12 +80,14 @@ A comment a tool reads stays:
 
 | Language | Kept comments |
 | --- | --- |
-| JavaScript and TypeScript | `@ts-`; `eslint-`; `biome-ignore`; `prettier-ignore`; `#__PURE__`; `@vitest-environment`; `/// <reference`; `/*!`; in plain JavaScript, JSDoc `@type`, `@typedef` and all-`@param` blocks |
-| Dart | `ignore:`; `ignore_for_file:`; `coverage:`; `@dart=` |
+| JavaScript and TypeScript | `@ts-expect-error`; a leading `// @ts-check` in plain JavaScript; `eslint-disable-line` and `eslint-disable-next-line` naming rules; `/* eslint-disable */` and `/* eslint-enable */` naming rules; `biome-ignore`, `-all`, `-start` and `-end` naming only rules or `format`; `prettier-ignore` alone; `#__PURE__` or `@__PURE__` alone; `@vitest-environment <env>` alone; a leading `/// <reference`; in plain JavaScript, JSDoc blocks holding only `@type {…}`, `@typedef {…} Name` and `@param {…} name` |
+| Dart | `ignore:`; `ignore_for_file:`; `// @dart = x.y` alone |
 | SQL | drizzle's `--> statement-breakpoint` |
-| shell | the first-line shebang; `shellcheck` directives |
+| shell | the first-line shebang; `shellcheck` directives of `source=`, `source-path=`, `shell=`, `external-sources=` and `enable=` |
 | Rust | none |
 | Every language | one `SPDX-License-Identifier:` line; a gate marker on a line of its own |
+
+A form keeps the reason that follows it on the same line, unless it must stand alone; a directive in a block comment that spans lines is refused. A suppression that silences every rule, such as `@ts-ignore`, `@ts-nocheck`, a rule-less `eslint-disable`, a `biome-ignore lint` or `shellcheck disable=`, is refused, as is tool configuration in a comment, such as `eslint-env`, `/* eslint … */`, `/* global */` and Dart's `coverage:`. Dart's analyzer flags an `ignore:` that silences nothing under its opt-in `unnecessary_ignore` lint.
 
 A refusal names these forms for each language it refused a comment in, on a line of its own after its total. A gate marker is this tool's `agent-gate:<part>:<version>` or another's `<tool>-gate:[<part>:]<version>`. In Rust a first-line shebang is not a comment, and an attribute without doc text, such as `#[doc(hidden)]`, is code.
 
