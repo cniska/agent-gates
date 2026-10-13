@@ -40,6 +40,8 @@ const shellComments = untracked(ADAPTERS.shell.comments);
 
 const rustComments = untracked(ADAPTERS.rust.comments);
 
+const goComments = untracked(ADAPTERS.go.comments);
+
 function read(comments: readonly Comment[]): Reading {
   return { kind: "read", comments };
 }
@@ -53,6 +55,9 @@ const KEPT_IN_JAVASCRIPT =
 
 const KEPT_IN_RUST =
   "kept in Rust: in library code, an outer doc comment (`///`, `/** */`, `#[doc]`) on a `pub` item, a `#[macro_export]` macro, or a variant or item of a `pub` enum or trait; an inner doc comment (`//!`, `/*! */`, `#![doc]`) in a library's `src/lib.rs`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own";
+
+const KEPT_IN_GO =
+  'kept in Go: in library code, a doc or trailing comment `go doc` shows: on the package, or on an exported name, its fields and its methods; `//go:` directives at column 1 (`build`, `generate`, `embed`, `linkname`, `noinline`, `nosplit`, `noescape`, `norace`, `nocheckptr`, `uintptrescapes`, `uintptrkeepalive`, `wasmimport`, `wasmexport`, `debug`, `fix`), with `//go:build` only before `package` and `//go:embed` only above a `var`; `// +build` before `package`; `//line file:N` at column 1, and `/*line file:N*/`; `//export Name` above the top-level func `Name`, in a file that imports `"C"`; the cgo preamble above `import "C"`, but no line of it that starts a C `//` comment; `//nolint:` naming linters, never `all`; `//lint:ignore` and `//lint:file-ignore` naming checks, with a reason; `// Code generated … DO NOT EDIT.` before `package`; in a `_test.go` file outside packages `main` and `main_test`, an `Example` func\'s doc and its closing `// Output:` comment; `// want` in a file under `testdata`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own';
 
 function refusalText(listing: readonly string[], kept: readonly string[] = [KEPT_IN_JAVASCRIPT]): string {
   const count = listing.filter((line) => line.startsWith("  ")).length;
@@ -931,6 +936,249 @@ describe("the rust adapter", () => {
   });
 });
 
+describe("the go adapter", () => {
+  test("refuses each comment, and reads no comment inside a string, raw string or rune", () => {
+    const lines = [
+      "\uFEFFpackage main",
+      "",
+      'var a = "// not a comment" // trailing',
+      "var b = `raw /* not a comment",
+      "// still raw` /* block */",
+      "var c = '/' + '\\'' // after runes",
+      "/* a",
+      "   block */",
+      "/* blocks /* do not nest */ var d = 1",
+    ];
+    expect(goComments("main.go", lines.join("\n"))).toEqual(
+      read([
+        { line: 3, text: "// trailing" },
+        { line: 5, text: "/* block */" },
+        { line: 6, text: "// after runes" },
+        { line: 7, text: "/* a\n   block */" },
+        { line: 9, text: "/* blocks /* do not nest */" },
+      ]),
+    );
+  });
+
+  test("names the line where a literal or comment that never closes opens", () => {
+    for (const [open, reason] of [
+      ['var a = "open\nb\n', "Unterminated string"],
+      ['var a = "open\\\nb\n', "Unterminated string"],
+      ["var a = `open\nb\n", "Unterminated raw string"],
+      ["var a = '\nb\n", "Unterminated rune"],
+      ["/* open\nb\n", "Unterminated comment"],
+    ] as const)
+      expect([open, goComments("a.go", `package a\n${open}`)]).toEqual([open, unparsed(2, reason)]);
+  });
+
+  test("keeps in library code the docs and trailing comments go doc shows on exported names", () => {
+    const lines = [
+      "// Package a is kept.",
+      "package a",
+      "",
+      "// T is kept.",
+      "type T struct {",
+      "\t// A is kept.",
+      "\tA int // kept",
+      "\tE int; // kept after an explicit semicolon",
+      "\t// b is refused.",
+      "\tb int // refused",
+      "\t// Reader is kept.",
+      "\tio.Reader",
+      "\t*inner // refused",
+      "\tN struct {",
+      "\t\tX int // kept",
+      "\t\ty int // refused",
+      "\t}",
+      "\tM map[string]struct {",
+      "\t\tz int // kept: go doc does not filter inside a map",
+      "\t}",
+      "}",
+      "",
+      "// t is refused.",
+      "type t struct{ X int }",
+      "",
+      "type I interface {",
+      "\t// M is kept.",
+      "\tM() // kept",
+      "\tm() // refused",
+      "\terror // kept",
+      "\tinner // refused",
+      "\t~int | ~string // kept",
+      "}",
+      "",
+      "// F is kept.",
+      "func F() {} // refused",
+      "",
+      "// M is kept.",
+      "func (r *T) M() {}",
+      "",
+      "// N is refused.",
+      "func (t) N() {}",
+      "",
+      "// Group is kept.",
+      "const (",
+      "\t// B is kept.",
+      "\tB = iota // kept",
+      "\tc // refused",
+      ")",
+      "",
+      "var v, W = 1, 2 // kept",
+      "",
+      "// f is refused.",
+      "func f() {",
+      "\t// refused",
+      "}",
+      "",
+      "// D is kept,",
+      "//nolint:all",
+      "//lint:ignore SA1019",
+      "// nolint",
+      "// but not the directives above it.",
+      "func D() {}",
+    ];
+    const kept = (line: string) => /is kept|\/\/ kept|but not/.test(line);
+    const refused = lines.flatMap((line, index) => {
+      const at = line.indexOf("//");
+      return at < 0 || kept(line) ? [] : [{ line: index + 1, text: line.slice(at) }];
+    });
+    expect(goComments("a.go", lines.join("\n"))).toEqual(read(refused));
+  });
+
+  test("keeps a trailing block comment that spans lines, and a package doc after a byte order mark", () => {
+    const text =
+      "\uFEFF// Package a.\npackage a\n\ntype T struct {\n\tA int /* kept\n\t   across lines */\n\t// b is refused.\n\tb int\n\tC int /* kept\n\t*/ d int // refused\n}\n";
+    expect(goComments("a.go", text)).toEqual(
+      read([
+        { line: 7, text: "// b is refused." },
+        { line: 10, text: "// refused" },
+      ]),
+    );
+  });
+
+  test("keeps exported docs only outside package main and outside test files", () => {
+    const text = "// Package a.\npackage a\n\n// F is exported.\nfunc F() {}\n";
+    const all = [
+      { line: 1, text: "// Package a." },
+      { line: 4, text: "// F is exported." },
+    ];
+    for (const [path, body, refused] of [
+      ["a.go", text, []],
+      ["cmd/a/main.go", text.replace("package a", "package main"), all],
+      ["a_test.go", text, all],
+      ["a_test.go", text.replace("package a", "package a_test"), all],
+    ] as const)
+      expect([path, goComments(path, body)]).toEqual([path, read(refused)]);
+  });
+
+  test("keeps cgo's preamble and exports only in a file that imports C", () => {
+    const lines = [
+      "package main",
+      "",
+      "// #include <stdio.h>",
+      "// // a C comment is refused",
+      'import "C"',
+      "",
+      "//export F",
+      "func F() {}",
+      "",
+      "//export G",
+      "func H() {}",
+      "",
+      "/*",
+      "#include <stdlib.h>",
+      "// refused with its whole block",
+      "*/",
+      'import "C"',
+    ];
+    expect(goComments("main.go", lines.join("\n"))).toEqual(
+      read([
+        { line: 4, text: "// // a C comment is refused" },
+        { line: 10, text: "//export G" },
+        { line: 13, text: "/*\n#include <stdlib.h>\n// refused with its whole block\n*/" },
+      ]),
+    );
+    expect(
+      goComments(
+        "main.go",
+        'package main\n\n// #include <stdio.h>\nimport "fmt"\n\n//export F\nfunc F() {}\n',
+      ),
+    ).toEqual(
+      read([
+        { line: 3, text: "// #include <stdio.h>" },
+        { line: 6, text: "//export F" },
+      ]),
+    );
+  });
+
+  test("keeps go:embed only at column 1 above a var", () => {
+    const text =
+      "package a\n\n//go:embed a.txt\nvar a string\n\nvar (\n\t//go:embed b.txt\n\tb string\n)\n\n//go:embed c.txt\nconst c = 1\n";
+    expect(goComments("a.go", text)).toEqual(
+      read([
+        { line: 7, text: "//go:embed b.txt" },
+        { line: 11, text: "//go:embed c.txt" },
+      ]),
+    );
+  });
+
+  test("keeps an Example's doc and its closing output in a test file outside package main", () => {
+    const lines = [
+      "package a_test",
+      "",
+      "// ExampleF is kept.",
+      "func ExampleF() {",
+      "\t// refused",
+      "\tfmt.Println(1)",
+      "\t// Output: 1",
+      "}",
+      "",
+      "// Examplef is refused.",
+      "func Examplef() {",
+      "\t// Output: refused",
+      "}",
+      "",
+      "// Example_params is refused.",
+      "func Example_params(t int) {",
+      "\t// Output: refused",
+      "}",
+      "",
+      "func Example_suffix() {",
+      "\t// Unordered output: kept",
+      "\t// 2",
+      "}",
+      "",
+      "func Example_last() {",
+      "\t// Output: refused, not the last group",
+      "",
+      "\tfmt.Println(1)",
+      "\t// refused",
+      "}",
+    ];
+    const kept = (line: string) => /is kept|Output: 1|output: kept|\/\/ 2/.test(line);
+    const refused = lines.flatMap((line, index) => {
+      const at = line.indexOf("//");
+      return at < 0 || kept(line) ? [] : [{ line: index + 1, text: line.slice(at) }];
+    });
+    expect(goComments("a_test.go", lines.join("\n"))).toEqual(read(refused));
+    const main = lines.join("\n").replace("package a_test", "package main");
+    expect(goComments("a_test.go", main)).toEqual(
+      read(
+        main.split("\n").flatMap((line, index) => {
+          const at = line.indexOf("//");
+          return at < 0 ? [] : [{ line: index + 1, text: line.slice(at) }];
+        }),
+      ),
+    );
+  });
+
+  test("keeps want comments only in a file under testdata", () => {
+    const text = 'package a\n\nvar x = 1 // want "x"\n';
+    expect(goComments("testdata/src/a/a.go", text)).toEqual(read([]));
+    expect(goComments("a/testdatum/a.go", text)).toEqual(read([{ line: 3, text: '// want "x"' }]));
+  });
+});
+
 describe("the README", () => {
   test("lists the forms each adapter keeps, and those every language keeps", () => {
     const cell = (forms: readonly string[]) => (forms.length === 0 ? "none" : forms.join("; "));
@@ -1137,6 +1385,25 @@ describe("the pre-commit hook", () => {
     rmSync(join(dir, "src/lib.rs"));
     writeFiles(dir, { "src/a.rs": "/// A.\npub fn a() -> u8 { 1 }\n" });
     expect(commit(dir).stderr).toBe(refusalText(["src/a.rs", "  1  /// A."], [KEPT_IN_RUST]));
+  });
+
+  test("refuses a kept Go doc the change moves into package main or off an exported name", () => {
+    const dir = repo({
+      "a/a.go": "// Package a.\npackage a\n\n// F does.\nfunc F() {}\n",
+      "b/b.go": "package b\n\n// G does.\nfunc G() {}\n",
+    });
+    installGates(dir, ["no-comments-go"]);
+    expect(commit(dir)).toEqual({ status: 0, stderr: "" });
+    writeFiles(dir, {
+      "a/a.go": "// Package a.\npackage main\n\n// F does.\nfunc F() {}\n",
+      "b/b.go": "package b\n\n// G does.\nfunc g() {}\n",
+    });
+    expect(commit(dir).stderr).toBe(
+      refusalText(
+        ["a/a.go", "  1  // Package a.", "  4  // F does.", "b/b.go", "  3  // G does."],
+        [KEPT_IN_GO],
+      ),
+    );
   });
 
   test("keeps one SPDX-License-Identifier line in every language, and nothing more with it", () => {
