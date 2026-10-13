@@ -666,13 +666,20 @@ function targetSpans(text: string, tokens: readonly Token[]): Lexed<GoSpan, Fact
     return base;
   }
 
+  function groupStart(group: Group): number {
+    return tokens[groups[group]?.[0] ?? -1]?.start ?? text.length;
+  }
+
   function lastGroupWithin(open: number, close: number): Group | null {
-    let last: Group | null = null;
-    for (const [group, members] of groups.entries()) {
-      const first = tokens[members[0] ?? -1];
-      if (first !== undefined && first.start > open && first.start < close) last = group;
+    let low = 0;
+    let high = groups.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (groupStart(middle) < close) low = middle + 1;
+      else high = middle;
     }
-    return last;
+    const last = low - 1;
+    return last >= 0 && groupStart(last) > open ? last : null;
   }
 
   function groupText(group: Group): string {
