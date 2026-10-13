@@ -53,8 +53,7 @@ function unparsed(line: number, reason: string): Reading {
 const KEPT_IN_JAVASCRIPT =
   "kept in JavaScript and TypeScript: `#__PURE__` or `@__PURE__` alone; a leading `/// <reference …/>` holding only its attributes; one `SPDX-License-Identifier:` line; a gate marker on a line of its own";
 
-const KEPT_IN_RUST =
-  "kept in Rust: in library code, an outer doc comment (`///`, `/** */`, `#[doc]`) on a `pub` item, a `#[macro_export]` macro, or a variant or item of a `pub` enum or trait; an inner doc comment (`//!`, `/*! */`, `#![doc]`) in a library's `src/lib.rs`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own";
+const KEPT_IN_RUST = "kept in Rust: one `SPDX-License-Identifier:` line; a gate marker on a line of its own";
 
 const KEPT_IN_GO =
   'kept in Go: in library code, a doc or trailing comment `go doc` shows: on the package, or on an exported name, its fields and its methods; `//go:` directives at column 1 (`build`, `generate`, `embed`, `linkname`, `noinline`, `nosplit`, `noescape`, `norace`, `nocheckptr`, `uintptrescapes`, `uintptrkeepalive`, `wasmimport`, `wasmexport`, `debug`, `fix`), with `//go:build` only before `package` and `//go:embed` only above a `var`; `// +build` before `package`; `//line file:N` at column 1, and `/*line file:N*/`; `//export Name` above the top-level func `Name`, in a file that imports `"C"`; the cgo preamble above `import "C"`, but no line of it that starts a C `//` comment; `//nolint:` naming linters, never `all`; `//lint:ignore` and `//lint:file-ignore` naming checks, with a reason; `// Code generated … DO NOT EDIT.` before `package`; in a `_test.go` file outside packages `main` and `main_test`, an `Example` func\'s doc and its closing `// Output:` comment; `// want` in a file under `testdata`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own';
@@ -817,7 +816,7 @@ describe("the rust adapter", () => {
       expect([open, rustComments("a.rs", `fn f() {}\n${open}`)]).toEqual([open, unparsed(2, reason)]);
   });
 
-  test("keeps in library code the outer docs of a pub item, an exported macro, and a pub enum's or trait's members", () => {
+  test("refuses every doc comment, on pub items and exported macros too", () => {
     const lines = [
       "/// Public.",
       "pub fn a() {}",
@@ -865,47 +864,17 @@ describe("the rust adapter", () => {
       "r#pub fn h() {}",
       "/// Last.",
     ];
-    const text = lines.join("\n");
-    const library = trackedIn(["Cargo.toml", "src/lib.rs"]);
-    expect(ADAPTERS.rust.comments("src/a.rs", text, library)).toEqual(
+    const docs = lines.flatMap((line, index) =>
+      /^\s*(?:\/\/\/|\/\*\*|#\[doc)/.test(line) ? [{ line: index + 1, text: line.trim() }] : [],
+    );
+    const libraryCrate = trackedIn(["Cargo.toml", "src/lib.rs"]);
+    expect(ADAPTERS.rust.comments("src/a.rs", lines.join("\n"), libraryCrate)).toEqual(read(docs));
+    expect(ADAPTERS.rust.comments("src/lib.rs", '//! Crate.\n#![doc = "Crate."]\n', libraryCrate)).toEqual(
       read([
-        { line: 3, text: "/// Restricted." },
-        { line: 5, text: "/// Private." },
-        { line: 26, text: "/// Private field." },
-        { line: 32, text: "/// Private variant." },
-        { line: 36, text: "/// In a body." },
-        { line: 43, text: "/// Raw." },
-        { line: 45, text: "/// Last." },
+        { line: 1, text: "//! Crate." },
+        { line: 2, text: '#![doc = "Crate."]' },
       ]),
     );
-  });
-
-  test("keeps public docs only under a library crate's src, and inner docs only in its src/lib.rs", () => {
-    const text = '//! Crate.\n#![doc = "Crate."]\n/*! Crate. */\n/// Public.\npub fn a() {}\n';
-    const inner = [
-      { line: 1, text: "//! Crate." },
-      { line: 2, text: '#![doc = "Crate."]' },
-      { line: 3, text: "/*! Crate. */" },
-    ];
-    const all = [...inner, { line: 4, text: "/// Public." }];
-    const library = ["Cargo.toml", "src/lib.rs"];
-    for (const [path, tracked, refused] of [
-      ["src/lib.rs", library, []],
-      ["src/a/b.rs", library, inner],
-      ["src/main.rs", library, all],
-      ["src/bin/tool.rs", library, all],
-      ["examples/a.rs", library, all],
-      ["tests/a.rs", library, all],
-      ["src/lib.rs", ["Cargo.toml"], all],
-      ["src/lib.rs", ["src/lib.rs"], all],
-      ["crates/x/src/lib.rs", ["Cargo.toml", "crates/x/Cargo.toml", "crates/x/src/lib.rs"], []],
-      ["tools/x/src/lib.rs", [...library, "tools/x/Cargo.toml"], all],
-    ] as const)
-      expect([path, tracked, ADAPTERS.rust.comments(path, text, trackedIn(tracked))]).toEqual([
-        path,
-        tracked,
-        read(refused),
-      ]);
   });
 });
 
@@ -1340,38 +1309,6 @@ describe("the pre-commit hook", () => {
     });
   });
 
-  test("refuses a kept Rust doc the change moves out of library code or off a pub item", () => {
-    const dir = repo({
-      "Cargo.toml": '[package]\nname = "x"\n',
-      "src/lib.rs": "//! Crate.\npub mod util;\n",
-      "src/util.rs": "/// Util.\npub fn util() {}\n",
-      "src/other.rs": "/// Other.\npub fn other() {}\n",
-    });
-    installGates(dir, ["no-comments-rust"]);
-    expect(commit(dir)).toEqual({ status: 0, stderr: "" });
-    rmSync(join(dir, "src/util.rs"));
-    writeFiles(dir, {
-      "examples/util.rs": "/// Util.\npub fn util() {}\n",
-      "src/other.rs": "/// Other.\nfn other() {}\n",
-    });
-    expect(commit(dir).stderr).toBe(
-      refusalText(["examples/util.rs", "  1  /// Util.", "src/other.rs", "  1  /// Other."], [KEPT_IN_RUST]),
-    );
-  });
-
-  test("judges a Rust file's base by the crate HEAD holds, and its head by the crate the index holds", () => {
-    const dir = repo({
-      "Cargo.toml": '[package]\nname = "x"\n',
-      "src/lib.rs": "pub mod a;\n",
-      "src/a.rs": "/// A.\npub fn a() {}\n",
-    });
-    installGates(dir, ["no-comments-rust"]);
-    expect(commit(dir)).toEqual({ status: 0, stderr: "" });
-    rmSync(join(dir, "src/lib.rs"));
-    writeFiles(dir, { "src/a.rs": "/// A.\npub fn a() -> u8 { 1 }\n" });
-    expect(commit(dir).stderr).toBe(refusalText(["src/a.rs", "  1  /// A."], [KEPT_IN_RUST]));
-  });
-
   test("refuses a kept Go doc the change moves into package main or off an exported name", () => {
     const dir = repo({
       "a/a.go": "// Package a.\npackage a\n\n// F does.\nfunc F() {}\n",
@@ -1568,22 +1505,6 @@ describe("the no-comments workflow", () => {
       stdout: "",
       stderr: "",
     });
-  });
-
-  test("reads a pushed Rust file's crate from the pushed head, not the index", () => {
-    const dir = repo({ "Cargo.toml": '[package]\nname = "x"\n', "src/lib.rs": "pub fn a() {}\n" });
-    installGates(dir, ["no-comments-rust"]);
-    const base = commitPastHooks(dir, "feat: start");
-    writeFiles(dir, { "src/lib.rs": "/// A.\npub fn a() {}\n" });
-    const head = commitPastHooks(dir, "feat: docs");
-    git(dir, ["rm", "-q", "--cached", "Cargo.toml"]);
-    expect(scan(dir, [base, head])).toEqual({ status: 0, stderr: "" });
-    expect(scan(dir, ["--all"]).stderr).toBe(
-      refusalText(["src/lib.rs", "  1  /// A."], [KEPT_IN_RUST]).replace(
-        "this change adds",
-        "the tracked files hold",
-      ),
-    );
   });
 
   test("judges a new branch from its merge base with the default branch, not its tip alone", () => {

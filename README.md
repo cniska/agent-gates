@@ -77,7 +77,7 @@ A comment a tool reads stays:
 | Dart | `// @dart = x.y` alone, before any code |
 | SQL | drizzle's `--> statement-breakpoint` |
 | shell | the first-line shebang |
-| Rust | in library code, an outer doc comment (`///`, `/** */`, `#[doc]`) on a `pub` item, a `#[macro_export]` macro, or a variant or item of a `pub` enum or trait; an inner doc comment (`//!`, `/*! */`, `#![doc]`) in a library's `src/lib.rs` |
+| Rust | none |
 | Go | in library code, a doc or trailing comment `go doc` shows: on the package, or on an exported name, its fields and its methods; `//go:` directives at column 1 (`build`, `generate`, `embed`, `linkname`, `noinline`, `nosplit`, `noescape`, `norace`, `nocheckptr`, `uintptrescapes`, `uintptrkeepalive`, `wasmimport`, `wasmexport`, `debug`, `fix`), with `//go:build` only before `package` and `//go:embed` only above a `var`; `// +build` before `package`; `//line file:N` at column 1, and `/*line file:N*/`; `//export Name` above the top-level func `Name`, in a file that imports `"C"`; the cgo preamble above `import "C"`, but no line of it that starts a C `//` comment; `//nolint:` naming linters, never `all`; `//lint:ignore` and `//lint:file-ignore` naming checks, with a reason; `// Code generated … DO NOT EDIT.` before `package`; in a `_test.go` file outside packages `main` and `main_test`, an `Example` func's doc and its closing `// Output:` comment; `// want` in a file under `testdata` |
 | Every language | one `SPDX-License-Identifier:` line; a gate marker on a line of its own |
 
@@ -91,7 +91,7 @@ How each language is read:
 - **JavaScript and TypeScript** with Babel's parser.
 - **SQL** as PostgreSQL, with dollar quotes and `E''` strings. A dollar-quoted body that parses as SQL is judged as code; one that does not is text.
 - **Dart, shell, Rust and Go** by lexers that find the comments the language's own tokenizer finds. Shell treats `#` as a comment only where a word starts.
-- **Rust library code** is a file under `src/` of a crate whose `Cargo.toml` and `src/lib.rs` are tracked, other than `src/main.rs` and `src/bin/`. `pub` means bare `pub`, not `pub(crate)`. An attribute carrying `doc = …` anywhere, such as `#[cfg_attr(docsrs, doc = …)]`, is a doc comment; `#[doc(hidden)]` is code. Each side of a change is judged by its own tree, so dropping `pub` or moving a file out of `src/` turns its docs into added comments.
+- **Rust** reads an attribute carrying `doc = …` anywhere, such as `#[cfg_attr(docsrs, doc = …)]`, as a doc comment; `#[doc(hidden)]` is code.
 - **Go library code** is a file outside package `main` whose name does not end in `_test.go`. Its comments are grouped as `go/parser` groups them, and a doc is the group that ends on the line above its declaration. What `go doc` shows follows `go/doc`'s filter: an exported name starts with an upper-case letter, a method needs an exported receiver type, and a field or interface method needs an exported name or embedded type. A directive line inside a doc, such as `//nolint:all`, is not doc, as `go doc` leaves it out; it and a `// nolint` line are judged as directives.
 
 ## Commands
