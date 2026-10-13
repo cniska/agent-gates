@@ -3,6 +3,7 @@ import { invariant } from "./assert";
 import { type KeptForm, keptBy, shownOf } from "./no-comments-kept";
 import type { Comment, CommentsOf, Reading } from "./no-comments-languages";
 import { interpreterOf, routeOf } from "./no-comments-route";
+import { lineCounter } from "./no-comments-spans";
 
 type Dialect = { readonly syntax: ParserPlugin[]; readonly plainJavaScript: boolean };
 
@@ -51,15 +52,13 @@ function dialectOf(path: string, text: string): Dialect {
   return { syntax: ["typescript"], plainJavaScript: false };
 }
 
-function rejected(error: SyntaxError): Rejected {
+function rejected(error: SyntaxError, lineAt: (offset: number) => number): Rejected {
   const offset: unknown = Reflect.get(error, "pos");
-  const loc: unknown = Reflect.get(error, "loc");
-  const line: unknown = typeof loc === "object" && loc !== null ? Reflect.get(loc, "line") : null;
-  invariant(typeof offset === "number" && typeof line === "number", "Babel locates each syntax error");
+  invariant(typeof offset === "number", "Babel locates each syntax error");
   return {
     kind: "rejected",
     offset,
-    unparsed: { kind: "unparsed", line, reason: error.message.replace(BABEL_POSITION, "") },
+    unparsed: { kind: "unparsed", line: lineAt(offset), reason: error.message.replace(BABEL_POSITION, "") },
   };
 }
 
@@ -77,12 +76,13 @@ function parsedWith(text: string, plugins: ParserPlugin[]): Parsed[] | Rejected 
     const [firstCode] = [...file.program.directives, ...file.program.body];
     const codeStart = firstCode === undefined ? text.length : firstCode.start;
     invariant(typeof codeStart === "number", "Babel locates each statement");
-    return (file.comments ?? []).map(({ type, value, loc, start, end }) => {
-      invariant(loc !== undefined && end !== undefined, "Babel locates each comment");
-      return { type, value, line: loc.start.line, source: text.slice(start, end), leading: end <= codeStart };
+    const lineAt = lineCounter(text);
+    return (file.comments ?? []).map(({ type, value, start, end }) => {
+      invariant(start !== undefined && end !== undefined, "Babel locates each comment");
+      return { type, value, line: lineAt(start), source: text.slice(start, end), leading: end <= codeStart };
     });
   } catch (error) {
-    if (error instanceof SyntaxError) return rejected(error);
+    if (error instanceof SyntaxError) return rejected(error, lineCounter(text));
     throw error;
   }
 }

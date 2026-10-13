@@ -1,3 +1,4 @@
+import { invariant } from "./assert";
 import { type KeptForm, keptBy } from "./no-comments-kept";
 import type { Comment, CommentsOf, Tracked } from "./no-comments-languages";
 
@@ -49,10 +50,11 @@ export function nestedBlockEnd(text: string, start: number, to: number): number 
   return null;
 }
 
-function lineCounter(text: string): (offset: number) => number {
+export function lineCounter(text: string): (offset: number) => number {
   let line = 1;
   let counted = 0;
   return (offset) => {
+    invariant(offset >= counted, "lines are counted in source order");
     for (; counted < offset; counted++) if (text.charCodeAt(counted) === NEWLINE) line++;
     return line;
   };

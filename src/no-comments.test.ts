@@ -152,6 +152,13 @@ describe("the javascript adapter", () => {
     );
   });
 
+  test("counts lines by newline alone, as git does", () => {
+    expect(comments("a.ts", 'const s = "\u2028\u2029";\rconst t = 1;\n// why\n')).toEqual(
+      read([{ line: 2, text: "// why" }]),
+    );
+    expect(comments("a.ts", 'const s = "\u2028";\rconst = ;\n')).toMatchObject({ kind: "unparsed", line: 1 });
+  });
+
   test("keeps the comments a tool reads, with a reason on the same line", () => {
     const kept = [
       '/// <reference types="bun" />',
