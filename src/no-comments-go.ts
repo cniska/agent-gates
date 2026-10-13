@@ -8,9 +8,7 @@ import {
   type Lexed,
   type Span,
 } from "./no-comments-adapter";
-import { lineCounter, lineEnd, type Stopped, unterminated } from "./no-comments-spans";
-
-const BOM = "﻿";
+import { lineCounter, lineEnd, type Stopped, textStart, unterminated } from "./no-comments-spans";
 
 const OPENER = 2;
 
@@ -210,7 +208,7 @@ const NOT_DOCUMENTING: Documents = { kind: "none" };
 
 function tokensOf(text: string): Tokenized {
   const tokens: Token[] = [];
-  let at = text.startsWith(BOM) ? BOM.length : 0;
+  let at = textStart(text);
   let endsStatement = false;
 
   const charAt = (index: number): string => {

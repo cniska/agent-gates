@@ -4,6 +4,12 @@ export type Stopped = { readonly kind: "stopped"; readonly at: number; readonly 
 
 const NEWLINE = 10;
 
+const BYTE_ORDER_MARK = "\uFEFF";
+
+export function textStart(text: string): number {
+  return text.startsWith(BYTE_ORDER_MARK) ? BYTE_ORDER_MARK.length : 0;
+}
+
 export function lineEnd(text: string, from: number): number {
   const newline = text.indexOf("\n", from);
   return newline < 0 ? text.length : newline;

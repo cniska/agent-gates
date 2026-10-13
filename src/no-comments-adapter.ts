@@ -1,5 +1,5 @@
 import { isMarkerBody } from "./gate-marker";
-import { lineCounter, lineEnd, type Stopped } from "./no-comments-spans";
+import { lineCounter, lineEnd, type Stopped, textStart } from "./no-comments-spans";
 
 export type Comment = { readonly line: number; readonly text: string };
 
@@ -99,7 +99,7 @@ const SHARED_FORMS: readonly KeptForm<CommentRead>[] = [
 export const SHARED_SHOWN: readonly string[] = SHARED_FORMS.map(({ shown }) => shown);
 
 function lineStart(text: string, offset: number): number {
-  return text.lastIndexOf("\n", offset - 1) + 1;
+  return Math.max(text.lastIndexOf("\n", offset - 1) + 1, textStart(text));
 }
 
 function readOf<S extends Span, C, F>(
