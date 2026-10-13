@@ -326,7 +326,10 @@ describe("the dart adapter", () => {
       "// ignore_for_file: avoid_print",
       "// ignore: unused_element",
       "/// ignore: unused_element",
-      "// ignore: unused_element, kept for the plugin API",
+      "// ignore: unused_element, dead_code",
+      "// ignore:UNUSED_IMPORT",
+      "// ignore: custom_lint/my_rule",
+      "// ignore_for_file: avoid_print , dead_code",
       "// @dart=3.0",
       "// @dart = 3.0",
       "void f() {}",
@@ -334,21 +337,22 @@ describe("the dart adapter", () => {
     expect(dartComments("a.dart", text)).toEqual(read([]));
   });
 
-  test("refuses coverage directives and a language version that is not alone", () => {
-    const text = [
+  test("refuses coverage directives, a language version that is not alone, and an ignore that names no diagnostic", () => {
+    const refused = [
       "// coverage:ignore-line",
       "/// @dart = 3.0",
       "// @dart = 3.0 for the records",
       "// @dart = 3",
-      "void f() {}",
-    ].join("\n");
-    expect(dartComments("a.dart", text)).toEqual(
-      read([
-        { line: 1, text: "// coverage:ignore-line" },
-        { line: 2, text: "/// @dart = 3.0" },
-        { line: 3, text: "// @dart = 3.0 for the records" },
-        { line: 4, text: "// @dart = 3" },
-      ]),
+      "// ignore: type=lint",
+      "// ignore_for_file: type=lint",
+      "// ignore: because the api is weird",
+      "// ignore: unused_element, kept for the plugin API",
+      "// ignore:",
+      "// ignore: custom_lint/",
+      "// ignore: custom_lint /my_rule",
+    ];
+    expect(dartComments("a.dart", [...refused, "void f() {}"].join("\n"))).toEqual(
+      read(refused.map((text, index) => ({ line: index + 1, text }))),
     );
   });
 
@@ -1094,7 +1098,7 @@ describe("the pre-commit hook", () => {
           '  1  #[doc = "why"]',
         ],
         [
-          "kept in Dart: `ignore:`; `ignore_for_file:`; `// @dart = x.y` alone; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
+          "kept in Dart: `ignore:` and `ignore_for_file:` naming only diagnostics; `// @dart = x.y` alone; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
           "kept in SQL: drizzle's `--> statement-breakpoint`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
           "kept in shell: the first-line shebang; `shellcheck` directives of `source=`, `source-path=`, `shell=`, `external-sources=` and `enable=`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
           KEPT_IN_RUST,

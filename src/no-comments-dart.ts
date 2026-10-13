@@ -16,6 +16,10 @@ const DOC_SLASH_AND_SPACE = /^\/?\s*/;
 
 const IDENTIFIER_CHAR = /[A-Za-z0-9_$]/;
 
+const DIAGNOSTIC = "[A-Za-z][A-Za-z0-9_]*(?:/[A-Za-z][A-Za-z0-9_]*)?";
+
+const IGNORE = new RegExp(`ignore(?:_for_file)?:\\s*${DIAGNOSTIC}(?:\\s*,\\s*${DIAGNOSTIC})*`);
+
 const LANGUAGE_VERSION = /^\s*@dart\s*=\s*\d+\.\d+\s*$/;
 
 function commentSpans(text: string): Lexed<Span, null> {
@@ -91,8 +95,11 @@ function isLine({ span }: CommentRead): boolean {
 }
 
 const KEPT: readonly KeptForm<CommentRead<Span, null, null>>[] = [
-  directive("`ignore:`", { pattern: /ignore:/, reason: "allowed", where: isLine }),
-  directive("`ignore_for_file:`", { pattern: /ignore_for_file:/, reason: "allowed", where: isLine }),
+  directive("`ignore:` and `ignore_for_file:` naming only diagnostics", {
+    pattern: IGNORE,
+    reason: "alone",
+    where: isLine,
+  }),
   {
     shown: "`// @dart = x.y` alone",
     keeps: (read) => isLine(read) && LANGUAGE_VERSION.test(read.body),
