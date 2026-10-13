@@ -105,6 +105,7 @@ export const SCANNER_FILE: GateFile = {
     { version: 23, sha256: "037e445e2ca241466bcbd98900bd5dbbd765ecf6d736880c71066d97ec913f7c" },
     { version: 24, sha256: "c4ecbb358448d994394f7a6eadc24d0e3d72588b801cc0615bb1325fc55e90a3" },
     { version: 25, sha256: "66c4de011c1abb5c22bf3cbbc89f9beaca9e7588ea47c45e2e62d189405f82fd" },
+    { version: 26, sha256: "f77162148eb6575afd6a04b8667d6f998a308a035d561eb37ca89e1479b0791e" },
   ],
 };
 
@@ -235,6 +236,9 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 6, sha256: "b828403db8d89b62217db7baf6ec9071571af20ad0f284145232b02f7dd5e732" },
     { version: 7, sha256: "2232379950e0f29097c04f01fa42d65360da01a2ebc2e1a522df68fcd21652ee" },
   ]),
+  python: adapterFile("python", [
+    { version: 1, sha256: "0a9e1622e9cbb6d697e50947de8488666247a3ba7505c986eff90bdb63e08152" },
+  ]),
 };
 
 function noCommentsFiles(language: Language): readonly GateFile[] {
@@ -272,6 +276,7 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
   "no-comments-shell": noCommentsFiles("shell"),
   "no-comments-rust": noCommentsFiles("rust"),
   "no-comments-go": noCommentsFiles("go"),
+  "no-comments-python": noCommentsFiles("python"),
 };
 
 export const INSTALL_GATES = `agent-gates install <gate>..., choosing from ${GATE_NAMES.join(", ")}`;

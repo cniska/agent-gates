@@ -33,6 +33,8 @@ const rustComments = ADAPTERS.rust.comments;
 
 const goComments = ADAPTERS.go.comments;
 
+const pythonComments = ADAPTERS.python.comments;
+
 function read(comments: readonly Comment[]): Reading {
   return { kind: "read", comments };
 }
@@ -48,6 +50,9 @@ const KEPT_IN_RUST = "kept in Rust: one `SPDX-License-Identifier:` line; a gate 
 
 const KEPT_IN_GO =
   'kept in Go: `//go:build` and `//go:debug` with their argument, before `package`; `//go:embed` with its patterns, above a `var`; `//go:generate`, `//go:linkname`, `//go:wasmimport`, `//go:wasmexport` and `//go:fix` with their arguments, and `//go:noinline`, `//go:nosplit`, `//go:noescape`, `//go:norace`, `//go:nocheckptr`, `//go:uintptrescapes` and `//go:uintptrkeepalive` alone, at column 1; `//line file:N` at column 1, and `/*line file:N*/`; `//export Name` above the top-level func `Name`, in a file that imports `"C"`; the cgo preamble above `import "C"`, holding no C comment; one `SPDX-License-Identifier:` line; a gate marker on a line of its own';
+
+const KEPT_IN_PYTHON =
+  "kept in Python: the first-line shebang; the PEP 263 coding declaration on line 1, or on line 2 under a blank or comment line; a PEP 723 `# /// script` block whose TOML holds no comment; one `SPDX-License-Identifier:` line; a gate marker on a line of its own";
 
 function refusalText(listing: readonly string[], kept: readonly string[] = [KEPT_IN_JAVASCRIPT]): string {
   const count = listing.filter((line) => line.startsWith("  ")).length;
@@ -112,7 +117,9 @@ describe("the language table", () => {
     expect(languageOf("bin/tool", "#!/usr/bin/env node")).toBe("javascript");
     expect(languageOf("bin/tool", "#!/usr/bin/env -S bun --silent")).toBe("javascript");
     expect(languageOf("bin/tool", "#!/usr/local/bin/deno run")).toBe("javascript");
-    expect(languageOf("bin/tool", "#!/usr/bin/env python3")).toBeNull();
+    expect(languageOf("bin/tool", "#!/usr/bin/env python3")).toBe("python");
+    expect(languageOf("bin/tool", "#!/usr/bin/env ruby")).toBeNull();
+    expect(languageOf("pkg/a.pyi", "")).toBe("python");
     expect(languageOf(".eslintrc", "")).toBeNull();
     expect(languageOf("lib/a.dart", "")).toBe("dart");
     expect(languageOf("bin/tool", "#!/usr/bin/env dart")).toBe("dart");
@@ -1071,6 +1078,111 @@ describe("the go adapter", () => {
   });
 });
 
+describe("the python adapter", () => {
+  test("refuses each comment, and reads none inside a string of any prefix or quote", () => {
+    const lines = [
+      "#!/usr/bin/env python3",
+      "# -*- coding: utf-8 -*-",
+      "x = '#' + \"#\" + r'\\#' + b'#'  # trailing",
+      "y = '''",
+      "# inside",
+      "'''",
+      "z = f\"{x!r:>{w}} {{#}} {'#'} \\N{BULLET}\"",
+      'w = f"""{',
+      "  x  # a comment in a field",
+      '}"""',
+      "v = rb'#' if x else Rb\"#\"",
+    ];
+    expect(pythonComments("a.py", lines.join("\n"))).toEqual(
+      read([
+        { line: 3, text: "# trailing" },
+        { line: 9, text: "# a comment in a field" },
+      ]),
+    );
+  });
+
+  test("refuses every string that stands alone as a statement, docstrings included", () => {
+    const lines = [
+      '"""Module docstring."""',
+      "def f():",
+      "    '''Function docstring.'''",
+      "    x = 'not alone'",
+      '    ("one"',
+      '     "statement")',
+      "    g('not alone')",
+      "    y = 1; 'alone after a semicolon'",
+      "    'a' + x",
+      '    b"bytes" f"{x}"',
+    ];
+    expect(pythonComments("a.py", lines.join("\n"))).toEqual(
+      read([
+        { line: 1, text: '"""Module docstring."""' },
+        { line: 3, text: "'''Function docstring.'''" },
+        { line: 5, text: '("one"\n     "statement")' },
+        { line: 8, text: "'alone after a semicolon'" },
+        { line: 10, text: 'b"bytes" f"{x}"' },
+      ]),
+    );
+  });
+
+  test("refuses a string that stands alone after a compound header's colon, not after an annotation or lambda", () => {
+    const lines = [
+      'class Error(Exception): "Raised on purpose."',
+      "def f(): 'One line.'",
+      "if x: pass",
+      "else: 'else body'",
+      "if (lambda: 'a')(): 'after a lambda in brackets'",
+      "with open(p) as f, lambda: 1: 'after a top-level lambda'",
+      "x: 'T' = 1",
+      "y: 'T'",
+      "g = lambda: 's'",
+      "if n := 1: 'after a walrus'",
+    ];
+    expect(pythonComments("a.py", lines.join("\n"))).toEqual(
+      read([
+        { line: 1, text: '"Raised on purpose."' },
+        { line: 2, text: "'One line.'" },
+        { line: 4, text: "'else body'" },
+        { line: 5, text: "'after a lambda in brackets'" },
+        { line: 6, text: "'after a top-level lambda'" },
+        { line: 10, text: "'after a walrus'" },
+      ]),
+    );
+  });
+
+  test("keeps a PEP 723 script block only when it closes and its TOML holds no comment", () => {
+    expect(pythonComments("a.py", '# /// script\n# dependencies = ["httpx"]\n# ///\nx = 1\n')).toEqual(
+      read([]),
+    );
+    expect(pythonComments("a.py", "# /// script\n# dependencies = []\nx = 1\n")).toEqual(
+      read([
+        { line: 1, text: "# /// script" },
+        { line: 2, text: "# dependencies = []" },
+      ]),
+    );
+    expect(pythonComments("a.py", "# /// pyproject\n# ///\n")).toEqual(
+      read([
+        { line: 1, text: "# /// pyproject" },
+        { line: 2, text: "# ///" },
+      ]),
+    );
+  });
+
+  test("names the line where a string, bracket or continuation that never closes opens", () => {
+    for (const [open, reason] of [
+      ["x = 'open\ny = 'z'\n", "Unterminated string"],
+      ['x = """open\ny = 1\n', "Unterminated string"],
+      ['x = f"{open\n', "Unterminated string"],
+      ['x = f"{1:\n}"\n', "Unterminated string"],
+      ["x = [1,\n2\n", "Unterminated bracket"],
+      ["x = (1\n", "Unterminated parenthesis"],
+      ["x = 1 + \\", "Unterminated line continuation"],
+    ] as const)
+      expect([open, pythonComments("a.py", `y = 0\n${open}`)]).toEqual([open, unparsed(2, reason)]);
+    expect(pythonComments("a.py", "x = 1)\nif x:\n    y\n  z\n")).toEqual(read([]));
+  });
+});
+
 describe("the README", () => {
   test("lists the forms each adapter keeps, and those every language keeps", () => {
     const cell = (forms: readonly string[]) => (forms.length === 0 ? "none" : forms.join("; "));
@@ -1222,9 +1334,11 @@ describe("the pre-commit hook", () => {
       "no-comments-shell",
       "no-comments-rust",
       "no-comments-go",
+      "no-comments-python",
     ]);
     writeFiles(dir, {
       "a.go": "// Package a.\npackage a\n",
+      "a.py": '"""Docstring."""\n',
       "lib/a.dart": "void f() {} // why\n",
       "src/a.rs": '#[doc = "why"]\nfn f() {}\n',
       "db/a.sql": "select 1; -- why\n",
@@ -1237,6 +1351,8 @@ describe("the pre-commit hook", () => {
         [
           "a.go",
           "  1  // Package a.",
+          "a.py",
+          '  1  """Docstring."""',
           "bin/tool",
           "  2  # why",
           "db/a.sql",
@@ -1252,6 +1368,7 @@ describe("the pre-commit hook", () => {
           "kept in shell: the first-line shebang; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
           KEPT_IN_RUST,
           KEPT_IN_GO,
+          KEPT_IN_PYTHON,
         ],
       ),
     });

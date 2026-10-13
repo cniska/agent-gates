@@ -26,7 +26,7 @@ agent-gates doctor
 | `commit-subject` | `.githooks/commit-msg` | `commits.yml` | A subject that is not a Conventional Commit, is over 50 characters or is not ASCII, and any message body |
 | `no-comments-<language>` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment the change adds, other than a [kept form](#kept-comments) |
 
-The languages are `javascript` (JavaScript and TypeScript), `dart`, `sql` (PostgreSQL), `shell`, `rust` and `go`.
+The languages are `javascript` (JavaScript and TypeScript), `dart`, `sql` (PostgreSQL), `shell`, `rust`, `go` and `python`.
 
 Installed files:
 
@@ -54,7 +54,7 @@ What is judged:
 - **On commit:** the staged changes against `HEAD`.
 - **In CI:** a pull request against the point it left its base branch; a push against the branch's previous tip, or against the default branch when the push creates the branch.
 - **Added** means the comment's text, trimmed and with whitespace collapsed, is not among the comments the changed files held before. Moving, reindenting or renaming keeps a comment; editing a word, splitting, joining or duplicating one adds it.
-- **Not parsing:** JavaScript and TypeScript refuse any syntax error Babel reports, at its line. The other languages refuse a string, comment, quote, character, expansion or heredoc that never closes, at the line where it opens. Dart and SQL also refuse an unbalanced bracket, and SQL a `$` that starts neither a dollar quote nor a parameter.
+- **Not parsing:** JavaScript and TypeScript refuse any syntax error Babel reports, at its line. The other languages refuse a string, comment, quote, character, expansion or heredoc that never closes, at the line where it opens. Dart and SQL also refuse an unbalanced bracket, Python one that never closes and a line continuation at the end of the file, and SQL a `$` that starts neither a dollar quote nor a parameter.
 - **Skipped:** files marked `linguist-generated` or `linguist-vendored`, binary files, symlinks, and code embedded in another language (shell in a workflow's `run:`, SQL in a string, `.vue` files). A file without an extension is routed by its shebang.
 
 The gates need `node` on `PATH` and nothing installed in the project.
@@ -79,6 +79,7 @@ A comment stays only when the compiler, interpreter, bundler or runtime reads it
 | shell | the first-line shebang |
 | Rust | none |
 | Go | `//go:build` and `//go:debug` with their argument, before `package`; `//go:embed` with its patterns, above a `var`; `//go:generate`, `//go:linkname`, `//go:wasmimport`, `//go:wasmexport` and `//go:fix` with their arguments, and `//go:noinline`, `//go:nosplit`, `//go:noescape`, `//go:norace`, `//go:nocheckptr`, `//go:uintptrescapes` and `//go:uintptrkeepalive` alone, at column 1; `//line file:N` at column 1, and `/*line file:N*/`; `//export Name` above the top-level func `Name`, in a file that imports `"C"`; the cgo preamble above `import "C"`, holding no C comment |
+| Python | the first-line shebang; the PEP 263 coding declaration on line 1, or on line 2 under a blank or comment line; a PEP 723 `# /// script` block whose TOML holds no comment |
 | Every language | one `SPDX-License-Identifier:` line; a gate marker on a line of its own |
 
 - Every kept form stands alone in its comment: no reason, no trailing text. A directive in a block comment that spans lines is refused.
@@ -90,8 +91,9 @@ How each language is read:
 
 - **JavaScript and TypeScript** with Babel's parser.
 - **SQL** as PostgreSQL, with dollar quotes and `E''` strings. A dollar-quoted body that parses as SQL is judged as code; one that does not is text.
-- **Dart, shell, Rust and Go** by lexers that find the comments the language's own tokenizer finds. Shell treats `#` as a comment only where a word starts.
+- **Dart, shell, Rust, Go and Python** by lexers that find the comments the language's own tokenizer finds. Shell treats `#` as a comment only where a word starts.
 - **Rust** reads an attribute carrying `doc = …` anywhere, such as `#[cfg_attr(docsrs, doc = …)]`, as a doc comment; `#[doc(hidden)]` is code.
+- **Python** judges a string that stands alone as a statement, a docstring included, as a comment, and reads a closed `# /// script` block as one comment. Indentation is not checked.
 - **Go** groups comments as `go/parser` does, so `//go:embed` and `//export` count only in the group on the line above their declaration, and the cgo preamble is the group above `import "C"`.
 
 ## Commands

@@ -18,7 +18,7 @@ describe("the cli", () => {
     expect(cli("doctor")).toEqual({
       status: 0,
       stdout:
-        '{"command":"doctor","ok":true,"result":{"checks":[{"name":"gates","state":"warn","detail":"no gate is installed","fix":"agent-gates install <gate>..., choosing from commit-subject, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-go"}],"failing":0}}\n',
+        '{"command":"doctor","ok":true,"result":{"checks":[{"name":"gates","state":"warn","detail":"no gate is installed","fix":"agent-gates install <gate>..., choosing from commit-subject, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-go, no-comments-python"}],"failing":0}}\n',
       stderr: "",
     });
     const installed = cli("install", "commit-subject");
@@ -73,10 +73,10 @@ describe("the cli", () => {
         meta: {
           names: ["lint-free"],
           usage:
-            "agent-gates install [<gate>...], choosing from commit-subject, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-go",
+            "agent-gates install [<gate>...], choosing from commit-subject, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-go, no-comments-python",
         },
         resolve:
-          "agent-gates install [<gate>...], choosing from commit-subject, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-go",
+          "agent-gates install [<gate>...], choosing from commit-subject, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-go, no-comments-python",
       },
     });
     expect(cli("doctor").stdout).toBe(before);
