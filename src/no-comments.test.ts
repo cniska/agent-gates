@@ -6,16 +6,9 @@ import { gatesDoctor } from "./doctor";
 import { bundled } from "./gate-bundles";
 import { installGates, SOURCE_DIR } from "./gates";
 import { ADAPTER_FILES, SCANNER_FILE } from "./gates-contract";
+import { type Comment, type CommentsOf, type Reading, SHARED_SHOWN } from "./no-comments-adapter";
 import { ADAPTERS } from "./no-comments-adapters.test-support";
-import {
-  type Comment,
-  type CommentsOf,
-  LANGUAGE_NAMES,
-  LANGUAGES,
-  languageOf,
-  type Reading,
-} from "./no-comments-languages";
-import { SHARED_KEPT_SHOWN } from "./no-comments-scan";
+import { LANGUAGE_NAMES, LANGUAGES, type Language, languageOf } from "./no-comments-languages";
 import {
   commit,
   commitPastHooks,
@@ -938,11 +931,14 @@ describe("the README", () => {
   test("lists the forms each adapter keeps, and those every language keeps", () => {
     const cell = (forms: readonly string[]) => (forms.length === 0 ? "none" : forms.join("; "));
     const readme = readFileSync(join(import.meta.dir, "../README.md"), "utf8");
+    const own = (language: Language) => {
+      const { kept } = ADAPTERS[language];
+      expect(kept.slice(kept.length - SHARED_SHOWN.length)).toEqual([...SHARED_SHOWN]);
+      return kept.slice(0, kept.length - SHARED_SHOWN.length);
+    };
     const rows = [
-      ...LANGUAGE_NAMES.map(
-        (language) => `| ${LANGUAGES[language].shown} | ${cell(ADAPTERS[language].kept)} |`,
-      ),
-      `| Every language | ${cell(SHARED_KEPT_SHOWN)} |`,
+      ...LANGUAGE_NAMES.map((language) => `| ${LANGUAGES[language].shown} | ${cell(own(language))} |`),
+      `| Every language | ${cell(SHARED_SHOWN)} |`,
     ];
     expect(readme).toContain(["| Language | Kept comments |", "| --- | --- |", ...rows].join("\n"));
   });

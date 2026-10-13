@@ -128,12 +128,12 @@ Each gate file is in one of these states, and `install` acts on it:
 To add a language:
 
 1. Add its extensions and shebang interpreters to `LANGUAGES` in `src/no-comments-languages.ts`.
-2. Write a lexer in `src/no-comments-<language>.ts` that exports `comments`, built with `refusedComments` from `src/no-comments-spans.ts`. The lexer returns the comment spans it read, or `unterminated(<offset>, "<construct>")` for a construct that never closes, at the offset where it opens. `comments` then returns `{ kind: "read", comments }`, each comment its line and full text, or `{ kind: "unparsed", line, reason }`.
+2. Write `src/no-comments-<language>.ts`, exporting `comments` and `kept` from `adapter()` in `src/no-comments-adapter.ts`. Its lexer returns each comment's span with its body's bounds, or `unterminated(<offset>, "<construct>")` where a construct never closes. Its kept forms are `directive(...)` rows for tool directives and plain forms for placement rules; the shared SPDX and marker forms are added for it.
 3. Check the lexer against the language's own tokenizer over real and deliberately broken files. It must find the same comments, and never refuse a file the tokenizer accepts.
 4. Add its tests, its `GATES` entry and its README row.
 5. Run `bun run gates:bundle`, and record the bundle's hash as [AGENTS.md](AGENTS.md) describes.
 
-`bun run check` fails until the entry, the bundle and the hash agree. JavaScript and TypeScript are the exception to step 2: they use Babel's parser, because their comments cannot be found without parsing.
+`bun run check` fails until the entry, the bundle and the hash agree. JavaScript and TypeScript lex with Babel's parser, because their comments cannot be found without parsing.
 
 To support another SQL dialect: `.sql` is read as PostgreSQL, which SQLite also passes but MySQL, BigQuery and Snowflake do not. Supporting them takes a table of lexer rules per dialect in the SQL adapter, chosen per path by a git attribute such as `agent-gates-sql=mysql`.
 

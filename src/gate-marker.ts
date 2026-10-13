@@ -1,4 +1,12 @@
-const MARKER_LINE = /^(?:#|\/\/) ([a-z]+(?:-[a-z]+)*)-gate:(?:([a-z-]+):)?(\d+)$/;
+const MARKER_BODY = " ([a-z]+(?:-[a-z]+)*)-gate:(?:([a-z-]+):)?(\\d+)";
+
+const MARKER_LINE = new RegExp(`^(?:#|//)${MARKER_BODY}$`);
+
+const MARKER_COMMENT_BODY = new RegExp(`^${MARKER_BODY}$`);
+
+export function isMarkerBody(body: string): boolean {
+  return MARKER_COMMENT_BODY.test(body);
+}
 
 const OURS = "agent";
 

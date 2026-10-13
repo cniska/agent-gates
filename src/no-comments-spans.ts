@@ -1,19 +1,6 @@
 import { invariant } from "./assert";
-import { type KeptForm, keptBy } from "./no-comments-kept";
-import type { Comment, CommentsOf, Tracked } from "./no-comments-languages";
-
-export type Span = { readonly start: number; readonly end: number };
-
-export type Spanned<S extends Span = Span> = {
-  readonly text: string;
-  readonly span: S;
-  readonly path: string;
-  readonly tracked: Tracked;
-};
 
 export type Stopped = { readonly kind: "stopped"; readonly at: number; readonly reason: string };
-
-export type Lexed<S extends Span = Span> = { readonly kind: "lexed"; readonly spans: readonly S[] } | Stopped;
 
 const NEWLINE = 10;
 
@@ -57,21 +44,5 @@ export function lineCounter(text: string): (offset: number) => number {
     invariant(offset >= counted, "lines are counted in source order");
     for (; counted < offset; counted++) if (text.charCodeAt(counted) === NEWLINE) line++;
     return line;
-  };
-}
-
-export function refusedComments<S extends Span>(
-  commentSpans: (text: string) => Lexed<S>,
-  forms: readonly KeptForm<Spanned<S>>[],
-): CommentsOf {
-  const isKept = keptBy(forms);
-  return (path, text, tracked) => {
-    const lexed = commentSpans(text);
-    const lineAt = lineCounter(text);
-    if (lexed.kind === "stopped") return { kind: "unparsed", line: lineAt(lexed.at), reason: lexed.reason };
-    const comments: Comment[] = lexed.spans
-      .filter((span) => !isKept({ text, span, path, tracked }))
-      .map(({ start, end }) => ({ line: lineAt(start), text: text.slice(start, end) }));
-    return { kind: "read", comments };
   };
 }

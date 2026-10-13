@@ -1,18 +1,21 @@
-import { type KeptForm, shownOf } from "./no-comments-kept";
-import type { CommentsOf } from "./no-comments-languages";
-import { SHEBANG_PREFIX } from "./no-comments-route";
 import {
+  adapter,
+  type CommentRead,
+  directive,
+  type KeptForm,
   type Lexed,
-  lineEnd,
-  refusedComments,
   type Span,
-  type Spanned,
-  type Stopped,
-  unterminated,
-} from "./no-comments-spans";
+} from "./no-comments-adapter";
+import { lineEnd, type Stopped, unterminated } from "./no-comments-spans";
 
 const SHELLCHECK_DIRECTIVE =
-  /^#\s*shellcheck(?:\s+(?:source|source-path|shell|external-sources|enable)=\S+)+\s*(?:#.*)?$/;
+  /shellcheck(?:\s+(?:source|source-path|shell|external-sources|enable)=\S+)+(?:\s*#.*)?/;
+
+const SHEBANG_BODY = "!";
+
+const OPENER = 1;
+
+const LEADING_BLANKS = /^\s*/;
 
 const BLANKS = new Set([" ", "\t"]);
 
@@ -56,15 +59,19 @@ type Heredoc = {
 
 type CaseState = "subject" | "in" | "pattern" | "body";
 
-function commentSpans(text: string): Lexed {
+function commentSpans(text: string): Lexed<Span, null> {
   const spans: Span[] = [];
   const pending: Heredoc[] = [];
   let at = 0;
 
+  function lineSpan(start: number, end: number): Span {
+    return { start, end, bodyStart: start + OPENER, bodyEnd: end, style: "line" };
+  }
+
   function comment(): void {
     const start = at;
     at = lineEnd(text, at);
-    spans.push({ start, end: at });
+    spans.push(lineSpan(start, at));
   }
 
   function singleQuoted(): Stopped | null {
@@ -117,7 +124,7 @@ function commentSpans(text: string): Lexed {
     const nested = commentSpans(inner);
     if (nested.kind === "stopped") return { ...nested, at: offsets[nested.at] ?? end };
     for (const span of nested.spans)
-      spans.push({ start: offsets[span.start] ?? end, end: (offsets[span.end - 1] ?? end) + 1 });
+      spans.push(lineSpan(offsets[span.start] ?? end, (offsets[span.end - 1] ?? end) + 1));
     at = end + 1;
     return null;
   }
@@ -407,21 +414,23 @@ function commentSpans(text: string): Lexed {
     return null;
   }
 
-  return code(false) ?? { kind: "lexed", spans };
+  return code(false) ?? { kind: "lexed", spans, facts: null };
 }
 
-const KEPT: readonly KeptForm<Spanned>[] = [
+const KEPT: readonly KeptForm<CommentRead<Span, null, null>>[] = [
   {
     shown: "the first-line shebang",
-    keeps: ({ text, span: { start } }) => start === 0 && text.startsWith(SHEBANG_PREFIX),
+    keeps: ({ span, body }) => span.start === 0 && body.startsWith(SHEBANG_BODY),
   },
-  {
-    shown:
-      "`shellcheck` directives of `source=`, `source-path=`, `shell=`, `external-sources=` and `enable=`",
-    keeps: ({ text, span: { start, end } }) => SHELLCHECK_DIRECTIVE.test(text.slice(start, end)),
-  },
+  directive(
+    "`shellcheck` directives of `source=`, `source-path=`, `shell=`, `external-sources=` and `enable=`",
+    { pattern: SHELLCHECK_DIRECTIVE, reason: "alone" },
+  ),
 ];
 
-export const comments: CommentsOf = refusedComments(commentSpans, KEPT);
-
-export const kept = shownOf(KEPT);
+export const { comments, kept } = adapter({
+  contextOf: () => null,
+  lex: commentSpans,
+  directiveLead: LEADING_BLANKS,
+  kept: KEPT,
+});

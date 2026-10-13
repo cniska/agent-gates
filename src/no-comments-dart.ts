@@ -1,40 +1,37 @@
-import { bracketsOf } from "./no-comments-brackets";
-import { type KeptForm, shownOf } from "./no-comments-kept";
-import type { CommentsOf } from "./no-comments-languages";
-import { SHEBANG_PREFIX } from "./no-comments-route";
 import {
+  adapter,
+  type CommentRead,
+  directive,
+  type KeptForm,
   type Lexed,
-  lineEnd,
-  nestedBlockEnd,
-  refusedComments,
   type Span,
-  type Spanned,
-  type Stopped,
-  unterminated,
-} from "./no-comments-spans";
+} from "./no-comments-adapter";
+import { bracketsOf } from "./no-comments-brackets";
+import { SHEBANG_PREFIX } from "./no-comments-route";
+import { lineEnd, nestedBlockEnd, type Stopped, unterminated } from "./no-comments-spans";
 
-const LINE_COMMENT = "//";
+const OPENER = 2;
 
 const DOC_SLASH_AND_SPACE = /^\/?\s*/;
 
 const IDENTIFIER_CHAR = /[A-Za-z0-9_$]/;
 
-const LANGUAGE_VERSION = /^\/\/\s*@dart\s*=\s*\d+\.\d+\s*$/;
+const LANGUAGE_VERSION = /^\s*@dart\s*=\s*\d+\.\d+\s*$/;
 
-function commentSpans(text: string): Lexed {
+function commentSpans(text: string): Lexed<Span, null> {
   const spans: Span[] = [];
   let at = text.startsWith(SHEBANG_PREFIX) ? lineEnd(text, 0) : 0;
 
   function lineComment(): void {
     const start = at;
     at = lineEnd(text, at);
-    spans.push({ start, end: at });
+    spans.push({ start, end: at, bodyStart: start + OPENER, bodyEnd: at, style: "line" });
   }
 
   function blockComment(): Stopped | null {
     const end = nestedBlockEnd(text, at, text.length);
     if (end === null) return unterminated(at, "comment");
-    spans.push({ start: at, end });
+    spans.push({ start: at, end, bodyStart: at + OPENER, bodyEnd: end - OPENER, style: "block" });
     at = end;
     return null;
   }
@@ -86,33 +83,25 @@ function commentSpans(text: string): Lexed {
     return brackets.unclosed() ?? (closesInterpolation ? unterminated(start, "interpolation") : null);
   }
 
-  return code(false) ?? { kind: "lexed", spans };
+  return code(false) ?? { kind: "lexed", spans, facts: null };
 }
 
-function directiveOf({ text, span: { start, end } }: Spanned): string | null {
-  if (!text.startsWith(LINE_COMMENT, start)) return null;
-  return text.slice(start + LINE_COMMENT.length, end).replace(DOC_SLASH_AND_SPACE, "");
+function isLine({ span }: CommentRead): boolean {
+  return span.style === "line";
 }
 
-function analyzerDirective(shown: string, directive: RegExp): KeptForm<Spanned> {
-  return {
-    shown,
-    keeps: (comment) => {
-      const body = directiveOf(comment);
-      return body !== null && directive.test(body);
-    },
-  };
-}
-
-const KEPT: readonly KeptForm<Spanned>[] = [
-  analyzerDirective("`ignore:`", /^ignore:/),
-  analyzerDirective("`ignore_for_file:`", /^ignore_for_file:/),
+const KEPT: readonly KeptForm<CommentRead<Span, null, null>>[] = [
+  directive("`ignore:`", { pattern: /ignore:/, reason: "allowed", where: isLine }),
+  directive("`ignore_for_file:`", { pattern: /ignore_for_file:/, reason: "allowed", where: isLine }),
   {
     shown: "`// @dart = x.y` alone",
-    keeps: ({ text, span: { start, end } }) => LANGUAGE_VERSION.test(text.slice(start, end)),
+    keeps: (read) => isLine(read) && LANGUAGE_VERSION.test(read.body),
   },
 ];
 
-export const comments: CommentsOf = refusedComments(commentSpans, KEPT);
-
-export const kept = shownOf(KEPT);
+export const { comments, kept } = adapter({
+  contextOf: () => null,
+  lex: commentSpans,
+  directiveLead: DOC_SLASH_AND_SPACE,
+  kept: KEPT,
+});

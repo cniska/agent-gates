@@ -1,8 +1,7 @@
 import { invariant, unreachable } from "./assert";
-import { markerLine } from "./gate-marker";
 import { blobsOf, gitOutput, mergeBase, nulFields } from "./git";
-import { type KeptForm, keptBy, shownOf } from "./no-comments-kept";
-import { type Adapter, type Language, languageOf, type Reading, type Tracked } from "./no-comments-languages";
+import type { Adapter, Reading, Tracked } from "./no-comments-adapter";
+import { type Language, languageOf } from "./no-comments-languages";
 import { outsideTheCode } from "./no-comments-skips";
 import { firstLine } from "./no-comments-spans";
 
@@ -48,9 +47,7 @@ export type FileFindings =
 
 export type AdapterOf = (language: Language) => Adapter | null;
 
-type Read = { readonly language: Language; readonly reading: Reading };
-
-type InSource = { readonly text: string; readonly sourceLine: string };
+type LanguageReading = { readonly language: Language; readonly reading: Reading };
 
 const HEAD = "HEAD";
 
@@ -69,24 +66,6 @@ const NUMSTAT_RECORD = /^([^\t]*\t[^\t]*\t)(.*)$/s;
 const BINARY = "-\t-\t";
 
 const WHITESPACE_RUN = /\s+/g;
-
-const LICENSE_ID = "[\\w.+\\-:()]+";
-
-const SPDX_LINE = new RegExp(
-  `^(?://+!?|#+|--+|/\\*+!?)[ \\t]*SPDX-License-Identifier:[ \\t]*${LICENSE_ID}(?:[ \\t]+(?:AND|OR|WITH)[ \\t]+${LICENSE_ID})*[ \\t]*(?:\\*+/)?$`,
-);
-
-const SHARED_KEPT: readonly KeptForm<InSource>[] = [
-  { shown: "one `SPDX-License-Identifier:` line", keeps: ({ text }) => SPDX_LINE.test(text.trim()) },
-  {
-    shown: "a gate marker on a line of its own",
-    keeps: ({ sourceLine }) => markerLine(sourceLine) !== null,
-  },
-];
-
-const isSharedKept = keptBy(SHARED_KEPT);
-
-export const SHARED_KEPT_SHOWN = shownOf(SHARED_KEPT);
 
 function emptyTree(root: string): string {
   return gitOutput(root, ["hash-object", "-t", "tree", "--stdin"], "").toString().trim();
@@ -207,23 +186,17 @@ export function judgedChange(root: string, judged: Judged): JudgedChange {
   return { heads, bases: files.slice(inTheCode.length).map((file) => ({ ...file, tracked: trackedAtBase })) };
 }
 
-function readingOf({ path, text, tracked }: JudgedFile, adapterOf: AdapterOf): Read | null {
+function readingOf({ path, text, tracked }: JudgedFile, adapterOf: AdapterOf): LanguageReading | null {
   const language = languageOf(path, firstLine(text));
   const adapter = language === null ? null : adapterOf(language);
   if (language === null || adapter === null) return null;
-  const reading = adapter.comments(path, text, tracked);
-  if (reading.kind === "unparsed") return { language, reading };
-  const lines = text.split("\n");
-  const refused = reading.comments.filter(
-    (comment) => !isSharedKept({ text: comment.text, sourceLine: lines[comment.line - 1] ?? "" }),
-  );
-  return { language, reading: { kind: "read", comments: refused } };
+  return { language, reading: adapter.comments(path, text, tracked) };
 }
 
 export function keptIn(adapterOf: AdapterOf, language: Language): readonly string[] {
   const adapter = adapterOf(language);
   invariant(adapter !== null, `the ${language} adapter that refused a comment is loaded`);
-  return [...adapter.kept, ...SHARED_KEPT_SHOWN];
+  return adapter.kept;
 }
 
 function identityOf(comment: string): string {
@@ -258,7 +231,7 @@ function takenFrom(pool: Pool, comment: string): boolean {
   return true;
 }
 
-function unmatchedIn(read: Read | null, own: Pool | null): Read | null {
+function unmatchedIn(read: LanguageReading | null, own: Pool | null): LanguageReading | null {
   if (read?.reading.kind !== "read" || own === null) return read;
   const comments = read.reading.comments.filter(({ text }) => !takenFrom(own, text));
   return { language: read.language, reading: { kind: "read", comments } };

@@ -1,17 +1,15 @@
 import { dirname, join, relative } from "node:path/posix";
-import { type KeptForm, shownOf } from "./no-comments-kept";
-import type { CommentsOf, Tracked } from "./no-comments-languages";
-import { SHEBANG_PREFIX } from "./no-comments-route";
 import {
+  adapter,
+  type CommentRead,
+  type KeptForm,
   type Lexed,
-  lineEnd,
-  nestedBlockEnd,
-  refusedComments,
   type Span,
-  type Spanned,
-  type Stopped,
-  unterminated,
-} from "./no-comments-spans";
+  type Style,
+  type Tracked,
+} from "./no-comments-adapter";
+import { SHEBANG_PREFIX } from "./no-comments-route";
+import { lineEnd, nestedBlockEnd, type Stopped, unterminated } from "./no-comments-spans";
 
 const IDENTIFIER_START = /^[\p{XID_Start}_]$/u;
 
@@ -57,6 +55,14 @@ const BINARY_ROOT = "src/main.rs";
 
 const BINARIES_DIR = "src/bin/";
 
+const PLAIN_OPENER = 2;
+
+const DOC_OPENER = 3;
+
+const BLOCK_CLOSER = 2;
+
+const NO_DIRECTIVES = /^/;
+
 type Doc = "none" | "inner" | "public" | "other";
 
 type DocForm = "none" | "inner" | "outer";
@@ -100,7 +106,7 @@ function formAt(text: string, start: number): DocForm {
   return OUTER_DOC.test(text) ? "outer" : "none";
 }
 
-function commentSpans(text: string): Lexed<DocSpan> {
+function commentSpans(text: string): Lexed<DocSpan, null> {
   const spans: FormSpan[] = [];
   const awaitingItem: number[] = [];
   const documentsPublicItem = new Set<number>();
@@ -133,21 +139,23 @@ function commentSpans(text: string): Lexed<DocSpan> {
     return stopped;
   }
 
-  function found(start: number, end: number, form: DocForm): void {
-    spans.push({ start, end, form });
+  function found(start: number, end: number, form: DocForm, style: Style): void {
+    const bodyStart = style === "attribute" ? start : start + (form === "none" ? PLAIN_OPENER : DOC_OPENER);
+    const bodyEnd = style === "block" ? end - BLOCK_CLOSER : end;
+    spans.push({ start, end, bodyStart, bodyEnd, style, form });
     if (form === "outer" && insideAttribute === 0) awaitingItem.push(start);
   }
 
   function lineComment(): void {
     const start = at;
     at = lineEnd(text, at);
-    found(start, at, formAt(text, start));
+    found(start, at, formAt(text, start), "line");
   }
 
   function blockComment(): Stopped | null {
     const end = nestedBlockEnd(text, at, text.length);
     if (end === null) return unterminated(at, "comment");
-    found(at, end, formAt(text, at));
+    found(at, end, formAt(text, at), "block");
     at = end;
     return null;
   }
@@ -322,7 +330,7 @@ function commentSpans(text: string): Lexed<DocSpan> {
     if (stopped !== null) return stopped;
     if (carriesDocText) {
       spans.splice(firstInside, Infinity);
-      found(start, at, form);
+      found(start, at, form, "attribute");
     }
     carriesDocText ||= outerCarriesDocText;
     return null;
@@ -384,7 +392,8 @@ function commentSpans(text: string): Lexed<DocSpan> {
   };
   return {
     kind: "lexed",
-    spans: spans.map(({ start, end, form }) => ({ start, end, doc: docOf(form, start) })),
+    spans: spans.map(({ form, ...span }) => ({ ...span, doc: docOf(form, span.start) })),
+    facts: null,
   };
 }
 
@@ -402,18 +411,21 @@ function placementOf(path: string, tracked: Tracked): Placement {
   return "library";
 }
 
-const KEPT: readonly KeptForm<Spanned<DocSpan>>[] = [
+const KEPT: readonly KeptForm<CommentRead<DocSpan, Placement, null>>[] = [
   {
     shown:
       "in library code, an outer doc comment (`///`, `/** */`, `#[doc]`) on a `pub` item, a `#[macro_export]` macro, or a variant or item of a `pub` enum or trait",
-    keeps: ({ span, path, tracked }) => span.doc === "public" && placementOf(path, tracked) !== "elsewhere",
+    keeps: ({ span, file }) => span.doc === "public" && file.context !== "elsewhere",
   },
   {
     shown: "an inner doc comment (`//!`, `/*! */`, `#![doc]`) in a library's `src/lib.rs`",
-    keeps: ({ span, path, tracked }) => span.doc === "inner" && placementOf(path, tracked) === "crate-root",
+    keeps: ({ span, file }) => span.doc === "inner" && file.context === "crate-root",
   },
 ];
 
-export const comments: CommentsOf = refusedComments(commentSpans, KEPT);
-
-export const kept = shownOf(KEPT);
+export const { comments, kept } = adapter({
+  contextOf: (path, _text, tracked) => placementOf(path, tracked),
+  lex: commentSpans,
+  directiveLead: NO_DIRECTIVES,
+  kept: KEPT,
+});

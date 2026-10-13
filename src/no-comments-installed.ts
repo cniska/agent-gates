@@ -2,7 +2,8 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { invariant } from "./assert";
-import type { Adapter, Comment, Language, Reading } from "./no-comments-languages";
+import type { Adapter, Comment, Reading } from "./no-comments-adapter";
+import type { Language } from "./no-comments-languages";
 import type { AdapterOf } from "./no-comments-scan";
 
 const SCANNER = "scan.cjs";

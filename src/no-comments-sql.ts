@@ -1,17 +1,6 @@
+import { adapter, type CommentRead, type KeptForm, type Lexed, type Span } from "./no-comments-adapter";
 import { bracketsOf } from "./no-comments-brackets";
-import { type KeptForm, shownOf } from "./no-comments-kept";
-import type { CommentsOf } from "./no-comments-languages";
-import {
-  type Lexed,
-  lineEnd,
-  nestedBlockEnd,
-  refusedComments,
-  type Span,
-  type Spanned,
-  type Stopped,
-  unexpected,
-  unterminated,
-} from "./no-comments-spans";
+import { lineEnd, nestedBlockEnd, type Stopped, unexpected, unterminated } from "./no-comments-spans";
 
 const POSTGRES_LETTER = "A-Za-z\\u0080-\\uffff_";
 
@@ -23,9 +12,15 @@ const DIGIT = /^[0-9]$/;
 
 const ESCAPE_STRING_PREFIX = /^[Ee]$/;
 
-const DRIZZLE_STATEMENT_BREAKPOINT = "--> statement-breakpoint";
+const OPENER = 2;
 
-function commentSpans(text: string): Lexed {
+const LINE_OPENER = "--";
+
+const DRIZZLE_STATEMENT_BREAKPOINT = "> statement-breakpoint";
+
+const LEADING_BLANKS = /^\s*/;
+
+function commentSpans(text: string): Lexed<Span, null> {
   const spans: Span[] = [];
   const followsIdentifier = (index: number) => IDENTIFIER_CHAR.test(text[index - 1] ?? "");
 
@@ -55,14 +50,14 @@ function commentSpans(text: string): Lexed {
 
   function lineComment(start: number, to: number): number {
     const end = Math.min(lineEnd(text, start), to);
-    spans.push({ start, end });
+    spans.push({ start, end, bodyStart: start + OPENER, bodyEnd: end, style: "line" });
     return end;
   }
 
   function blockComment(start: number, to: number): number | Stopped {
     const end = nestedBlockEnd(text, start, to);
     if (end === null) return unterminated(start, "comment");
-    spans.push({ start, end });
+    spans.push({ start, end, bodyStart: start + OPENER, bodyEnd: end - OPENER, style: "block" });
     return end;
   }
 
@@ -91,16 +86,19 @@ function commentSpans(text: string): Lexed {
     return brackets.unclosed();
   }
 
-  return code(0, text.length) ?? { kind: "lexed", spans };
+  return code(0, text.length) ?? { kind: "lexed", spans, facts: null };
 }
 
-const KEPT: readonly KeptForm<Spanned>[] = [
+const KEPT: readonly KeptForm<CommentRead<Span, null, null>>[] = [
   {
-    shown: `drizzle's \`${DRIZZLE_STATEMENT_BREAKPOINT}\``,
-    keeps: ({ text, span: { start, end } }) => text.slice(start, end).trim() === DRIZZLE_STATEMENT_BREAKPOINT,
+    shown: `drizzle's \`${LINE_OPENER}${DRIZZLE_STATEMENT_BREAKPOINT}\``,
+    keeps: ({ opener, body }) => opener === LINE_OPENER && body.trimEnd() === DRIZZLE_STATEMENT_BREAKPOINT,
   },
 ];
 
-export const comments: CommentsOf = refusedComments(commentSpans, KEPT);
-
-export const kept = shownOf(KEPT);
+export const { comments, kept } = adapter({
+  contextOf: () => null,
+  lex: commentSpans,
+  directiveLead: LEADING_BLANKS,
+  kept: KEPT,
+});
