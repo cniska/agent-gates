@@ -101,6 +101,7 @@ export const SCANNER_FILE: GateFile = {
     { version: 19, sha256: "a00e2bc6294d6d3c6d8a824749190307015e999c17616903a3e4b6bb495d63cc" },
     { version: 20, sha256: "e33a12f6c8989f3e1c4002d3a6a56b3c717a217702a350025c8aaa6935064848" },
     { version: 21, sha256: "d03456acb428d0c89b384ba675ac5d09ee6b0b00e80b2c0def1818bdeeac40d8" },
+    { version: 22, sha256: "722964462b7354334fe7fa3e0c505afb2424970a934593f3727d0f8d55a276c7" },
   ],
 };
 

@@ -32,7 +32,9 @@ type JudgedHead = { readonly file: JudgedFile; readonly base: Base | null };
 
 type JudgedChange = { readonly heads: readonly JudgedHead[]; readonly bases: readonly JudgedFile[] };
 
-type Pool = Map<string, number>;
+type Pool = ReadonlyMap<string, number>;
+
+type Counts = Map<string, number>;
 
 export type Refused = { readonly line: number; readonly body: string };
 
@@ -206,24 +208,24 @@ function identityOf(comment: string): string {
     .join("\n");
 }
 
-function added(pool: Pool, identity: string, count: number): void {
+function added(pool: Counts, identity: string, count: number): void {
   pool.set(identity, (pool.get(identity) ?? 0) + count);
 }
 
 function poolOf(base: JudgedFile, adapterOf: AdapterOf): Pool {
-  const pool: Pool = new Map();
+  const pool: Counts = new Map();
   const reading = readingOf(base, adapterOf)?.reading;
   if (reading?.kind === "read") for (const { text } of reading.comments) added(pool, identityOf(text), 1);
   return pool;
 }
 
 function leftoversOf(pools: Iterable<Pool>): Pool {
-  const leftovers: Pool = new Map();
+  const leftovers: Counts = new Map();
   for (const pool of pools) for (const [identity, count] of pool) added(leftovers, identity, count);
   return leftovers;
 }
 
-function takenFrom(pool: Pool, comment: string): boolean {
+function takenFrom(pool: Counts, comment: string): boolean {
   const identity = identityOf(comment);
   const left = pool.get(identity) ?? 0;
   if (left === 0) return false;
@@ -231,10 +233,13 @@ function takenFrom(pool: Pool, comment: string): boolean {
   return true;
 }
 
-function unmatchedIn(read: LanguageReading | null, own: Pool | null): LanguageReading | null {
-  if (read?.reading.kind !== "read" || own === null) return read;
-  const comments = read.reading.comments.filter(({ text }) => !takenFrom(own, text));
-  return { language: read.language, reading: { kind: "read", comments } };
+type OwnRead = { readonly read: LanguageReading | null; readonly left: Pool | null };
+
+function unmatchedIn(read: LanguageReading | null, own: Pool | null): OwnRead {
+  if (read?.reading.kind !== "read" || own === null) return { read, left: own };
+  const left: Counts = new Map(own);
+  const comments = read.reading.comments.filter(({ text }) => !takenFrom(left, text));
+  return { read: { language: read.language, reading: { kind: "read", comments } }, left };
 }
 
 function byPath(a: FileFindings, b: FileFindings): number {
@@ -244,19 +249,32 @@ function byPath(a: FileFindings, b: FileFindings): number {
 
 type Unmatched = { readonly file: JudgedFile; readonly read: LanguageReading | null };
 
-type OwnMatch = { readonly unmatched: readonly Unmatched[]; readonly leftovers: ReadonlyMap<string, number> };
+type OwnMatch = { readonly unmatched: readonly Unmatched[]; readonly leftovers: Pool };
 
 function ownMatch({ heads, bases }: JudgedChange, adapterOf: AdapterOf): OwnMatch {
   const pools = new Map(bases.map((base) => [base.path, poolOf(base, adapterOf)]));
-  const unmatched = heads.map(({ file, base }) => {
-    const own = base?.origin === "own" ? (pools.get(base.path) ?? null) : null;
-    return { file, read: unmatchedIn(readingOf(file, adapterOf), own) };
+  const matched = heads.map(({ file, base }) => {
+    const ownPath = base?.origin === "own" ? base.path : null;
+    const own = ownPath === null ? null : (pools.get(ownPath) ?? null);
+    return { file, ownPath, ...unmatchedIn(readingOf(file, adapterOf), own) };
   });
-  return { unmatched, leftovers: leftoversOf(pools.values()) };
+  const remainders = new Map<string, Pool>();
+  for (const { ownPath, left } of matched) {
+    if (ownPath === null || left === null) continue;
+    invariant(
+      !remainders.has(ownPath),
+      "git diff -M -C gives each base path at most one renamed or modified head",
+    );
+    remainders.set(ownPath, left);
+  }
+  return {
+    unmatched: matched.map(({ file, read }) => ({ file, read })),
+    leftovers: leftoversOf([...pools].map(([path, pool]) => remainders.get(path) ?? pool)),
+  };
 }
 
 function crossFileFindings({ unmatched, leftovers }: OwnMatch): FileFindings[] {
-  const left: Pool = new Map(leftovers);
+  const left: Counts = new Map(leftovers);
   const found: FileFindings[] = [];
   for (const { file, read } of unmatched) {
     if (read === null) continue;
