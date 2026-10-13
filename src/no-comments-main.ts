@@ -5,20 +5,28 @@ import { invariant, unreachable } from "./assert";
 import { EXIT_STATUS, recordOf, usageErrors } from "./coded-error";
 import { checkoutRoot } from "./git";
 import type { Comment, CommentsOf, Language, Reading } from "./no-comments-languages";
-import { REPLY_BYTES, reply, type Scope } from "./no-comments-report";
+import { annotations, REPLY_BYTES, reply, type Scope } from "./no-comments-report";
 import { type AdapterOf, findings, type Judged, judgedChange } from "./no-comments-scan";
 
 const SCANNER = "scan.cjs";
 
 const ALL = "--all";
 
+const FORMAT = "--format";
+
+const GITHUB = "github";
+
 const FLAG_PREFIX = "-";
+
+type Format = "text" | "github";
+
+type Call = { readonly judged: Judged; readonly format: Format };
 
 const scanUsageError = usageErrors<{ readonly wrong_arguments: { readonly got: readonly string[] } }>({
   wrong_arguments: {
     message: ({ got }) =>
-      `scan.cjs takes no arguments, ${ALL}, or a base and a head, and got ${got.length}: ${got.join(" ")}`,
-    resolve: () => `node scan.cjs [${ALL} | <base> <head>]`,
+      `scan.cjs takes no arguments, ${ALL}, or a base and a head, each optionally after ${FORMAT} ${GITHUB}, and got ${got.length}: ${got.join(" ")}`,
+    resolve: () => `node scan.cjs [${FORMAT} ${GITHUB}] [${ALL} | <base> <head>]`,
   },
 });
 
@@ -79,6 +87,16 @@ function judgedOf(args: readonly string[]): Judged | null {
   return null;
 }
 
+function callOf(args: readonly string[]): Call | null {
+  if (args[0] !== FORMAT) {
+    const judged = judgedOf(args);
+    return judged === null ? null : { judged, format: "text" };
+  }
+  if (args[1] !== GITHUB) return null;
+  const judged = judgedOf(args.slice(2));
+  return judged === null ? null : { judged, format: "github" };
+}
+
 function scopeOf(judged: Judged): Scope {
   switch (judged.kind) {
     case "staged":
@@ -95,11 +113,22 @@ function main(): number {
   const script = process.argv[1];
   invariant(script !== undefined, "node names the script it runs");
   const args = process.argv.slice(2);
-  const judged = judgedOf(args);
-  if (judged === null) throw scanUsageError("wrong_arguments", { got: args });
+  const call = callOf(args);
+  if (call === null) throw scanUsageError("wrong_arguments", { got: args });
+  const { judged, format } = call;
   const root = checkoutRoot(process.cwd());
   const found = findings(judgedChange(root, judged), adaptersBeside(dirname(realpathSync(script))));
-  process.stderr.write(reply(found, scopeOf(judged), REPLY_BYTES));
+  switch (format) {
+    case "text":
+      process.stderr.write(reply(found, scopeOf(judged), REPLY_BYTES));
+      break;
+    case "github":
+      process.stdout.write(annotations(found));
+      process.stderr.write(reply(found, scopeOf(judged), null));
+      break;
+    default:
+      unreachable(format);
+  }
   return found.length === 0 ? 0 : EXIT_STATUS.refusal;
 }
 

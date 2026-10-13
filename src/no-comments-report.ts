@@ -1,7 +1,9 @@
 import { invariant, unreachable } from "./assert";
-import type { FileFindings, Refused } from "./no-comments-scan";
+import type { FileFindings } from "./no-comments-scan";
 
 export type Scope = "change" | "tracked";
+
+type Shown = { readonly line: number; readonly text: string };
 
 type Block = { readonly path: string; readonly lines: readonly string[] };
 
@@ -18,6 +20,20 @@ const INDENT = "  ";
 const COMMENT_FIX = "Remove each comment; a why belongs in a name, a test or the docs.";
 
 const SYNTAX_FIX = "Fix the syntax where each file stops parsing.";
+
+const ANNOTATIONS_PER_STEP = 10;
+
+const DATA_ESCAPES: readonly (readonly [string, string])[] = [
+  ["%", "%25"],
+  ["\r", "%0D"],
+  ["\n", "%0A"],
+];
+
+const PROPERTY_ESCAPES: readonly (readonly [string, string])[] = [
+  ...DATA_ESCAPES,
+  [":", "%3A"],
+  [",", "%2C"],
+];
 
 const SUBJECT: Readonly<Record<Scope, string>> = {
   change: "this change adds",
@@ -49,19 +65,19 @@ function shownBody(body: string): string {
   return `${characters.slice(0, BODY_CHARACTERS - 1).join("")}${CUT}`;
 }
 
-function commentLine({ line, body }: Refused): string {
-  return `${INDENT}${line}  ${shownBody(body)}`;
-}
-
-function blockOf(file: FileFindings): Block {
+function shownFindings(file: FileFindings): Shown[] {
   switch (file.kind) {
     case "comments":
-      return { path: file.path, lines: file.comments.map(commentLine) };
+      return file.comments.map(({ line, body }) => ({ line, text: shownBody(body) }));
     case "unparsed":
-      return { path: file.path, lines: [`${INDENT}${file.line}  does not parse: ${file.reason}`] };
+      return [{ line: file.line, text: `does not parse: ${file.reason}` }];
     default:
       return unreachable(file);
   }
+}
+
+function blockOf(file: FileFindings): Block {
+  return { path: file.path, lines: shownFindings(file).map(({ line, text }) => `${INDENT}${line}  ${text}`) };
 }
 
 function lineBytes(line: string): number {
@@ -130,6 +146,10 @@ function capped(header: string, listing: Listing, maxBytes: number): string[] {
   return shown;
 }
 
+function printed(lines: readonly string[]): string {
+  return lines.map((line) => `${line}\n`).join("");
+}
+
 export function reply(found: readonly FileFindings[], scope: Scope, maxBytes: number | null): string {
   if (found.length === 0) return "";
   const header = headerOf(found, scope);
@@ -137,5 +157,22 @@ export function reply(found: readonly FileFindings[], scope: Scope, maxBytes: nu
   const whole = [header, ...blocks.flatMap(({ path, lines }) => [path, ...lines])];
   const total = whole.reduce((sum, line) => sum + lineBytes(line), 0);
   const lines = maxBytes === null || total <= maxBytes ? whole : capped(header, listingOf(blocks), maxBytes);
-  return lines.map((line) => `${line}\n`).join("");
+  return printed(lines);
+}
+
+function escaped(value: string, escapes: readonly (readonly [string, string])[]): string {
+  return escapes.reduce((text, [from, to]) => text.replaceAll(from, to), value);
+}
+
+export function annotations(found: readonly FileFindings[]): string {
+  const all = found.flatMap((file) =>
+    shownFindings(file).map(
+      ({ line, text }) =>
+        `::error file=${escaped(file.path, PROPERTY_ESCAPES)},line=${line}::${escaped(text, DATA_ESCAPES)}`,
+    ),
+  );
+  if (all.length <= ANNOTATIONS_PER_STEP) return printed(all);
+  const shown = all.slice(0, ANNOTATIONS_PER_STEP - 1);
+  const rest = counted(all.length - shown.length, "more finding", "more findings");
+  return printed([...shown, `::error::no-comments: ${rest}; the step's log lists them all`]);
 }

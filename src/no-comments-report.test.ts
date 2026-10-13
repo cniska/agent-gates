@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { REPLY_BYTES, reply } from "./no-comments-report";
+import { annotations, REPLY_BYTES, reply } from "./no-comments-report";
 import type { FileFindings, Refused } from "./no-comments-scan";
 
 function commented(path: string, comments: readonly Refused[]): FileFindings {
@@ -113,5 +113,31 @@ describe("the no-comments reply", () => {
 
   test("lists everything when the reader has no window", () => {
     expect(linesOf(reply(manyComments(2, 200), "change", null))).toHaveLength(403);
+  });
+});
+
+describe("the no-comments annotations", () => {
+  test("annotates each finding at its file and line, escaping what GitHub reads as syntax", () => {
+    const found: FileFindings[] = [
+      { kind: "unparsed", path: "src/a,b:c.ts", line: 2, reason: "100% wrong\r\nhere" },
+      commented("src/d.ts", [{ line: 7, body: `// ${"é".repeat(118)}` }]),
+    ];
+    expect(annotations(found)).toBe(
+      [
+        "::error file=src/a%2Cb%3Ac.ts,line=2::does not parse: 100%25 wrong%0D%0Ahere",
+        `::error file=src/d.ts,line=7::// ${"é".repeat(116)}…`,
+        "",
+      ].join("\n"),
+    );
+    expect(annotations([])).toBe("");
+  });
+
+  test("annotates up to GitHub's ten per step, pointing at the log for the rest", () => {
+    expect(linesOf(annotations(manyComments(2, 5)))).toHaveLength(10);
+    const lines = linesOf(annotations(manyComments(2, 6)));
+    expect(lines).toHaveLength(10);
+    expect(lines[0]).toBe("::error file=src/file-000.ts,line=1::// reason number 0");
+    expect(lines[8]).toBe("::error file=src/file-001.ts,line=3::// reason number 2");
+    expect(lines[9]).toBe("::error::no-comments: 3 more findings; the step's log lists them all");
   });
 });

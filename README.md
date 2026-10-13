@@ -64,6 +64,8 @@ The `no-comments-<language>` gates refuse the comments a change adds:
 
 A refusal leads with its total and the fix, then lists each file's findings under its path, sorted by path and line, so a retry after a partial fix prints a subset of the same lines in the same order. A comment is shown by its first line, cut at 120 characters, and the reply stops at 4,000 bytes, which reaches every agent harness [measured](docs/no-comments-measurements.md) whole. Past that, each file with findings left gets a line counting them, and the files no line fits for share one count.
 
+In CI, `scan.cjs --format github` also annotates each finding at its file and line, cut like the reply. GitHub shows ten error annotations per step, so past ten the first nine are annotated and the tenth counts the rest. The step's log then holds the whole reply, uncapped, since a log has no window to fit.
+
 The gates stop the comment count from growing; they do not drive it to zero. Comments already in the tree wait for a deliberate sweep: `node .githooks/no-comments/scan.cjs --all` judges every comment of every tracked file, as the index holds it.
 
 They need `node` on `PATH` and nothing installed in the project. A file with no extension is routed by its shebang. They skip:

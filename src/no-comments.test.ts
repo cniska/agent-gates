@@ -60,12 +60,18 @@ function commitPaths(dir: string, paths: readonly string[]) {
   return { status: run.status, stderr: run.stderr };
 }
 
-function scan(dir: string, args: readonly string[]) {
+function scanned(dir: string, args: readonly string[]) {
   const run = spawnSync("node", [join(dir, ".githooks/no-comments/scan.cjs"), ...args], {
     cwd: dir,
     encoding: "utf8",
   });
-  return { status: run.status, stderr: run.stderr };
+  return { status: run.status, stdout: run.stdout, stderr: run.stderr };
+}
+
+function scan(dir: string, args: readonly string[]) {
+  const { status, stdout, stderr } = scanned(dir, args);
+  expect(stdout).toBe("");
+  return { status, stderr };
 }
 
 afterEach(removeScratchDirs);
@@ -980,7 +986,7 @@ describe("the no-comments workflow", () => {
       },
       encoding: "utf8",
     });
-    return { status: run.status, stderr: run.stderr };
+    return { status: run.status, stdout: run.stdout, stderr: run.stderr };
   }
 
   test("judges the files changed since the merge base of the pushed base", () => {
@@ -990,9 +996,14 @@ describe("the no-comments workflow", () => {
     const head = commitPastHooks(dir, "feat: more");
     expect(judged(dir, { base, head, ref: "refs/heads/main" })).toEqual({
       status: 1,
+      stdout: "::error file=b.ts,line=1::// new\n",
       stderr: refusalText(["b.ts", "  1  // new"]),
     });
-    expect(judged(dir, { base: head, head, ref: "refs/heads/main" })).toEqual({ status: 0, stderr: "" });
+    expect(judged(dir, { base: head, head, ref: "refs/heads/main" })).toEqual({
+      status: 0,
+      stdout: "",
+      stderr: "",
+    });
   });
 
   test("judges a new branch from its merge base with the default branch, not its tip alone", () => {
@@ -1004,6 +1015,7 @@ describe("the no-comments workflow", () => {
     const head = commitPastHooks(dir, "feat: tip");
     expect(judged(dir, { base: NO_COMMIT, head, ref: "refs/heads/topic" })).toEqual({
       status: 1,
+      stdout: "::error file=b.ts,line=1::// early\n",
       stderr: refusalText(["b.ts", "  1  // early"]),
     });
   });
@@ -1016,6 +1028,7 @@ describe("the no-comments workflow", () => {
     git(dir, ["update-ref", "refs/remotes/origin/main", head]);
     expect(judged(dir, { base: NO_COMMIT, head, ref: "refs/heads/main" })).toEqual({
       status: 1,
+      stdout: "::error file=a.ts,line=1::// root\n",
       stderr: refusalText(["a.ts", "  1  // root"]),
     });
   });
@@ -1027,6 +1040,7 @@ describe("the no-comments workflow", () => {
     const head = commitPastHooks(dir, "feat: more");
     expect(judged(dir, { base: NO_COMMIT, head, ref: "refs/heads/topic" })).toEqual({
       status: 1,
+      stdout: "::error file=a.ts,line=1::// root\n",
       stderr: refusalText(["a.ts", "  1  // root"]),
     });
   });
@@ -1041,6 +1055,7 @@ describe("the no-comments workflow", () => {
     const head = commitPastHooks(dir, "feat: tip");
     expect(judged(dir, { base: NO_COMMIT, head, ref: "refs/heads/pages" })).toEqual({
       status: 1,
+      stdout: "::error file=b.ts,line=1::// orphan\n",
       stderr: refusalText(["b.ts", "  1  // orphan"]),
     });
   });
@@ -1048,10 +1063,49 @@ describe("the no-comments workflow", () => {
   test("exits 2 on a call that names a base without a head, or --all with one, or a flag it does not know", () => {
     const dir = gated();
     const usage = (got: string) =>
-      `no-comments: scan.cjs takes no arguments, --all, or a base and a head, and got ${got}; node scan.cjs [--all | <base> <head>]\n`;
+      `no-comments: scan.cjs takes no arguments, --all, or a base and a head, each optionally after --format github, and got ${got}; node scan.cjs [--format github] [--all | <base> <head>]\n`;
     expect(scan(dir, ["HEAD"])).toEqual({ status: 2, stderr: usage("1: HEAD") });
     expect(scan(dir, ["--all", "HEAD"])).toEqual({ status: 2, stderr: usage("2: --all HEAD") });
-    expect(scan(dir, ["--format", "github"])).toEqual({ status: 2, stderr: usage("2: --format github") });
+    expect(scan(dir, ["--format", "json"])).toEqual({ status: 2, stderr: usage("2: --format json") });
+    expect(scan(dir, ["--format"])).toEqual({ status: 2, stderr: usage("1: --format") });
+    expect(scan(dir, ["--format", "github", "--format", "github"])).toEqual({
+      status: 2,
+      stderr: usage("4: --format github --format github"),
+    });
+    expect(scan(dir, ["--json"])).toEqual({ status: 2, stderr: usage("1: --json") });
+    expect(scan(dir, ["HEAD", "--format", "github", "HEAD"])).toEqual({
+      status: 2,
+      stderr: usage("4: HEAD --format github HEAD"),
+    });
+    expect(scan(dir, ["--all", "--format", "github"])).toEqual({
+      status: 2,
+      stderr: usage("3: --all --format github"),
+    });
+  });
+
+  test("annotates each finding for GitHub with --format github, and logs the whole reply", () => {
+    const dir = gated({ "a.ts": "// why\nexport {};\n".repeat(300) });
+    commitPastHooks(dir, "feat: start");
+    const { status, stdout, stderr } = scanned(dir, ["--format", "github", "--all"]);
+    expect(status).toBe(1);
+    expect(stdout.split("\n").slice(0, 2)).toEqual([
+      "::error file=a.ts,line=1::// why",
+      "::error file=a.ts,line=3::// why",
+    ]);
+    expect(stdout).toEndWith("\n::error::no-comments: 291 more findings; the step's log lists them all\n");
+    expect(stderr.split("\n")).toHaveLength(303);
+  });
+
+  test("annotates a pushed change for GitHub", () => {
+    const dir = gated({ "a.ts": "export {};\n" });
+    const base = commitPastHooks(dir, "feat: start");
+    writeFiles(dir, { "a.ts": "// why\nexport {};\n" });
+    const head = commitPastHooks(dir, "feat: why");
+    expect(scanned(dir, ["--format", "github", base, head])).toEqual({
+      status: 1,
+      stdout: "::error file=a.ts,line=1::// why\n",
+      stderr: refusalText(["a.ts", "  1  // why"]),
+    });
   });
 
   test("keeps the reply within 4,000 bytes, counting the comments it does not show", () => {

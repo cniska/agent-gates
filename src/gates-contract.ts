@@ -94,6 +94,7 @@ export const SCANNER_FILE: GateFile = {
     { version: 12, sha256: "b2a49bda7916ad313518d2f7871ccecd5773698e0df42259501d4d3b354d3064" },
     { version: 13, sha256: "31afdb20742637f34672f836458e7a6d1a4bd9ce85e1ecca9b8f43050860169e" },
     { version: 14, sha256: "ff59819cac42f134ad5d9c2af3764a622ddedafa12710ebe1a51057fd24c8ff1" },
+    { version: 15, sha256: "edeb998d6e432ba222c7328afc2b3b1463ff559a25c30db96a4eda8e17d722ad" },
   ],
 };
 
@@ -117,6 +118,7 @@ const NO_COMMENTS_SHARED: readonly GateFile[] = [
     versions: [
       { version: 1, sha256: "40c64a59e2409c91c2d07df092eeb9384811a991784e2f3300b8aa43e6c78dd9" },
       { version: 2, sha256: "3b83b0cbd4e92e31034e16bbc5d80bd285d41c0612c6ad3fb81239ffc99eb9a1" },
+      { version: 3, sha256: "e226a011a732f4af4a218046de9df61ab64920ab242251e61a5dd889b1fa4246" },
     ],
   },
 ];
