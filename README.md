@@ -73,7 +73,7 @@ A comment a tool reads stays:
 
 | Language | Kept comments |
 | --- | --- |
-| JavaScript and TypeScript | `@ts-expect-error`; a leading `// @ts-check` in plain JavaScript; `eslint-disable-line` and `eslint-disable-next-line` naming rules; `/* eslint-disable */` and `/* eslint-enable */` naming rules; `biome-ignore`, `-all`, `-start` and `-end` naming only rules or `format`; `prettier-ignore` alone; `#__PURE__` or `@__PURE__` alone; `@vitest-environment <env>` alone; a leading `/// <reference`; in plain JavaScript, JSDoc blocks holding only `@type {…}`, `@typedef {…} Name` and `@param {…} name` |
+| JavaScript and TypeScript | `#__PURE__` or `@__PURE__` alone; a leading `/// <reference …/>` holding only its attributes |
 | Dart | `// @dart = x.y` alone, before any code |
 | SQL | drizzle's `--> statement-breakpoint` |
 | shell | the first-line shebang |
@@ -82,7 +82,7 @@ A comment a tool reads stays:
 | Every language | one `SPDX-License-Identifier:` line; a gate marker on a line of its own |
 
 - A form may carry a reason on the same line, unless it is marked "alone". A directive in a block comment that spans lines is refused.
-- A suppression that silences every rule is refused: `@ts-ignore`, `@ts-nocheck`, a rule-less `eslint-disable`, `biome-ignore lint`. Every `shellcheck` directive is refused; its settings belong in `.shellcheckrc`. Every Dart `ignore:` and `ignore_for_file:` is refused; the analyzer's settings belong in `analysis_options.yaml`. Tool configuration in a comment is refused too: `eslint-env`, `/* eslint … */`, `/* global */`, Dart's `coverage:`.
+- Every TypeScript, ESLint and Biome suppression is refused, `@ts-expect-error` included, and so are `prettier-ignore`, `@ts-check` and `@vitest-environment`; their settings belong in `tsconfig.json`, the linter's config, `.prettierignore` and the Vitest config. Every `shellcheck` directive is refused; its settings belong in `.shellcheckrc`. Every Dart `ignore:` and `ignore_for_file:` is refused; the analyzer's settings belong in `analysis_options.yaml`. Tool configuration in a comment is refused too: `eslint-env`, `/* eslint … */`, `/* global */`, Dart's `coverage:`.
 - A gate marker is `agent-gate:<part>:<version>`, or another tool's `<tool>-gate:[<part>:]<version>`.
 - A refusal lists the kept forms of each language it refused a comment in.
 

@@ -51,7 +51,7 @@ function unparsed(line: number, reason: string): Reading {
 }
 
 const KEPT_IN_JAVASCRIPT =
-  "kept in JavaScript and TypeScript: `@ts-expect-error`; a leading `// @ts-check` in plain JavaScript; `eslint-disable-line` and `eslint-disable-next-line` naming rules; `/* eslint-disable */` and `/* eslint-enable */` naming rules; `biome-ignore`, `-all`, `-start` and `-end` naming only rules or `format`; `prettier-ignore` alone; `#__PURE__` or `@__PURE__` alone; `@vitest-environment <env>` alone; a leading `/// <reference`; in plain JavaScript, JSDoc blocks holding only `@type {…}`, `@typedef {…} Name` and `@param {…} name`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own";
+  "kept in JavaScript and TypeScript: `#__PURE__` or `@__PURE__` alone; a leading `/// <reference …/>` holding only its attributes; one `SPDX-License-Identifier:` line; a gate marker on a line of its own";
 
 const KEPT_IN_RUST =
   "kept in Rust: in library code, an outer doc comment (`///`, `/** */`, `#[doc]`) on a `pub` item, a `#[macro_export]` macro, or a variant or item of a `pub` enum or trait; an inner doc comment (`//!`, `/*! */`, `#![doc]`) in a library's `src/lib.rs`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own";
@@ -157,57 +157,42 @@ describe("the javascript adapter", () => {
     expect(comments("a.ts", 'const s = "\u2028";\rconst = ;\n')).toMatchObject({ kind: "unparsed", line: 1 });
   });
 
-  test("keeps the comments a tool reads, with a reason on the same line", () => {
-    const kept = [
+  test("keeps `#__PURE__` alone and an exact leading `/// <reference`", () => {
+    const text = [
       '/// <reference types="bun" />',
-      "// @ts-expect-error",
-      "// @ts-expect-error: the fixture is malformed on purpose",
-      "/* @ts-expect-error */",
-      "// eslint-disable-next-line no-console",
-      "// eslint-disable-line no-console, no-alert -- prints the banner",
-      "/* eslint-disable-next-line no-console */",
-      "/* eslint-disable no-console */",
-      "/* eslint-enable no-console */",
-      "// biome-ignore lint/style/useConst: x",
-      "// biome-ignore lint/correctness/noUnusedVariables(foo): x",
-      "// biome-ignore format: x",
-      "// biome-ignore-all lint/suspicious/noConsole: x",
-      "/* biome-ignore-start lint/suspicious/noConsole: x */",
-      "// biome-ignore-end lint/suspicious/noConsole",
-      "// prettier-ignore",
-      "/* #__PURE__ */",
-      "/* @__PURE__ */",
-      "/** @vitest-environment jsdom */",
-    ];
-    expect(comments("a.ts", `#!/usr/bin/env node\n${kept.join("\nf();\n")}\n`)).toEqual(read([]));
+      "/// <reference lib='dom' />",
+      '/// <reference types="node" resolution-mode="import" />',
+      "let a = /* #__PURE__ */ f();",
+      "let b = /* @__PURE__ */ f();",
+      "// #__PURE__",
+      "g();",
+    ].join("\n");
+    expect(comments("a.ts", `${text}\n`)).toEqual(read([]));
   });
 
-  test("refuses a directive that silences everything, configures a tool, or spans lines", () => {
+  test("refuses every suppression, tool setting and formatter hint, and a directive that spans lines", () => {
     const refused = [
+      "// @ts-expect-error",
+      "// @ts-expect-error: the fixture is malformed on purpose",
       "// @ts-ignore",
       "// @ts-nocheck",
-      "// @ts-expect-errors",
-      "// eslint-disable",
+      "// @ts-check",
+      "// eslint-disable-next-line no-console",
+      "// eslint-disable-line no-console -- prints the banner",
+      "/* eslint-disable no-console */",
+      "/* eslint-enable no-console */",
       "/* eslint-disable */",
-      "// eslint-disable-next-line -- reason",
-      "// eslint-disable no-console",
-      "// eslint-enable no-console",
-      "/* eslint-enable */",
       "/* eslint-env node */",
       "/* eslint no-console: off */",
       "/* global window */",
       "/*! license */",
-      "// biome-ignore",
-      "// biome-ignore lint: x",
-      "// biome-ignore lint/style: x",
-      "// biome-ignore-all lint: x",
-      "// biome-ignore lint/style/useConst lint: x",
-      "// biome-ignore format lint: x",
-      "// prettier-ignore because",
+      "// biome-ignore lint/style/useConst: x",
+      "// biome-ignore format: x",
+      "// biome-ignore-all lint/suspicious/noConsole: x",
+      "// prettier-ignore",
       "/* #__PURE__ call */",
-      "/** @vitest-environment */",
-      "/**\n * @ts-expect-error\n */",
-      "/* eslint-disable\n   no-console */",
+      "/** @vitest-environment jsdom */",
+      "/**\n * #__PURE__\n */",
     ];
     let line = 1;
     const listed = refused.map((text) => {
@@ -215,51 +200,43 @@ describe("the javascript adapter", () => {
       line += text.split("\n").length + 1;
       return { line: at, text };
     });
-    expect(comments("a.ts", `${refused.join("\nf();\n")}\n`)).toEqual(read(listed));
+    expect(comments("a.ts", `f();\n${refused.join("\nf();\n")}\n`)).toEqual(
+      read(listed.map((comment) => ({ ...comment, line: comment.line + 1 }))),
+    );
   });
 
-  test("keeps `@ts-check` and `/// <reference` only in the leading line comments TypeScript reads them from", () => {
-    const leading = '// @ts-check\n/// <reference types="bun" />\n"use strict";\n';
-    expect(comments("a.js", `${leading}f();\n// @ts-check\n/// <reference types="node" />\n`)).toEqual(
-      read([
-        { line: 5, text: "// @ts-check" },
-        { line: 6, text: '/// <reference types="node" />' },
-      ]),
-    );
-    expect(comments("a.js", "/* @ts-check */\nf();\n")).toEqual(read([{ line: 1, text: "/* @ts-check */" }]));
-    expect(comments("a.ts", '// / <reference types="bun" />\nf();\n')).toEqual(
-      read([{ line: 1, text: '// / <reference types="bun" />' }]),
-    );
-    expect(comments("a.ts", "// @ts-check\nf();\n")).toEqual(read([{ line: 1, text: "// @ts-check" }]));
-  });
-
-  test("keeps JSDoc types only where plain JavaScript needs them", () => {
-    const typed =
-      "/** @type {number} */\nlet a;\n/**\n * @param {string} x\n * @param {{ n: number }} [y=1]\n */\nfunction f(x, y) {}\n";
-    expect(comments("a.js", typed)).toEqual(read([]));
-    expect(comments("a.cjs", "/** @typedef {{ n: number }} Point */\n")).toEqual(read([]));
-    expect(comments("a.jsx", `${typed}const b = <div />;\n`)).toEqual(read([]));
-    for (const described of [
-      "/**\n * @param {number} x the input\n */",
-      "/**\n * @param {number} x\n * Adds one.\n */",
-      "/** @param x */",
-      "/** @type {number} the count */",
-      "/** @typedef {object} Point\n * @property {number} n */",
+  test("keeps `/// <reference` only in the leading line comments TypeScript reads it from, and only with its attributes", () => {
+    expect(
+      comments(
+        "a.js",
+        '/// <reference types="bun" />\n"use strict";\nf();\n/// <reference types="node" />\n',
+      ),
+    ).toEqual(read([{ line: 4, text: '/// <reference types="node" />' }]));
+    for (const reference of [
+      '/// <reference types="node" /> for Buffer',
+      '/// <reference types="node" because="Buffer" />',
+      "/// <reference types=node />",
+      '// / <reference types="bun" />',
+      '/* <reference types="bun" /> */',
     ])
-      expect(comments("a.mjs", `${described}\nfunction f(x) {}\n`)).toEqual(
-        read([{ line: 1, text: described }]),
-      );
-    expect(comments("a.ts", typed)).toEqual(
-      read([
-        { line: 1, text: "/** @type {number} */" },
-        { line: 3, text: "/**\n * @param {string} x\n * @param {{ n: number }} [y=1]\n */" },
-      ]),
-    );
-    expect(comments("bin/tool", `#!/usr/bin/env node\n${typed}const b = <div />;\n`)).toEqual(read([]));
-    expect(comments("bin/tool", `#!/usr/bin/env bun\n${typed}const b: number = 1;\n`)).toEqual(
+      expect([reference, comments("a.ts", `${reference}\nf();\n`)]).toEqual([
+        reference,
+        read([{ line: 1, text: reference }]),
+      ]);
+  });
+
+  test("refuses JSDoc type blocks, in plain JavaScript too", () => {
+    const typed = "/** @type {number} */\nlet a;\n/**\n * @param {string} x\n */\nfunction f(x) {}\n";
+    const listed = read([
+      { line: 1, text: "/** @type {number} */" },
+      { line: 3, text: "/**\n * @param {string} x\n */" },
+    ]);
+    expect(comments("a.js", typed)).toEqual(listed);
+    expect(comments("a.ts", typed)).toEqual(listed);
+    expect(comments("bin/tool", `#!/usr/bin/env node\n${typed}const b = <div />;\n`)).toEqual(
       read([
         { line: 2, text: "/** @type {number} */" },
-        { line: 4, text: "/**\n * @param {string} x\n * @param {{ n: number }} [y=1]\n */" },
+        { line: 4, text: "/**\n * @param {string} x\n */" },
       ]),
     );
   });
