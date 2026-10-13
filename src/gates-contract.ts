@@ -197,6 +197,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 10, sha256: "4a5ee28cfca707dee82a1e8ffde463e4c0465f35fa8bc31d0b83011d6103d9a3" },
     { version: 11, sha256: "44df1bb7c417b2cae6be77209ba1e818df257c09d568dd8ed0202088408c8ecd" },
     { version: 12, sha256: "2020535dc6549c536d1e7bd9219c7abd35fef944a9ce61a38a8217ebaf09e8ea" },
+    { version: 13, sha256: "9d09cb3ad8cbcd9708518cb46292d959eb6014420830e2b1e194e7a498cccb68" },
   ]),
   rust: adapterFile("rust", [
     { version: 1, sha256: "f7d0dd77af2f515cca76525640e20f72984a24e995031360b190b31478634daa" },

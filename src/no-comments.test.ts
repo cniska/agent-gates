@@ -508,7 +508,7 @@ describe("the shell adapter", () => {
     );
   });
 
-  test("keeps the shebang and shellcheck's directives that are not suppressions, and only those", () => {
+  test("keeps the first-line shebang, and no shellcheck directive", () => {
     const text = [
       "#!/bin/sh",
       "# shellcheck shell=bash",
@@ -522,13 +522,16 @@ describe("the shell adapter", () => {
     ].join("\n");
     expect(shellComments("a.sh", text)).toEqual(
       read([
+        { line: 2, text: "# shellcheck shell=bash" },
+        {
+          line: 4,
+          text: "# shellcheck source=lib.sh source-path=SCRIPTDIR external-sources=true # sourced at runtime",
+        },
+        { line: 5, text: "# shellcheck enable=require-variable-braces" },
         { line: 6, text: "# shellcheck disable=SC2034" },
         { line: 7, text: "# shellcheck source=lib.sh disable=SC1090" },
         { line: 8, text: "#!/bin/sh" },
       ]),
-    );
-    expect(shellComments("a.sh", "# shellchecked by hand\n")).toEqual(
-      read([{ line: 1, text: "# shellchecked by hand" }]),
     );
   });
 
@@ -1360,7 +1363,7 @@ describe("the pre-commit hook", () => {
         [
           "kept in Dart: `ignore:` and `ignore_for_file:` naming only diagnostics; `// @dart = x.y` alone; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
           "kept in SQL: drizzle's `--> statement-breakpoint`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
-          "kept in shell: the first-line shebang; `shellcheck` directives of `source=`, `source-path=`, `shell=`, `external-sources=` and `enable=`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
+          "kept in shell: the first-line shebang; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
           KEPT_IN_RUST,
         ],
       ),

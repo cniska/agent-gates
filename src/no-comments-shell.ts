@@ -1,21 +1,11 @@
-import {
-  adapter,
-  type CommentRead,
-  directive,
-  type KeptForm,
-  type Lexed,
-  type Span,
-} from "./no-comments-adapter";
+import { adapter, type CommentRead, type KeptForm, type Lexed, type Span } from "./no-comments-adapter";
 import { lineEnd, type Stopped, unterminated } from "./no-comments-spans";
-
-const SHELLCHECK_DIRECTIVE =
-  /shellcheck(?:\s+(?:source|source-path|shell|external-sources|enable)=\S+)+(?:\s*#.*)?/;
 
 const SHEBANG_BODY = "!";
 
 const OPENER = 1;
 
-const LEADING_BLANKS = /^\s*/;
+const NO_DIRECTIVES = /^/;
 
 const BLANKS = new Set([" ", "\t"]);
 
@@ -422,15 +412,11 @@ const KEPT: readonly KeptForm<CommentRead<Span, null, null>>[] = [
     shown: "the first-line shebang",
     keeps: ({ span, body }) => span.start === 0 && body.startsWith(SHEBANG_BODY),
   },
-  directive(
-    "`shellcheck` directives of `source=`, `source-path=`, `shell=`, `external-sources=` and `enable=`",
-    { pattern: SHELLCHECK_DIRECTIVE, reason: "alone" },
-  ),
 ];
 
 export const { comments, kept } = adapter({
   contextOf: () => null,
   lex: commentSpans,
-  directiveLead: LEADING_BLANKS,
+  directiveLead: NO_DIRECTIVES,
   kept: KEPT,
 });
