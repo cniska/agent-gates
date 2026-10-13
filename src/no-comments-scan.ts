@@ -242,13 +242,21 @@ function byPath(a: FileFindings, b: FileFindings): number {
   return a.path < b.path ? -1 : 1;
 }
 
-export function findings({ heads, bases }: JudgedChange, adapterOf: AdapterOf): FileFindings[] {
+type Unmatched = { readonly file: JudgedFile; readonly read: LanguageReading | null };
+
+type OwnMatch = { readonly unmatched: readonly Unmatched[]; readonly leftovers: ReadonlyMap<string, number> };
+
+function ownMatch({ heads, bases }: JudgedChange, adapterOf: AdapterOf): OwnMatch {
   const pools = new Map(bases.map((base) => [base.path, poolOf(base, adapterOf)]));
   const unmatched = heads.map(({ file, base }) => {
     const own = base?.origin === "own" ? (pools.get(base.path) ?? null) : null;
     return { file, read: unmatchedIn(readingOf(file, adapterOf), own) };
   });
-  const leftovers = leftoversOf(pools.values());
+  return { unmatched, leftovers: leftoversOf(pools.values()) };
+}
+
+function crossFileFindings({ unmatched, leftovers }: OwnMatch): FileFindings[] {
+  const left: Pool = new Map(leftovers);
   const found: FileFindings[] = [];
   for (const { file, read } of unmatched) {
     if (read === null) continue;
@@ -258,11 +266,15 @@ export function findings({ heads, bases }: JudgedChange, adapterOf: AdapterOf): 
       continue;
     }
     const [first, ...rest] = reading.comments
-      .filter(({ text }) => !takenFrom(leftovers, text))
+      .filter(({ text }) => !takenFrom(left, text))
       .map(({ line, text }) => ({ line, body: firstLine(text).trim() }))
       .sort((a, b) => a.line - b.line);
     if (first !== undefined)
       found.push({ kind: "comments", path: file.path, language, comments: [first, ...rest] });
   }
-  return found.sort(byPath);
+  return found;
+}
+
+export function findings(change: JudgedChange, adapterOf: AdapterOf): FileFindings[] {
+  return crossFileFindings(ownMatch(change, adapterOf)).sort(byPath);
 }
