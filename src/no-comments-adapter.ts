@@ -64,7 +64,7 @@ const SPDX_LINE = new RegExp(
   `^(?://+!?|#+|--+|/\\*+!?)[ \\t]*SPDX-License-Identifier:[ \\t]*${LICENSE_ID}(?:[ \\t]+(?:AND|OR|WITH)[ \\t]+${LICENSE_ID})*[ \\t]*(?:\\*+/)?$`,
 );
 
-const MARKER_OPENERS = ["#", "//"];
+const MARKER_OPENERS = ["#", "//", "--"];
 
 export function directive<R extends CommentRead>(
   shown: string,

@@ -78,6 +78,8 @@ const SHARED_KEPT: readonly Lookalike[] = [
   at("shell", "# agent-gate:no-comments:1"),
   at("dart", "// x-gate:1"),
   at("rust", "// x-gate:1"),
+  at("sql", "-- agent-gate:no-comments:1"),
+  at("sql", "-- x-gate:1"),
   at("javascript", "/* SPDX-License-Identifier: MIT **/"),
   at("dart", "/* SPDX-License-Identifier: MIT **/"),
   at("sql", "/* SPDX-License-Identifier: MIT **/"),
@@ -95,7 +97,8 @@ const SHARED_REFUSED: readonly Lookalike[] = [
   at("dart", "/// x-gate:1"),
   at("rust", "/// x-gate:1"),
   at("rust", "//! x-gate:1"),
-  at("sql", "-- agent-gate:no-comments:1"),
+  at("sql", "--- agent-gate:no-comments:1"),
+  at("sql", "/* agent-gate:no-comments:1 */"),
   at("javascript", "// SPDX-License-Identifier: MIT because"),
 ];
 
