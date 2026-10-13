@@ -1,3 +1,4 @@
+import { dirname, join } from "node:path";
 import { unreachable } from "./assert";
 import type { Refusal } from "./coded-error";
 import { type HooksPathState, hooksPathState, installedGates, type PlannedFile, plannedFiles } from "./gates";
@@ -8,8 +9,12 @@ import {
   INSTALL_GATES,
   noCommentsGate,
   REINSTALL,
+  SCANNER_FILE,
 } from "./gates-contract";
+import { adaptersBeside, SWEEP_ALL } from "./no-comments-installed";
 import { LANGUAGE_NAMES, type Language } from "./no-comments-languages";
+import { countsOf } from "./no-comments-report";
+import { findings, judgedChange } from "./no-comments-scan";
 import { trackedPerLanguage } from "./no-comments-tracked";
 import { type PrepareState, prepareState } from "./package-manifest";
 
@@ -80,8 +85,11 @@ function languagesFix(missing: readonly Language[], unused: readonly Language[])
   return [...install, ...remove].join("; ");
 }
 
-function languagesHealth(root: string, gates: readonly GateName[]): Health[] {
-  const installed = LANGUAGE_NAMES.filter((language) => gates.includes(noCommentsGate(language)));
+function installedLanguages(gates: readonly GateName[]): Language[] {
+  return LANGUAGE_NAMES.filter((language) => gates.includes(noCommentsGate(language)));
+}
+
+function languagesHealth(root: string, installed: readonly Language[]): Health[] {
   if (installed.length === 0) return [];
   const tracked = trackedPerLanguage(root);
   const tracks = (language: Language) => (tracked.get(language) ?? 0) > 0;
@@ -105,6 +113,47 @@ function languagesHealth(root: string, gates: readonly GateName[]): Health[] {
         ...unused.map(unusedDetail),
       ].join("; "),
       fix: languagesFix(missing, unused),
+    },
+  ];
+}
+
+const BACKLOG_CHECK = "no-comments backlog";
+
+function staleSweepFiles(installed: readonly Language[], planned: readonly PlannedFile[]): string[] {
+  const sweep = [SCANNER_FILE, ...installed.map((language) => ADAPTER_FILES[language])].map(
+    ({ target }) => target,
+  );
+  return planned
+    .filter(({ target, state }) => sweep.includes(target) && state !== "installed")
+    .map(({ target }) => target);
+}
+
+function backlogHealth(
+  root: string,
+  installed: readonly Language[],
+  planned: readonly PlannedFile[],
+): Health[] {
+  if (installed.length === 0) return [];
+  const stale = staleSweepFiles(installed, planned);
+  if (stale.length > 0)
+    return [
+      {
+        name: BACKLOG_CHECK,
+        state: "warn",
+        detail: `not counted while these differ from this agent-gates, since the count runs them: ${stale.join(", ")}`,
+        fix: REINSTALL,
+      },
+    ];
+  const adapters = adaptersBeside(join(root, dirname(SCANNER_FILE.target)));
+  const found = findings(judgedChange(root, { kind: "all" }), adapters);
+  const detail = countsOf(found, "tracked");
+  if (found.length === 0) return [{ name: BACKLOG_CHECK, state: "ok", detail, fix: null }];
+  return [
+    {
+      name: BACKLOG_CHECK,
+      state: "warn",
+      detail,
+      fix: `node ${SCANNER_FILE.target} ${SWEEP_ALL} lists each one`,
     },
   ];
 }
@@ -168,12 +217,15 @@ function judged(root: string): Health[] {
         fix: INSTALL_GATES,
       },
     ];
+  const languages = installedLanguages(gates);
+  const planned = plannedFiles(root, gates);
   return [
     { name: "gates", state: "ok", detail: gates.join(", "), fix: null },
-    ...plannedFiles(root, gates).map(fileHealth),
+    ...planned.map(fileHealth),
     hooksPathHealth(hooksPathState(root)),
     prepareHealth(prepareState(root)),
-    ...languagesHealth(root, gates),
+    ...languagesHealth(root, languages),
+    ...backlogHealth(root, languages, planned),
   ];
 }
 

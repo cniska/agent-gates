@@ -74,6 +74,10 @@ function gated(files: Record<string, string> = {}): string {
   return dir;
 }
 
+function doctorCheck(dir: string, name: string) {
+  return gatesDoctor(dir).checks.find((check) => check.name === name);
+}
+
 function git(dir: string, args: readonly string[]): string {
   return execFileSync("git", ["-C", dir, ...IDENTITY, ...args], { encoding: "utf8" }).trim();
 }
@@ -1485,7 +1489,7 @@ describe("install and doctor", () => {
       "img.dart": "\0binary\n",
     });
     git(dir, ["add", "-A"]);
-    expect(gatesDoctor(dir).checks.at(-1)).toEqual({
+    expect(doctorCheck(dir, "no-comments languages")).toEqual({
       name: "no-comments languages",
       state: "ok",
       detail: "javascript, as the tracked files need",
@@ -1494,7 +1498,7 @@ describe("install and doctor", () => {
     git(dir, ["rm", "-q", "-f", "a.ts", "bin/tool"]);
     writeFiles(dir, { ".gitattributes": "gen.ts linguist-generated\n", "gen.ts": "export {};\n" });
     git(dir, ["add", "-A"]);
-    expect(gatesDoctor(dir).checks.at(-1)).toEqual({
+    expect(doctorCheck(dir, "no-comments languages")).toEqual({
       name: "no-comments languages",
       state: "warn",
       detail: "no-comments-javascript is installed, but the project tracks no file javascript reads",
@@ -1506,7 +1510,7 @@ describe("install and doctor", () => {
   test("doctor reports missing and unused languages in one check, with one fix for both", () => {
     const dir = gated({ "a.dart": "void f() {}\n" });
     git(dir, ["add", "-A"]);
-    expect(gatesDoctor(dir).checks.filter(({ name }) => name.startsWith("no-comments"))).toEqual([
+    expect(gatesDoctor(dir).checks.filter(({ name }) => name === "no-comments languages")).toEqual([
       {
         name: "no-comments languages",
         state: "warn",
@@ -1520,12 +1524,55 @@ describe("install and doctor", () => {
   test("doctor names every tracked language whose gate is not installed, with one install for all", () => {
     const dir = gated({ "a.ts": "export {};\n", "a.dart": "void f() {}\n", "b.dart": "", "db/a.sql": "" });
     git(dir, ["add", "-A"]);
-    expect(gatesDoctor(dir).checks.at(-1)).toEqual({
+    expect(doctorCheck(dir, "no-comments languages")).toEqual({
       name: "no-comments languages",
       state: "warn",
       detail:
         "dart reads 2 tracked files, but no-comments-dart is not installed; sql reads 1 tracked file, but no-comments-sql is not installed",
       fix: "agent-gates install no-comments-dart no-comments-sql",
+    });
+  });
+
+  test("doctor counts the tracked comments a sweep would refuse, through the installed adapters", () => {
+    const dir = gated({ "a.ts": "// old\nexport {};\n", "b.ts": "export {};\n", "c.dart": "// unread\n" });
+    commitPastHooks(dir, "feat: start");
+    expect(doctorCheck(dir, "no-comments backlog")).toEqual({
+      name: "no-comments backlog",
+      state: "warn",
+      detail: "the tracked files hold 1 comment",
+      fix: "node .githooks/no-comments/scan.cjs --all lists each one",
+    });
+    writeFiles(dir, { "b.ts": "// staged\nexport {\n" });
+    git(dir, ["add", "b.ts"]);
+    expect(doctorCheck(dir, "no-comments backlog")?.detail).toBe(
+      "the tracked files hold 1 comment, and 1 file does not parse",
+    );
+    git(dir, ["rm", "-q", "-f", "a.ts", "b.ts"]);
+    expect(doctorCheck(dir, "no-comments backlog")).toEqual({
+      name: "no-comments backlog",
+      state: "ok",
+      detail: "the tracked files hold no comment",
+      fix: null,
+    });
+  });
+
+  test("doctor runs no installed gate file that differs from this agent-gates, and still reports", () => {
+    const dir = gated({ "a.ts": "// old\nexport {};\n" });
+    commitPastHooks(dir, "feat: start");
+    writeFileSync(
+      join(dir, ".githooks/no-comments/javascript.cjs"),
+      ["// agent-gate:no-comments-javascript:1", 'throw new Error("ran");', ""].join("\n"),
+    );
+    const report = gatesDoctor(dir);
+    expect(report.checks.find(({ name }) => name === ".githooks/no-comments/javascript.cjs")?.state).toBe(
+      "warn",
+    );
+    expect(report.checks.find(({ name }) => name === "no-comments backlog")).toEqual({
+      name: "no-comments backlog",
+      state: "warn",
+      detail:
+        "not counted while these differ from this agent-gates, since the count runs them: .githooks/no-comments/javascript.cjs",
+      fix: "agent-gates install",
     });
   });
 });

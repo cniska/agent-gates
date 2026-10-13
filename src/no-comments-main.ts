@@ -1,16 +1,12 @@
-import { existsSync, realpathSync } from "node:fs";
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { realpathSync } from "node:fs";
+import { dirname } from "node:path";
 import { invariant, unreachable } from "./assert";
 import { EXIT_STATUS, recordOf, usageErrors } from "./coded-error";
 import { checkoutRoot } from "./git";
-import type { Adapter, Comment, Language, Reading } from "./no-comments-languages";
+import { adaptersBeside, SWEEP_ALL } from "./no-comments-installed";
+import type { Language } from "./no-comments-languages";
 import { annotations, REPLY_BYTES, reply, type Scope } from "./no-comments-report";
-import { type AdapterOf, findings, type Judged, judgedChange, keptIn } from "./no-comments-scan";
-
-const SCANNER = "scan.cjs";
-
-const ALL = "--all";
+import { findings, type Judged, judgedChange, keptIn } from "./no-comments-scan";
 
 const FORMAT = "--format";
 
@@ -25,71 +21,13 @@ type Call = { readonly judged: Judged; readonly format: Format };
 const scanUsageError = usageErrors<{ readonly wrong_arguments: { readonly got: readonly string[] } }>({
   wrong_arguments: {
     message: ({ got }) =>
-      `scan.cjs takes no arguments, ${ALL}, or a base and a head, each optionally after ${FORMAT} ${GITHUB}, and got ${got.length}: ${got.join(" ")}`,
-    resolve: () => `node scan.cjs [${FORMAT} ${GITHUB}] [${ALL} | <base> <head>]`,
+      `scan.cjs takes no arguments, ${SWEEP_ALL}, or a base and a head, each optionally after ${FORMAT} ${GITHUB}, and got ${got.length}: ${got.join(" ")}`,
+    resolve: () => `node scan.cjs [${FORMAT} ${GITHUB}] [${SWEEP_ALL} | <base> <head>]`,
   },
 });
 
-function isComment(value: unknown): value is Comment {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof Reflect.get(value, "line") === "number" &&
-    typeof Reflect.get(value, "text") === "string"
-  );
-}
-
-function isReading(value: unknown): value is Reading {
-  if (typeof value !== "object" || value === null) return false;
-  switch (Reflect.get(value, "kind")) {
-    case "read": {
-      const comments: unknown = Reflect.get(value, "comments");
-      return Array.isArray(comments) && comments.every(isComment);
-    }
-    case "unparsed":
-      return (
-        typeof Reflect.get(value, "line") === "number" && typeof Reflect.get(value, "reason") === "string"
-      );
-    default:
-      return false;
-  }
-}
-
-function isFormList(value: unknown): value is readonly string[] {
-  return Array.isArray(value) && value.every((form) => typeof form === "string");
-}
-
-function adapterAt(path: string, load: NodeJS.Require): Adapter | null {
-  if (!existsSync(path)) return null;
-  const module = Object(load(path));
-  const comments: unknown = Reflect.get(module, "comments");
-  const kept: unknown = Reflect.get(module, "kept");
-  invariant(typeof comments === "function", `${path} exports comments()`);
-  invariant(isFormList(kept), `${path} exports the comment forms it keeps`);
-  return {
-    comments: (file, text, tracked) => {
-      const reading: unknown = Reflect.apply(comments, undefined, [file, text, tracked]);
-      invariant(isReading(reading), `${path} returns the comments it read, or where the file stops parsing`);
-      return reading;
-    },
-    kept,
-  };
-}
-
-function adaptersBeside(dir: string): AdapterOf {
-  const load = createRequire(join(dir, SCANNER));
-  const loaded = new Map<Language, Adapter | null>();
-  return (language) => {
-    const known = loaded.get(language);
-    if (known !== undefined) return known;
-    const adapter = adapterAt(join(dir, `${language}.cjs`), load);
-    loaded.set(language, adapter);
-    return adapter;
-  };
-}
-
 function judgedOf(args: readonly string[]): Judged | null {
-  if (args.length === 1 && args[0] === ALL) return { kind: "all" };
+  if (args.length === 1 && args[0] === SWEEP_ALL) return { kind: "all" };
   if (args.some((arg) => arg.startsWith(FLAG_PREFIX))) return null;
   if (args.length === 0) return { kind: "staged" };
   const [base, head] = args;

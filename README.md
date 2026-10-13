@@ -66,7 +66,7 @@ A refusal leads with its total and the fix, then lists each file's findings unde
 
 In CI, `scan.cjs --format github` also annotates each finding at its file and line, cut like the reply. GitHub shows ten error annotations per step, so past ten the first nine are annotated and the tenth counts the rest. The step's log then holds the whole reply, uncapped, since a log has no window to fit.
 
-The gates stop the comment count from growing; they do not drive it to zero. Comments already in the tree wait for a deliberate sweep: `node .githooks/no-comments/scan.cjs --all` judges every comment of every tracked file, as the index holds it.
+The gates stop the comment count from growing; they do not drive it to zero. Comments already in the tree wait for a deliberate sweep: `node .githooks/no-comments/scan.cjs --all` judges every comment of every tracked file, as the index holds it, and `agent-gates doctor` reports their count as a warning, never a failure.
 
 They need `node` on `PATH` and nothing installed in the project. A file with no extension is routed by its shebang. They skip:
 
@@ -107,7 +107,7 @@ Each command prints one JSON line. An error goes to stderr with its `kind` and e
 | Command | Does |
 | --- | --- |
 | `agent-gates install [<gate>...]` | Install the named gates, bring the installed ones up to date, and report each file's state before it acted |
-| `agent-gates doctor` | Judge each gate file, `core.hooksPath`, the `prepare` script and, with a `no-comments` gate installed, whether its languages match the tracked files, as `ok`, `warn` or `fail` with the fix; exit 1 when one fails |
+| `agent-gates doctor` | Judge each gate file, `core.hooksPath`, the `prepare` script and, with a `no-comments` gate installed, whether its languages match the tracked files and how many comments a sweep would refuse, as `ok`, `warn` or `fail` with the fix; exit 1 when one fails |
 
 Each gate file is in one of these states, and `install` acts on it:
 

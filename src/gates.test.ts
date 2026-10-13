@@ -97,6 +97,7 @@ describe("this repo", () => {
       "hooksPath",
       "prepare",
       "no-comments languages",
+      "no-comments backlog",
     ]);
   });
 });

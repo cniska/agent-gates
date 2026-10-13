@@ -55,15 +55,26 @@ function commentCount(found: readonly FileFindings[]): number {
   return found.reduce((sum, file) => sum + (file.kind === "comments" ? file.comments.length : 0), 0);
 }
 
-function headerOf(found: readonly FileFindings[], scope: Scope): string {
+function unparsedCount(found: readonly FileFindings[]): number {
+  return found.filter(({ kind }) => kind === "unparsed").length;
+}
+
+export function countsOf(found: readonly FileFindings[], scope: Scope): string {
   const comments = commentCount(found);
-  const unparsed = found.filter(({ kind }) => kind === "unparsed").length;
-  const counts = [
+  const unparsed = unparsedCount(found);
+  if (comments === 0 && unparsed === 0) return `${SUBJECT[scope]} no comment`;
+  return [
     ...(comments > 0 ? [`${SUBJECT[scope]} ${counted(comments, "comment", "comments")}`] : []),
     ...(unparsed > 0 ? [`${counted(unparsed, "file does", "files do")} not parse`] : []),
+  ].join(", and ");
+}
+
+function headerOf(found: readonly FileFindings[], scope: Scope): string {
+  const fixes = [
+    ...(commentCount(found) > 0 ? [COMMENT_FIX] : []),
+    ...(unparsedCount(found) > 0 ? [SYNTAX_FIX] : []),
   ];
-  const fixes = [...(comments > 0 ? [COMMENT_FIX] : []), ...(unparsed > 0 ? [SYNTAX_FIX] : [])];
-  return `no-comments: ${counts.join(", and ")}. ${fixes.join(" ")}`;
+  return `no-comments: ${countsOf(found, scope)}. ${fixes.join(" ")}`;
 }
 
 function keptLines(found: readonly FileFindings[], keptOf: KeptOf): string[] {
