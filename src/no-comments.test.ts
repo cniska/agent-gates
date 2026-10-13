@@ -1079,7 +1079,7 @@ describe("the go adapter", () => {
       expect([path, goComments(path, body)]).toEqual([path, read(refused)]);
   });
 
-  test("keeps cgo's preamble and exports only in a file that imports C", () => {
+  test("keeps cgo's preamble, and exports on top-level funcs, only in a file that imports C", () => {
     const lines = [
       "package main",
       "",
@@ -1093,6 +1093,9 @@ describe("the go adapter", () => {
       "//export G",
       "func H() {}",
       "",
+      "//export M",
+      "func (T) M() {}",
+      "",
       "/*",
       "#include <stdlib.h>",
       "// refused with its whole block",
@@ -1103,7 +1106,8 @@ describe("the go adapter", () => {
       read([
         { line: 4, text: "// // a C comment is refused" },
         { line: 10, text: "//export G" },
-        { line: 13, text: "/*\n#include <stdlib.h>\n// refused with its whole block\n*/" },
+        { line: 13, text: "//export M" },
+        { line: 16, text: "/*\n#include <stdlib.h>\n// refused with its whole block\n*/" },
       ]),
     );
     expect(
