@@ -190,7 +190,7 @@ type Facts = { readonly packageName: string | null; readonly importsC: boolean }
 
 type Placement = { readonly test: boolean; readonly testdata: boolean };
 
-type Filter = "exported" | "all" | "none";
+type Filter = "exported" | "none";
 
 type Group = number;
 
@@ -412,9 +412,7 @@ function targetSpans(text: string, tokens: readonly Token[]): Lexed<GoSpan, Fact
   const isOpener = (index: number) => tokenAt(index)?.kind === "punct" && OPENERS.has(textOf(index));
   const isCloser = (index: number) => tokenAt(index)?.kind === "punct" && CLOSERS.has(textOf(index));
   const isExported = (name: string | null) => name !== null && EXPORTED.test(name);
-  const keeps = (filter: Filter, exported: boolean) =>
-    filter === "all" || (filter === "exported" && exported);
-  const unfiltered = (filter: Filter): Filter => (filter === "none" ? "none" : "all");
+  const keeps = (filter: Filter, exported: boolean) => filter === "exported" && exported;
 
   function show(group: Group | null): void {
     if (group !== null) shown.add(group);
@@ -489,14 +487,18 @@ function targetSpans(text: string, tokens: readonly Token[]): Lexed<GoSpan, Fact
     }
     if (word === "map") {
       at++;
-      if (isPunct(at, "[")) skipBalanced();
-      type(unfiltered(filter));
+      if (isPunct(at, "[")) {
+        at++;
+        type(filter);
+        if (isPunct(at, "]")) at++;
+      }
+      type(filter);
       return;
     }
     if (word === "chan" || isPunct(at, "<-")) {
       at++;
       if (isPunct(at, "<-") || wordAt(at) === "chan") at++;
-      type(unfiltered(filter));
+      type(filter);
       return;
     }
     if (word === "func") {

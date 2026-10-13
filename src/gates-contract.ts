@@ -206,6 +206,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
   ]),
   go: adapterFile("go", [
     { version: 1, sha256: "7636aedbafc041c6b38c608ef83f156d51f636b0aaacb7c766721b6f1ccde18e" },
+    { version: 2, sha256: "2b72f59f37d2644db0503fdace46d136a951f7fd00c53d3e80cd461cb89c65cf" },
   ]),
 };
 
