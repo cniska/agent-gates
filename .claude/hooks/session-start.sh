@@ -7,3 +7,5 @@ fi
 
 cd "$CLAUDE_PROJECT_DIR"
 bun install --frozen-lockfile
+claude plugin marketplace add cniska/agent-skills
+claude plugin install cniska-skills@cniska
