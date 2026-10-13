@@ -9,4 +9,4 @@ Installs commit gates into a project and judges their health. [`README.md`](READ
 - A file several gates share carries a shared part (`githooks`, `no-comments`), never a gate name, so it does not read back as a chosen gate.
 - Fix the cause, never work around it, and add no debt. Debt you find is fixed where it is found.
 - Code carries no comments, tool contracts aside. A why goes into a name, a test, or this file.
-- Commit directly to `main`, in Conventional Commits.
+- Commit directly to `main`, in Conventional Commits. The message is the subject line alone: no body, no trailers. The user stays the author.
