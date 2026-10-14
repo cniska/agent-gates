@@ -120,3 +120,5 @@ test("AC-13 counts the comments tracked files hold, through the installed adapte
     fix: "agent-gates install",
   });
 });
+
+test.todo("AC-29 installs the gate of each tracked language, and refuses when none is tracked", () => {});
