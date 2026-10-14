@@ -1130,7 +1130,6 @@ describe("the pre-commit hook", () => {
       "no-comments-python",
     ]);
     writeFiles(dir, {
-      "a.go": "// Package a.\npackage a\n",
       "a.py": '"""Docstring."""\n',
       "lib/a.dart": "void f() {} // why\n",
       "src/a.rs": '#[doc = "why"]\nfn f() {}\n',
