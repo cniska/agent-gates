@@ -58,6 +58,8 @@ const SPDX_LINE = new RegExp(
 
 const MARKER_OPENERS = ["#", "//", "--"];
 
+const SHEBANG_TRAILER = /(?:^#!|\s)#|\\c/;
+
 export function directive<R extends CommentRead>(
   shown: string,
   { pattern, where }: Directive<R>,
@@ -87,7 +89,8 @@ const SHARED_FORMS: readonly KeptForm<CommentRead>[] = [
 
 export const SHEBANG: KeptForm<CommentRead> = {
   shown: "the first-line shebang",
-  keeps: ({ span, text }) => span.start === 0 && text.startsWith(SHEBANG_PREFIX),
+  keeps: ({ span, text }) =>
+    span.start === 0 && text.startsWith(SHEBANG_PREFIX) && !SHEBANG_TRAILER.test(text),
 };
 
 export const SHARED_SHOWN: readonly string[] = SHARED_FORMS.map(({ shown }) => shown);
