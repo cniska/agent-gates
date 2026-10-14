@@ -76,10 +76,10 @@ A comment stays only when the compiler, interpreter, bundler or runtime reads it
 | JavaScript and TypeScript | `#__PURE__` or `@__PURE__` alone; a leading `/// <reference …/>` holding only its attributes |
 | Dart | `// @dart = x.y` alone, before any code |
 | SQL | drizzle's `--> statement-breakpoint` |
-| shell | the first-line shebang |
+| shell | the first-line shebang, with no `#` word or `\c` after `#!` |
 | Rust | none |
 | Go | `//go:build` and `//go:debug` with their argument, before `package`; `//go:embed` with its patterns, above a `var`; `//go:generate`, `//go:linkname`, `//go:wasmimport`, `//go:wasmexport` and `//go:fix` with their arguments, and `//go:noinline`, `//go:nosplit`, `//go:noescape`, `//go:norace`, `//go:nocheckptr`, `//go:uintptrescapes` and `//go:uintptrkeepalive` alone, at column 1; `//line file:N` at column 1, and `/*line file:N*/`; `//export Name` above the top-level func `Name`, in a file that imports `"C"`; the cgo preamble above `import "C"`, holding no C comment |
-| Python | the first-line shebang; the PEP 263 coding declaration on line 1, or on line 2 under a blank or comment line; a PEP 723 `# /// script` block of TOML holding only `requires-python`, `dependencies` and `[tool.*]`, and no comment |
+| Python | the first-line shebang, with no `#` word or `\c` after `#!`; the PEP 263 coding declaration on line 1, or on line 2 under a blank or comment line; a PEP 723 `# /// script` block of TOML holding only `requires-python`, `dependencies` and `[tool.*]`, and no comment |
 | Every language | one `SPDX-License-Identifier:` line; a gate marker on a line of its own |
 
 - Every kept form stands alone in its comment: no reason, no trailing text. A directive in a block comment that spans lines is refused.
