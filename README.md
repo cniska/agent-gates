@@ -1,6 +1,6 @@
 # agent-gates
 
-Gate your agents' work and save them round trips: git hooks refuse a bad commit locally and GitHub workflows refuse it again in CI, for every contributor, and an optional Claude Code plugin shows the agent the comments it added, right after each edit. It holds no workflow, records nothing and isolates no checkout; cniska-skills, agent-record and agent-worktree do.
+Gate your agents' work and save them round trips: git hooks refuse a bad commit locally and GitHub workflows refuse it again in CI, for every contributor, and an optional Claude Code plugin shows the agent the comments it added, right after each edit. It leaves the rest to its siblings: [cniska-skills](https://github.com/cniska/agent-skills) holds the workflow, [agent-record](https://github.com/cniska/agent-record) records past sessions, and [agent-worktree](https://github.com/cniska/agent-worktree) isolates checkouts.
 
 - `agent-gates install` writes the gates into the project, which commits them, and `agent-gates doctor` judges their health.
 - The gates refuse a commit subject that is not a Conventional Commit and an added comment, and run the project's formatter on every commit.
@@ -69,7 +69,7 @@ A comment is where a coding agent excuses a workaround instead of fixing it, and
 What is judged:
 
 - **On commit:** the staged changes against `HEAD`.
-- **One file:** `node .githooks/no-comments/scan.cjs --file <path>` judges the file as it stands in the working tree against `HEAD`, whatever the index holds, and skips what a commit would not judge, an ignored file included. It reads no other file and pairs the file only with its own path at `HEAD`, so a comment moved in from another file, and every comment of a file moved or renamed since `HEAD`, reads as added.
+- **One file:** `node .githooks/no-comments/scan.cjs --file <path>` judges the file as it stands in the working tree against `HEAD`, whatever the index holds, and skips what a commit would not judge, an ignored file included. It compares the file only with the same path at `HEAD`: a comment moved in from another file reads as added, and so does every comment of a file moved or renamed since `HEAD`.
 - **In CI:** a pull request against the point it left its base branch; a push against the branch's previous tip, or against the default branch when the push creates the branch.
 - **Added** means the comment's text, trimmed and with whitespace collapsed, is not among the comments the changed files held before. Moving, reindenting or renaming keeps a comment; editing a word, splitting, joining or duplicating one adds it. A file the change deletes, and git does not pair as a rename, counts for none, since removing comments is the goal: a comment moved out of it is added.
 - **Not parsing:** JavaScript and TypeScript refuse any syntax error Babel reports, at its line. The other languages refuse a string, comment, quote, character, expansion or heredoc that never closes, at the line where it opens. Dart and SQL also refuse an unbalanced bracket, Python one that never closes and a line continuation at the end of the file, and SQL a `$` that starts neither a dollar quote nor a parameter.
@@ -119,7 +119,7 @@ Each command prints one JSON line. An error goes to stderr and exits 2 for `usag
 | Command | Does |
 | --- | --- |
 | `agent-gates install [<gate>...] [--command <format command>] [--setup <CI setup command>]` | Install the named gates, update the installed ones, and report each file's state before acting and the format and setup commands |
-| `agent-gates doctor` | Check each gate file, `core.hooksPath`, the `prepare` script, the format and CI setup commands, whether a no-comments gate is installed for each language the tracked files hold, even when none is, and whether each installed one still has files to read, and how many comments the tracked files hold; exit 1 on a failure |
+| `agent-gates doctor` | Check each gate file, `core.hooksPath`, the `prepare` script and the format and CI setup commands; report each tracked language without its no-comments gate, each installed language with no files left to read, and the comment count; exit 1 on a failure |
 
 Gate file states:
 
