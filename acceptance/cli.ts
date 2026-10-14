@@ -90,14 +90,22 @@ export function install(dir: string, gates: readonly string[]): void {
   if (ran.status !== 0) throw new Error(`install ${gates.join(" ")} exited ${ran.status}: ${ran.stderr}`);
 }
 
+export function gitRan(dir: string, args: readonly string[]): Ran {
+  return run("git", ["-C", dir, ...args], dir);
+}
+
 export function git(dir: string, args: readonly string[]): string {
-  const ran = run("git", ["-C", dir, ...args], dir);
+  const ran = gitRan(dir, args);
   if (ran.status !== 0) throw new Error(`git ${args.join(" ")} exited ${ran.status}: ${ran.stderr}`);
   return ran.stdout.trim();
 }
 
 export function shell(dir: string, script: string): Ran {
   return run("sh", ["-c", script], dir);
+}
+
+export function githubStep(dir: string, script: string, env: Env): Ran {
+  return run("bash", ["--noprofile", "--norc", "-eo", "pipefail", "-c", script], dir, env);
 }
 
 export function writeFiles(dir: string, files: Readonly<Record<string, string>>): void {
