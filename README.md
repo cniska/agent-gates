@@ -118,6 +118,15 @@ Gate file states:
 
 `install` also refuses when `core.hooksPath` or `prepare` already hold something else, when `package.json` does not parse, or when no gate is named and none is installed. `commit-subject` owns `.githooks/commit-msg`.
 
+## Claude Code plugin
+
+The gates stay the check for every contributor. The optional `cniska-gates` plugin in `plugin/` saves a Claude Code agent the round trip through them: after each `Edit`, `Write` or `MultiEdit`, in a repo that commits `.githooks/no-comments/scan.cjs`, it runs `scan.cjs --file` on the edited file and hands the agent the scanner's reply, so it removes the comments before it commits. It never blocks an edit, never changes a file, and does nothing in a repo without the gate or with a scanner too old for `--file`. It needs `jq` and `node` on `PATH`.
+
+```bash
+claude plugin marketplace add cniska/agent-skills
+claude plugin install cniska-gates@cniska
+```
+
 ## Extending
 
 To add a language:

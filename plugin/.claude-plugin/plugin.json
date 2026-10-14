@@ -1,0 +1,10 @@
+{
+  "name": "cniska-gates",
+  "description": "Saves agents the round trip through agent-gates' commit gates: after each edit in a repo that commits the no-comments scanner, it scans the edited file against HEAD and tells the agent which comments the edit added and why they are refused, before it commits. It never blocks an edit or changes a file.",
+  "author": {
+    "name": "Christoffer Niska"
+  },
+  "homepage": "https://github.com/cniska/agent-gates",
+  "repository": "https://github.com/cniska/agent-gates",
+  "license": "MIT"
+}
