@@ -434,7 +434,7 @@ const KEPT: readonly KeptForm<Read>[] = [
   ),
   {
     shown:
-      "a PEP 723 `# /// script` block of TOML holding only `requires-python`, `dependencies` and `[tool.*]`, and no comment",
+      "a PEP 723 `# /// script` block of TOML holding only the keys `requires-python`, `dependencies` and `tool`, and no comment",
     keeps: ({ span, body }) => span.style === "block" && isScriptMetadata(body),
   },
 ];
