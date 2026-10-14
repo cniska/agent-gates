@@ -12,7 +12,7 @@ cd agent-gates
 mise trust && mise install
 ```
 
-`mise install` also links `agent-gates` into `~/.bun/bin`; put that directory on your `PATH`. Then, in the project you want to gate:
+In the clone, never in a worktree, `mise install` also links `agent-gates` into `~/.bun/bin`, so removing a worktree never leaves the command pointing at a deleted checkout; put that directory on your `PATH`. Then, in the project you want to gate:
 
 ```bash
 agent-gates install commit-subject no-comments

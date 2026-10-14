@@ -195,7 +195,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ## 6. Deliverables
 
-- **D-1** — The `agent-gates` CLI, run by Bun from a checkout and linked onto `PATH` by `mise install`.
+- **D-1** — The `agent-gates` CLI, run by Bun from a checkout and linked onto `PATH` by `mise install` in the primary checkout, never in a worktree.
 - **D-2** — The gate files in `gates/`, installed byte for byte, the `no-comments` scanner and adapters bundled into them from `src/`.
 - **D-3** — `README.md` (install, the gates, what each refuses and keeps, the commands), `AGENTS.md` (repository rules), `src/README.md` (module map), and this spec.
 - **D-4** — The test suite, run by `bun run check`, and the acceptance suite in `acceptance/`, run by `bun run acceptance`. The acceptance suite drives the CLI, the installed hooks through git, the installed scanner through `node`, and the installed workflows' steps with the environment GitHub Actions gives them; it imports nothing from `src/`.
