@@ -9,12 +9,16 @@ import {
   commitAs,
   committing,
   doctor,
+  each,
   field,
   git,
   githubStep,
   gitRan,
+  installed,
+  installs,
   jsonLine,
   readText,
+  refuses,
   removeScratch,
   stepScript,
   writeFiles,
@@ -41,16 +45,6 @@ const NAME_THE_SETUP =
 const SETUP_STEP = "Set up the project as agent-gates install --setup named";
 
 const CHECK_STEP = "Run the format command the hook installs, and refuse what it changes";
-
-function each(state: string) {
-  return FILES.map((target) => ({ target, state, backup: null }));
-}
-
-function installed(dir: string, args: readonly string[]): unknown {
-  const ran = agentGates(dir, ["install", ...args]);
-  expect([ran.status, ran.stderr]).toEqual([0, ""]);
-  return field(jsonLine(ran.stdout), "result");
-}
 
 function usageCode(dir: string, args: readonly string[]): readonly unknown[] {
   const ran = agentGates(dir, ["install", ...args]);
@@ -79,26 +73,20 @@ test("AC-30 refuses format without --command, which then installs a working gate
     "package.json": '{ "scripts": { "format": "true" } }\n',
     "bun.lock": "",
   });
-  const refused = agentGates(declared, ["install", "format"]);
-  expect([refused.status, refused.stdout]).toEqual([1, ""]);
-  expect(jsonLine(refused.stderr)).toEqual({
-    command: "install",
-    ok: false,
-    error: {
-      kind: "refusal",
-      code: "fill_missing",
-      message: `${declared}'s format gate runs the project's own format command, and none was given with --command`,
-      meta: { root: declared, fill: "command" },
-      resolve: NAME_THE_COMMAND,
-    },
+  refuses(declared, ["format"], {
+    kind: "refusal",
+    code: "fill_missing",
+    message: `${declared}'s format gate runs the project's own format command, and none was given with --command`,
+    meta: { root: declared, fill: "command" },
+    resolve: NAME_THE_COMMAND,
   });
   expect(readdirSync(declared).sort()).toEqual([".git", "Makefile", "bun.lock", "package.json"]);
 
   const dir = checkout({ "fmt.sh": UPPERCASE, Makefile: "fmt:\n\t@sh fmt.sh\n" });
   const before = git(dir, ["status", "--porcelain", "--untracked-files=all"]);
-  expect(installed(dir, ["format", "--command", "make fmt"])).toEqual({
+  installs(dir, ["format", "--command", "make fmt"], {
     gates: ["format"],
-    files: each("missing"),
+    files: each("missing", FILES),
     prepare: "absent",
     fills: { command: "make fmt", setup: null },
   });
@@ -117,11 +105,11 @@ test("AC-31 keeps the commands a reinstall is not given, and rewrites one it is"
   const dir = checkout();
   installed(dir, ["format", "--command", "sh fmt.sh", "--setup", "pnpm install"]);
   expect(installed(dir, [])).toMatchObject({
-    files: each("installed"),
+    files: each("installed", FILES),
     fills: { command: "sh fmt.sh", setup: "pnpm install" },
   });
   expect(installed(dir, ["format", "--command", "cargo fmt"])).toMatchObject({
-    files: [{ target: HOOK, state: "reconfigured", backup: null }, ...each("installed").slice(1)],
+    files: [{ target: HOOK, state: "reconfigured", backup: null }, ...each("installed", FILES).slice(1)],
     fills: { command: "cargo fmt", setup: "pnpm install" },
   });
   expect(readText(dir, HOOK)).toContain("\ncommand='cargo fmt'\n");

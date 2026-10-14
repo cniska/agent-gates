@@ -7,11 +7,16 @@ import {
   checkout,
   commitAs,
   doctor,
+  each,
   git,
+  hooksPath,
+  type InstallResult,
   install,
+  installs,
   jsonLine,
   modeOf,
   readText,
+  refuses,
   removeScratch,
   scratchDir,
   shell,
@@ -42,42 +47,10 @@ const NO_COMMENTS_FILES = [
   ".github/workflows/no-comments.yml",
 ];
 
-type FileResult = { readonly target: string; readonly state: string; readonly backup: string | null };
-
-type InstallResult = {
-  readonly gates: readonly string[];
-  readonly files: readonly FileResult[];
-  readonly prepare: string;
-};
-
-function each(state: string, targets: readonly string[]): FileResult[] {
-  return targets.map((target) => ({ target, state, backup: null }));
-}
-
-function installs(dir: string, gates: readonly string[], result: InstallResult): void {
-  const ran = agentGates(dir, ["install", ...gates]);
-  expect([ran.status, ran.stderr]).toEqual([0, ""]);
-  expect(jsonLine(ran.stdout)).toEqual({
-    command: "install",
-    ok: true,
-    result: { ...result, fills: { command: null, setup: null } },
-  });
-}
-
-function refuses(dir: string, gates: readonly string[], error: object): void {
-  const ran = agentGates(dir, ["install", ...gates]);
-  expect([ran.status, ran.stdout]).toEqual([1, ""]);
-  expect(jsonLine(ran.stderr)).toEqual({ command: "install", ok: false, error });
-}
-
 function cliLineBeforeBunManifestError(stderr: string, manifest: string): string {
   const [line = "", ...bun] = stderr.split("\n");
   expect(bun.join("\n")).toMatch(new RegExp(`\\nerror: .*\\n {4}at ${manifest}:\\d+:\\d+\\n$`));
   return `${line}\n`;
-}
-
-function hooksPath(dir: string): string {
-  return shell(dir, "git config --get core.hooksPath || true").stdout.trim();
 }
 
 function currentBytes(gates: readonly string[], path: string): string {

@@ -1,3 +1,4 @@
+import { expect } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
   mkdirSync,
@@ -101,6 +102,45 @@ export function check(dir: string, name: string): Check | undefined {
 export function install(dir: string, gates: readonly string[]): void {
   const ran = agentGates(dir, ["install", ...gates]);
   if (ran.status !== 0) throw new Error(`install ${gates.join(" ")} exited ${ran.status}: ${ran.stderr}`);
+}
+
+export type FileResult = { readonly target: string; readonly state: string; readonly backup: string | null };
+
+type Fills = { readonly command: string | null; readonly setup: string | null };
+
+export type InstallResult = {
+  readonly gates: readonly string[];
+  readonly files: readonly FileResult[];
+  readonly prepare: string;
+  readonly fills?: Fills;
+};
+
+const NO_FILLS: Fills = { command: null, setup: null };
+
+export function each(state: string, targets: readonly string[]): FileResult[] {
+  return targets.map((target) => ({ target, state, backup: null }));
+}
+
+export function installed(dir: string, args: readonly string[]): unknown {
+  const ran = agentGates(dir, ["install", ...args]);
+  expect([ran.status, ran.stderr]).toEqual([0, ""]);
+  const reply = jsonLine(ran.stdout);
+  expect([field(reply, "command"), field(reply, "ok")]).toEqual(["install", true]);
+  return field(reply, "result");
+}
+
+export function installs(dir: string, args: readonly string[], result: InstallResult): void {
+  expect(installed(dir, args)).toEqual({ fills: NO_FILLS, ...result });
+}
+
+export function refuses(dir: string, args: readonly string[], error: object): void {
+  const ran = agentGates(dir, ["install", ...args]);
+  expect([ran.status, ran.stdout]).toEqual([1, ""]);
+  expect(jsonLine(ran.stderr)).toEqual({ command: "install", ok: false, error });
+}
+
+export function hooksPath(dir: string): string {
+  return shell(dir, "git config --get core.hooksPath || true").stdout.trim();
 }
 
 export function gitRan(dir: string, args: readonly string[], env: Env = {}): Ran {

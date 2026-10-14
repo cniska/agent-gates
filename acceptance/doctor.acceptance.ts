@@ -6,10 +6,13 @@ import {
   type Check,
   check,
   checkout,
+  each,
   git,
-  gitRan,
+  hooksPath,
   install,
+  installs,
   jsonLine,
+  refuses,
   removeScratch,
   writeFiles,
 } from "./cli";
@@ -136,38 +139,25 @@ test("AC-29 installs the gate of each tracked language, and refuses when none is
     },
   ]);
 
-  const installed = agentGates(dir, ["install", "no-comments"]);
-  expect([installed.status, installed.stderr]).toEqual([0, ""]);
-  expect(jsonLine(installed.stdout)).toEqual({
-    command: "install",
-    ok: true,
-    result: {
-      gates: ["no-comments-javascript", "no-comments-python"],
-      files: [
-        ...NO_COMMENTS_FILES,
-        ".githooks/no-comments/javascript.cjs",
-        ".githooks/no-comments/python.cjs",
-      ].map((target) => ({ target, state: "missing", backup: null })),
-      prepare: "absent",
-      fills: { command: null, setup: null },
-    },
+  installs(dir, ["no-comments"], {
+    gates: ["no-comments-javascript", "no-comments-python"],
+    files: each("missing", [
+      ...NO_COMMENTS_FILES,
+      ".githooks/no-comments/javascript.cjs",
+      ".githooks/no-comments/python.cjs",
+    ]),
+    prepare: "absent",
   });
 
   const untyped = checkout({ "notes.txt": "a note\n" });
   git(untyped, ["add", "-A"]);
-  const refused = agentGates(untyped, ["install", "no-comments"]);
-  expect([refused.status, refused.stdout]).toEqual([1, ""]);
-  expect(jsonLine(refused.stderr)).toEqual({
-    command: "install",
-    ok: false,
-    error: {
-      kind: "refusal",
-      code: "no_language_tracked",
-      message: `${untyped} tracks no file a no-comments gate reads, so there is no language to install`,
-      meta: { root: untyped },
-      resolve: `stop and ask the owner which gates the project runs, then ${INSTALL_USAGE}`,
-    },
+  refuses(untyped, ["no-comments"], {
+    kind: "refusal",
+    code: "no_language_tracked",
+    message: `${untyped} tracks no file a no-comments gate reads, so there is no language to install`,
+    meta: { root: untyped },
+    resolve: `stop and ask the owner which gates the project runs, then ${INSTALL_USAGE}`,
   });
   expect(readdirSync(untyped).sort()).toEqual([".git", "notes.txt"]);
-  expect(gitRan(untyped, ["config", "--get", "core.hooksPath"]).status).toBe(1);
+  expect(hooksPath(untyped)).toBe("");
 });
