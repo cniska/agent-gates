@@ -54,6 +54,7 @@ function note(why: string): string {
 }
 
 test("AC-36 hands the agent the scanner's reply after an edit adding a comment, and says nothing otherwise", () => {
+  expect(JSON.parse(readText(PLUGIN, ".claude-plugin/plugin.json"))).toMatchObject({ name: "cniska-gates" });
   expect(JSON.parse(readText(PLUGIN, "hooks/hooks.json"))).toEqual({
     hooks: {
       PostToolUse: [{ matcher: "Edit|Write|MultiEdit", hooks: [{ type: "command", command: COMMAND }] }],
@@ -77,6 +78,7 @@ test("AC-36 hands the agent the scanner's reply after an edit adding a comment, 
   const loose = scratchDir();
   writeFiles(loose, { "a.ts": "export const a = 1; // why\n" });
   expect(edited(loose, join(loose, "a.ts"), tools)).toEqual(QUIET);
+  expect(edited(loose, join(loose, "gone", "a.ts"), tools)).toEqual(QUIET);
   expect(hookRan(JSON.stringify({ cwd: dir, tool_input: {} }), tools)).toEqual(QUIET);
 });
 
