@@ -1372,6 +1372,16 @@ describe("the pre-commit hook", () => {
     expect(commit(dir)).toEqual({ status: 0, stderr: "" });
   });
 
+  test("refuses a comment moved out of a file the change deletes", () => {
+    const dir = gated({ "a.ts": "// moved\nexport const a = 1;\n" });
+    commitPastHooks(dir, "feat: start");
+    git(dir, ["rm", "-q", "a.ts"]);
+    writeFiles(dir, {
+      "b.ts": "// moved\nexport function b() {\n  return [1, 2, 3].map((n) => n * 2);\n}\n",
+    });
+    expect(commit(dir).stderr).toBe(refusalText(["b.ts", "  1  // moved"]));
+  });
+
   test("refuses a comment the change duplicates, or a block it joins", () => {
     const dir = gated({ "a.ts": "// twice\n/* one\n   two */\nexport {};\n" });
     commitPastHooks(dir, "feat: start");
