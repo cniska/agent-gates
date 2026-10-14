@@ -10,3 +10,4 @@ Installs commit gates into a project and judges their health. [`README.md`](READ
 - Fix the cause, never work around it, and add no debt. Debt you find is fixed where it is found.
 - Code carries no comments, tool contracts aside. A why goes into a name, a test, or this file.
 - Commit directly to `main`, in Conventional Commits. The message is the subject line alone: no body, no trailers. The user stays the author.
+- Push each commit to `main` once `bun run check` passes and a fresh reviewer accepts it; that accept is the owner's standing sign-off, so no push waits on them.
