@@ -84,3 +84,22 @@ function isEnvRead(node: Node): boolean {
 export function readsEnv(text: string): boolean {
   return [...nodesOf(text)].some(isEnvRead);
 }
+
+function isTestCall(callee: Node): boolean {
+  return (
+    (callee.type === "Identifier" && callee.name === "test") ||
+    (callee.type === "MemberExpression" &&
+      callee.object.type === "Identifier" &&
+      callee.object.name === "test")
+  );
+}
+
+export function testNamesOf(text: string): readonly (string | null)[] {
+  const names: (string | null)[] = [];
+  for (const node of nodesOf(text)) {
+    if (node.type !== "CallExpression" || !isTestCall(node.callee)) continue;
+    const [name] = node.arguments;
+    names.push(name?.type === "StringLiteral" ? name.value : null);
+  }
+  return names;
+}

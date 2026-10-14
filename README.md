@@ -141,4 +141,4 @@ Another SQL dialect (MySQL, BigQuery, Snowflake) would need per-dialect lexer ru
 
 ## Development
 
-`bun run check` runs lint, typecheck and tests. A change to any file in `gates/` bumps its version first; see [AGENTS.md](AGENTS.md).
+`bun run check` runs lint, typecheck and tests. `bun run acceptance` proves the criteria in [`SPEC.md`](SPEC.md) through the CLI and the files it installs alone, as the spec's D-4 says; each test in `acceptance/` is named for the criteria it proves, and a check in `bun run check` fails when a criterion has no test or todo, or a test cites none. A change to any file in `gates/` bumps its version first; see [AGENTS.md](AGENTS.md).

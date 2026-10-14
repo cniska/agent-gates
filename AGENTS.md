@@ -1,6 +1,6 @@
 # agent-gates
 
-Installs commit gates into a project and judges their health. [`README.md`](README.md) lists the gates and commands.
+Installs commit gates into a project and judges their health. [`README.md`](README.md) lists the gates and commands. [`SPEC.md`](SPEC.md) states what must hold and changes in the same commit as the behavior it describes.
 
 ## Rules
 
