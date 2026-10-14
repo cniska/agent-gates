@@ -119,7 +119,7 @@ const C_LITERAL = /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g;
 
 const C_COMMENT = /\/\/|\/\*/;
 
-const C_PROSE_DIRECTIVE = /^[ \t]*#[ \t]*(?:(?:el)?if[ \t]+0\b|error\b|warning\b|pragma[ \t]+message\b)/m;
+const C_PROSE_DIRECTIVE = /^[ \t]*#[ \t]*(?:(?:el)?if[ \t]+0\b|error\b|warning\b|pragma[ \t]+message\b)/;
 
 type CodeKind = "word" | "string" | "rune" | "number" | "punct";
 
@@ -141,7 +141,7 @@ type Documents =
   | { readonly kind: "none" }
   | { readonly kind: "var" }
   | { readonly kind: "func"; readonly name: string }
-  | { readonly kind: "import-c" };
+  | { readonly kind: "import-c"; readonly clean: boolean };
 
 type GoSpan = Span & { readonly beforePackage: boolean; readonly documents: Documents };
 
@@ -156,16 +156,6 @@ type Grouped = { readonly groupOf: ReadonlyMap<number, Group>; readonly code: re
 type SpecFound = { readonly importsC: boolean; readonly doc: Group | null };
 
 const NOT_DOCUMENTING: Documents = { kind: "none" };
-
-type CommentToken = Extract<Token, { readonly kind: "comment" }>;
-
-function bodyEnd(token: CommentToken): number {
-  return token.style === "block" ? token.end - CLOSER : token.end;
-}
-
-function bodyOf(text: string, token: CommentToken): string {
-  return text.slice(token.start + OPENER, bodyEnd(token));
-}
 
 function tokensOf(text: string): Tokenized {
   const tokens: Token[] = [];
@@ -327,8 +317,37 @@ function commentGroups(text: string, tokens: readonly Token[]): Grouped {
   return { groupOf, code };
 }
 
+type CommentToken = Extract<Token, { readonly kind: "comment" }>;
+
+function bodyEndOf(token: CommentToken): number {
+  return token.style === "block" ? token.end - CLOSER : token.end;
+}
+
+function bodiesByGroup(
+  text: string,
+  tokens: readonly Token[],
+  groupOf: ReadonlyMap<number, Group>,
+): ReadonlyMap<Group, readonly string[]> {
+  const bodies = new Map<Group, string[]>();
+  for (const [index, token] of tokens.entries()) {
+    const group = groupOf.get(index);
+    if (token.kind !== "comment" || group === undefined) continue;
+    const body = text.slice(token.start + OPENER, bodyEndOf(token));
+    const known = bodies.get(group);
+    if (known === undefined) bodies.set(group, [body]);
+    else known.push(body);
+  }
+  return bodies;
+}
+
+function isCleanPreamble(bodies: readonly string[]): boolean {
+  const lines = bodies.flatMap((body) => body.split("\n"));
+  return !lines.some((line) => C_PROSE_DIRECTIVE.test(line) || C_COMMENT.test(line.replace(C_LITERAL, "")));
+}
+
 function targetSpans(text: string, tokens: readonly Token[]): Lexed<GoSpan, Facts> {
   const { groupOf, code } = commentGroups(text, tokens);
+  const groupBodies = bodiesByGroup(text, tokens, groupOf);
   const documents = new Map<Group, Documents>();
   let packageStart: number | null = null;
   let importsC = false;
@@ -399,7 +418,10 @@ function targetSpans(text: string, tokens: readonly Token[]): Lexed<GoSpan, Fact
       if (!found.importsC) continue;
       importsC = true;
       const preamble = found.doc ?? (specs.length === 1 ? doc : null);
-      if (preamble !== null) documents.set(preamble, { kind: "import-c" });
+      if (preamble === null) continue;
+      const bodies = groupBodies.get(preamble);
+      invariant(bodies !== undefined, "every comment group holds a comment");
+      documents.set(preamble, { kind: "import-c", clean: isCleanPreamble(bodies) });
     }
   }
 
@@ -425,27 +447,19 @@ function targetSpans(text: string, tokens: readonly Token[]): Lexed<GoSpan, Fact
     }
   }
 
-  const proseGroups = new Set<Group>();
-  for (const [index, token] of tokens.entries()) {
-    const group = groupOf.get(index);
-    if (token.kind === "comment" && group !== undefined && C_PROSE_DIRECTIVE.test(bodyOf(text, token)))
-      proseGroups.add(group);
-  }
-
   const spans = tokens.flatMap((token, index): GoSpan[] => {
     if (token.kind !== "comment") return [];
     const group = groupOf.get(index);
     invariant(group !== undefined, "commentGroups puts every comment in a group");
-    const documented = documents.get(group) ?? NOT_DOCUMENTING;
     return [
       {
         start: token.start,
         end: token.end,
         bodyStart: token.start + OPENER,
-        bodyEnd: bodyEnd(token),
+        bodyEnd: bodyEndOf(token),
         style: token.style,
         beforePackage: packageStart !== null && token.start < packageStart,
-        documents: documented.kind === "import-c" && proseGroups.has(group) ? NOT_DOCUMENTING : documented,
+        documents: documents.get(group) ?? NOT_DOCUMENTING,
       },
     ];
   });
@@ -466,10 +480,6 @@ function isLine({ span }: GoRead): boolean {
 
 function atLineStart(read: GoRead): boolean {
   return isLine(read) && read.column === 0;
-}
-
-function holdsNoCComment(body: string): boolean {
-  return !body.split("\n").some((line) => C_COMMENT.test(line.replace(C_LITERAL, "")));
 }
 
 const KEPT: readonly KeptForm<GoRead>[] = [
@@ -504,7 +514,7 @@ const KEPT: readonly KeptForm<GoRead>[] = [
   {
     shown:
       'the cgo preamble above `import "C"`, holding no C comment, `#if 0`, `#error`, `#warning` or `#pragma message`',
-    keeps: ({ span, body }) => span.documents.kind === "import-c" && holdsNoCComment(body),
+    keeps: ({ span }) => span.documents.kind === "import-c" && span.documents.clean,
   },
 ];
 

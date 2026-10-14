@@ -991,7 +991,7 @@ describe("the go adapter", () => {
     );
   });
 
-  test("refuses a whole cgo preamble that disables C with `#if 0` or holds a C diagnostic message", () => {
+  test("refuses a whole cgo preamble that holds a C comment, disables C with `#if 0` or holds a C diagnostic message", () => {
     for (const directive of ["#if 0", "#elif 0", "# error why", "#warning why", '#pragma message("why")']) {
       const lines = [
         "package main",
@@ -1011,6 +1011,24 @@ describe("the go adapter", () => {
         ]),
       ]);
     }
+    const split = [
+      "package main",
+      "",
+      "// #include <stdio.h>",
+      "// /*",
+      "// prose",
+      "// */",
+      'import "C"',
+      "",
+    ];
+    expect(goComments("main.go", split.join("\n"))).toEqual(
+      read([
+        { line: 3, text: "// #include <stdio.h>" },
+        { line: 4, text: "// /*" },
+        { line: 5, text: "// prose" },
+        { line: 6, text: "// */" },
+      ]),
+    );
     const block = ["package main", "", "/*", "#if 0", "disabled prose", "#endif", "*/", 'import "C"', ""];
     expect(goComments("main.go", block.join("\n"))).toEqual(
       read([{ line: 3, text: "/*\n#if 0\ndisabled prose\n#endif\n*/" }]),
@@ -1051,6 +1069,8 @@ describe("the go adapter", () => {
     ];
     expect(goComments("main.go", lines.join("\n"))).toEqual(
       read([
+        { line: 3, text: "// #include <stdio.h>" },
+        { line: 4, text: '// #define URL "http://x"' },
         { line: 5, text: "// // a C comment is refused" },
         { line: 6, text: "// int x; // so is a trailing one" },
         { line: 7, text: "// #include <x.h> /* and a block */" },
