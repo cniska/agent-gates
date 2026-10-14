@@ -80,7 +80,10 @@ const SHARED_FORMS: readonly KeptForm<CommentRead>[] = [
 export const SHEBANG: KeptForm<CommentRead> = {
   shown: "the first-line shebang, with no `#` word or `\\c` after `#!`",
   keeps: ({ span, text }) =>
-    span.start === 0 && text.startsWith(SHEBANG_PREFIX) && !SHEBANG_TRAILER.test(text),
+    span.style === "line" &&
+    span.start === 0 &&
+    text.startsWith(SHEBANG_PREFIX) &&
+    !SHEBANG_TRAILER.test(text),
 };
 
 export const SHARED_SHOWN: readonly string[] = SHARED_FORMS.map(({ shown }) => shown);

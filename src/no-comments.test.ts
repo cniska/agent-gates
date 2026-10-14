@@ -44,9 +44,10 @@ function unparsed(line: number, reason: string): Reading {
 }
 
 const KEPT_IN_JAVASCRIPT =
-  "kept in JavaScript and TypeScript: `#__PURE__` or `@__PURE__` alone; a leading `/// <reference …/>` holding only its attributes; a gate marker on a line of its own";
+  "kept in JavaScript and TypeScript: the first-line shebang, with no `#` word or `\\c` after `#!`; `#__PURE__` or `@__PURE__` alone; a leading `/// <reference …/>` holding only its attributes; a gate marker on a line of its own";
 
-const KEPT_IN_RUST = "kept in Rust: a gate marker on a line of its own";
+const KEPT_IN_RUST =
+  "kept in Rust: the first-line shebang, with no `#` word or `\\c` after `#!`; a gate marker on a line of its own";
 
 const KEPT_IN_GO =
   'kept in Go: `//go:build` and `//go:debug` with their argument, before `package`; `//go:embed` with its patterns, above a `var`; `//go:generate`, `//go:linkname`, `//go:wasmimport`, `//go:wasmexport` and `//go:fix` with their arguments, and `//go:noinline`, `//go:nosplit`, `//go:noescape`, `//go:norace`, `//go:nocheckptr`, `//go:uintptrescapes` and `//go:uintptrkeepalive` alone, at column 1; `//line file:N` at column 1, and `/*line file:N*/`; `//export Name` above the top-level func `Name`, in a file that imports `"C"`; the cgo preamble above `import "C"`, holding no C comment, `#if 0`, `#error`, `#warning` or `#pragma message`; a gate marker on a line of its own';
@@ -802,7 +803,7 @@ describe("the rust adapter", () => {
     expect(rustComments("a.rs", text)).toEqual(read([{ line: 2, text: "#[doc = $doc:expr]" }]));
   });
 
-  test("skips a first-line shebang, and reads #![ there as an inner attribute", () => {
+  test("keeps a first-line shebang, and reads #![ there as an inner attribute", () => {
     expect(rustComments("a.rs", "#!/usr/bin/env run-cargo-script // x\nfn main() {}\n")).toEqual(read([]));
     expect(rustComments("a.rs", '#! [doc = "x"]\n')).toEqual(read([{ line: 1, text: '#! [doc = "x"]' }]));
     expect(rustComments("a.rs", "#![allow(dead_code)] // x\n")).toEqual(read([{ line: 1, text: "// x" }]));
@@ -1470,7 +1471,7 @@ describe("the pre-commit hook", () => {
           '  1  #[doc = "why"]',
         ],
         [
-          "kept in Dart: `// @dart = x.y` alone, before any code; a gate marker on a line of its own",
+          "kept in Dart: the first-line shebang, with no `#` word or `\\c` after `#!`; `// @dart = x.y` alone, before any code; a gate marker on a line of its own",
           "kept in SQL: drizzle's `--> statement-breakpoint`; a gate marker on a line of its own",
           "kept in shell: the first-line shebang, with no `#` word or `\\c` after `#!`; a gate marker on a line of its own",
           KEPT_IN_RUST,

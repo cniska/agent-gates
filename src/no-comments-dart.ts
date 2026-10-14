@@ -5,6 +5,7 @@ import {
   type KeptForm,
   type LeadingSpan,
   type Lexed,
+  SHEBANG,
   type Span,
 } from "./no-comments-adapter";
 import { bracketsOf } from "./no-comments-brackets";
@@ -22,6 +23,7 @@ const WHITESPACE = /\s/;
 function commentSpans(text: string): Lexed<LeadingSpan, null> {
   const spans: Span[] = [];
   let at = text.startsWith(SHEBANG_PREFIX) ? lineEnd(text, 0) : 0;
+  if (at > 0) spans.push({ start: 0, end: at, bodyStart: SHEBANG_PREFIX.length, bodyEnd: at, style: "line" });
   let codeStart = text.length;
 
   function lineComment(): void {
@@ -99,6 +101,7 @@ function commentSpans(text: string): Lexed<LeadingSpan, null> {
 type Read = CommentRead<LeadingSpan, null>;
 
 const KEPT: readonly KeptForm<Read>[] = [
+  SHEBANG,
   directive("`// @dart = x.y` alone, before any code", {
     pattern: LANGUAGE_VERSION,
     where: ({ span }) => span.style === "line" && span.leading,

@@ -7,8 +7,9 @@ import {
   type KeptForm,
   type LeadingSpan,
   type Lexed,
+  SHEBANG,
 } from "./no-comments-adapter";
-import { interpreterOf, routeOf } from "./no-comments-route";
+import { interpreterOf, routeOf, SHEBANG_PREFIX } from "./no-comments-route";
 import type { Stopped } from "./no-comments-spans";
 
 type Dialect = { readonly syntax: ParserPlugin[] };
@@ -52,6 +53,11 @@ function rejected(error: SyntaxError): Stopped {
   return { kind: "stopped", at, reason: error.message.replace(BABEL_POSITION, "") };
 }
 
+function shebangSpan(start: number | null | undefined, end: number | null | undefined): LeadingSpan {
+  invariant(typeof start === "number" && typeof end === "number", "Babel locates the interpreter directive");
+  return { start, end, bodyStart: start + SHEBANG_PREFIX.length, bodyEnd: end, style: "line", leading: true };
+}
+
 function parsedWith(text: string, plugins: ParserPlugin[]): Lexed<LeadingSpan, null> {
   try {
     const file = parse(text, {
@@ -78,7 +84,12 @@ function parsedWith(text: string, plugins: ParserPlugin[]): Lexed<LeadingSpan, n
         leading: end <= codeStart,
       };
     });
-    return { kind: "lexed", spans, facts: null };
+    const { interpreter } = file.program;
+    const shebang: LeadingSpan[] =
+      interpreter === null || interpreter === undefined
+        ? []
+        : [shebangSpan(interpreter.start, interpreter.end)];
+    return { kind: "lexed", spans: [...shebang, ...spans], facts: null };
   } catch (error) {
     if (error instanceof SyntaxError) return rejected(error);
     throw error;
@@ -98,6 +109,7 @@ function leadingLine({ span }: Read): boolean {
 }
 
 const KEPT: readonly KeptForm<Read>[] = [
+  SHEBANG,
   directive("`#__PURE__` or `@__PURE__` alone", { pattern: /[\s*]*[#@]__PURE__/ }),
   directive("a leading `/// <reference …/>` holding only its attributes", {
     pattern: TRIPLE_SLASH_REFERENCE,

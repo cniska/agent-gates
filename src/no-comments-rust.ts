@@ -1,4 +1,4 @@
-import { adapter, type Lexed, type Span, type Style } from "./no-comments-adapter";
+import { adapter, type Lexed, SHEBANG, type Span, type Style } from "./no-comments-adapter";
 import { SHEBANG_PREFIX } from "./no-comments-route";
 import { lineEnd, nestedBlockEnd, type Stopped, unterminated } from "./no-comments-spans";
 
@@ -287,10 +287,13 @@ function spansOf(text: string, tokens: readonly Token[]): Span[] {
 function commentSpans(text: string): Lexed<Span, null> {
   const tokenized = tokensOf(text);
   if (tokenized.kind === "stopped") return tokenized;
-  return { kind: "lexed", spans: spansOf(text, tokenized.tokens), facts: null };
+  const end = shebangEnd(text);
+  const shebang: Span[] =
+    end === 0 ? [] : [{ start: 0, end, bodyStart: SHEBANG_PREFIX.length, bodyEnd: end, style: "line" }];
+  return { kind: "lexed", spans: [...shebang, ...spansOf(text, tokenized.tokens)], facts: null };
 }
 
 export const { comments, kept } = adapter({
   lex: commentSpans,
-  kept: [],
+  kept: [SHEBANG],
 });
