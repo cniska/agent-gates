@@ -1,11 +1,17 @@
-import { type ErrorRecord, recordOf } from "./coded-error";
+import { writeSync } from "node:fs";
+import { EXIT_STATUS, recordOf } from "./coded-error";
 
-export function writeResult(command: string, value: unknown): void {
-  process.stdout.write(`${JSON.stringify({ command, ok: true, result: value ?? null })}\n`);
+const STDOUT = 1;
+
+const STDERR = 2;
+
+export function exitWithResult(command: string, value: unknown, status: 0 | 1): never {
+  writeSync(STDOUT, `${JSON.stringify({ command, ok: true, result: value ?? null })}\n`);
+  return process.exit(status);
 }
 
-export function writeError(command: string, error: unknown): ErrorRecord {
+export function exitWithError(command: string, error: unknown): never {
   const record = recordOf(error);
-  process.stderr.write(`${JSON.stringify({ command, ok: false, error: record })}\n`);
-  return record;
+  writeSync(STDERR, `${JSON.stringify({ command, ok: false, error: record })}\n`);
+  return process.exit(EXIT_STATUS[record.kind]);
 }

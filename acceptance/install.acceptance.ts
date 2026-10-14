@@ -47,12 +47,6 @@ const NO_COMMENTS_FILES = [
   ".github/workflows/no-comments.yml",
 ];
 
-function cliLineBeforeBunManifestError(stderr: string, manifest: string): string {
-  const [line = "", ...bun] = stderr.split("\n");
-  expect(bun.join("\n")).toMatch(new RegExp(`\\nerror: .*\\n {4}at ${manifest}:\\d+:\\d+\\n$`));
-  return `${line}\n`;
-}
-
 function currentBytes(gates: readonly string[], path: string): string {
   const reference = checkout();
   install(reference, gates);
@@ -384,7 +378,7 @@ test("AC-9 wires the prepare script, keeping the manifest's shape, and refuses a
   const brokenPath = join(broken, "package.json");
   const brokenRun = agentGates(broken, ["install", "commit-subject"]);
   expect([brokenRun.status, brokenRun.stdout]).toEqual([1, ""]);
-  expect(jsonLine(cliLineBeforeBunManifestError(brokenRun.stderr, brokenPath))).toEqual({
+  expect(jsonLine(brokenRun.stderr)).toEqual({
     command: "install",
     ok: false,
     error: {
