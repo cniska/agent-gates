@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   agentGates,
   checkout,
+  doctor,
   git,
   jsonLine,
   modeOf,
@@ -38,13 +39,6 @@ const NO_COMMENTS_FILES = [
   ".githooks/no-comments/scan.cjs",
   ".github/workflows/no-comments.yml",
 ];
-
-type Check = {
-  readonly name: string;
-  readonly state: string;
-  readonly detail: string;
-  readonly fix: string | null;
-};
 
 type FileResult = { readonly target: string; readonly state: string; readonly backup: string | null };
 
@@ -81,17 +75,7 @@ function cliLineBeforeBunManifestError(stderr: string, manifest: string): string
   return `${line}\n`;
 }
 
-function doctor(dir: string): { readonly status: number | null; readonly checks: readonly Check[] } {
-  const ran = agentGates(dir, ["doctor"]);
-  expect(ran.stderr).toBe("");
-  const line = jsonLine(ran.stdout);
-  const checks =
-    typeof line === "object" && line !== null ? Reflect.get(Reflect.get(line, "result"), "checks") : [];
-  if (!Array.isArray(checks)) throw new Error(`doctor printed no checks: ${ran.stdout}`);
-  return { status: ran.status, checks };
-}
-
-function check(dir: string, name: string): Check | undefined {
+function check(dir: string, name: string): unknown {
   return doctor(dir).checks.find((found) => found.name === name);
 }
 

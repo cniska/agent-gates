@@ -12,6 +12,15 @@ type Ran = { readonly status: number | null; readonly stdout: string; readonly s
 
 type Env = Readonly<Record<string, string>>;
 
+export type Check = {
+  readonly name: string;
+  readonly state: string;
+  readonly detail: string;
+  readonly fix: string | null;
+};
+
+type Judged = { readonly status: number | null; readonly checks: readonly Check[] };
+
 const scratchDirs: string[] = [];
 
 let home: string | null = null;
@@ -58,6 +67,18 @@ export function jsonLine(text: string): unknown {
   const lines = text.split("\n");
   if (lines.length !== 2 || lines[1] !== "") throw new Error(`expected one JSON line, got: ${text}`);
   return JSON.parse(lines[0] ?? "");
+}
+
+function field(value: unknown, key: string): unknown {
+  return typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined;
+}
+
+export function doctor(dir: string): Judged {
+  const ran = agentGates(dir, ["doctor"]);
+  if (ran.stderr !== "") throw new Error(`doctor wrote to stderr: ${ran.stderr}`);
+  const checks = field(field(jsonLine(ran.stdout), "result"), "checks");
+  if (!Array.isArray(checks)) throw new Error(`doctor printed no checks: ${ran.stdout}`);
+  return { status: ran.status, checks };
 }
 
 export function git(dir: string, args: readonly string[]): string {
