@@ -131,6 +131,9 @@ const SHARED_KEPT: readonly Lookalike[] = [
   at("javascript", "\uFEFF// agent-gate:no-comments:1"),
   at("sql", "-- agent-gate:no-comments:1"),
   at("sql", "-- x-gate:1"),
+];
+
+const SHARED_REFUSED: readonly Lookalike[] = [
   at("javascript", "/* SPDX-License-Identifier: MIT **/"),
   at("dart", "/* SPDX-License-Identifier: MIT **/"),
   at("sql", "/* SPDX-License-Identifier: MIT **/"),
@@ -142,9 +145,6 @@ const SHARED_KEPT: readonly Lookalike[] = [
   at("javascript", "// SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0"),
   at("shell", "# SPDX-License-Identifier: (GPL-2.0-or-later WITH Linux-syscall-note) OR MIT"),
   at("go", "// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception"),
-];
-
-const SHARED_REFUSED: readonly Lookalike[] = [
   at("javascript", "  // agent-gate:no-comments:1"),
   at("javascript", "/* agent-gate:no-comments:1 */"),
   at("javascript", "//agent-gate:no-comments:1"),

@@ -162,6 +162,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 13, sha256: "478e6e927cfbcd8265f1f38d6fb97dcd1355bed9cd4f94af42d27951274b883b" },
     { version: 14, sha256: "d6387829d80f5eab43f1434a3da51682faa9aa38b5a84f4f7583a2b1dba9563d" },
     { version: 15, sha256: "3069319c98e761bef077ed4d2cb22eb1d5b58351deb9e3b26e86f435d9bf82b6" },
+    { version: 16, sha256: "97122de937f2bddbf93bab52bf2a73f35cf7a2682456bd8b615ac3bb0dfbeb34" },
   ]),
   dart: adapterFile("dart", [
     { version: 1, sha256: "25cc760fcd6ef317da0c52457e79e84926f4b87f81e67630b40dfd666f0feb2a" },
@@ -182,6 +183,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 16, sha256: "afbeb7aace14606f714b293003354eb4367a3aedf4af5bfc4e753d96b95c6435" },
     { version: 17, sha256: "27eb99e3392c515eee46e0bc383fe2a75a65e357f666a731c817fc78e21b5cec" },
     { version: 18, sha256: "cead83858a0d93d1305c28597434136f0468406cf1db5a60338e3266c636b2ac" },
+    { version: 19, sha256: "01288f901ae9bb765b9df167fdc7f17c40ba1c27a545f55a0b722e92733f5345" },
   ]),
   sql: adapterFile("sql", [
     { version: 1, sha256: "261cd8dc159c4222234bd5bc2796723b803ecf0cf448a7d417471faea8c3ef13" },
@@ -203,6 +205,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 17, sha256: "8872a17e172fdc64c86cd9f6a2658cd449b8ff5a33aa131b5877a0625dc1cf05" },
     { version: 18, sha256: "21aa97e07e7a70a3fa51ba78b62a0b6f7b72b52b55d726e1e5dfcc629b904cb0" },
     { version: 19, sha256: "37c20090cf2cc6502849798d25881a446de380549153556f577ce3c87aa094bc" },
+    { version: 20, sha256: "82eaf439c32f895bff74715063e08ec75db563751669572577c3dbdab34102a2" },
   ]),
   shell: adapterFile("shell", [
     { version: 1, sha256: "89a9bdde90915a96d5110890ac7dd715a098676cf44976c0bc2301b4012ab1b2" },
@@ -224,6 +227,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 17, sha256: "9902fc1e98d26301b83c350942e2433f5b48cd5ac3fcd349f985b0cb73d0e8b5" },
     { version: 18, sha256: "83d82f13d20bda123ce85a115c8285c05679c6ee647d4feb866396a75f5a5ef5" },
     { version: 19, sha256: "b1342ff62884afa3e1449f67c090bcae378207dfd95e561b4c443d545c7dafa6" },
+    { version: 20, sha256: "f78ed2bb9a8c844393de41f2c92eadd69827269ec13b563d25bdaf90c75bf291" },
   ]),
   rust: adapterFile("rust", [
     { version: 1, sha256: "f7d0dd77af2f515cca76525640e20f72984a24e995031360b190b31478634daa" },
@@ -244,6 +248,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 16, sha256: "60f2a638d86c3e904a2a203252d282bd8fb18c27e88a632738296c3b5d0652f8" },
     { version: 17, sha256: "8983326f5a6c148461a33489b54ec345f3c40acabf335265f38a92be3ce5f1cf" },
     { version: 18, sha256: "d0a2ade99c60f50ae6c0af68002abb98f3bdd9b9a4419d78ae742ebcd66ef889" },
+    { version: 19, sha256: "8f2843dbf1820d866d26d77e9fce9ad482bf260afcc96da9deef2dc9bf18b51b" },
   ]),
   go: adapterFile("go", [
     { version: 1, sha256: "7636aedbafc041c6b38c608ef83f156d51f636b0aaacb7c766721b6f1ccde18e" },
@@ -258,6 +263,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 10, sha256: "83bc0e8e6876d921b895b6fe4ff4011e53272426f555d185c33a355d81b013e4" },
     { version: 11, sha256: "06e241b22df21250fefe79cccde16c51f5addb6503f1cd3296e8c958ab1195cb" },
     { version: 12, sha256: "93cb7867ff19fa284236c2fe672d63bb73ca30510038c24184426b828f602708" },
+    { version: 13, sha256: "154f43f4526583d7b5bbd16528cea336b86372363d3205298a419f175ca42fea" },
   ]),
   python: adapterFile("python", [
     { version: 1, sha256: "0a9e1622e9cbb6d697e50947de8488666247a3ba7505c986eff90bdb63e08152" },
@@ -275,6 +281,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 13, sha256: "5a2935b1955f99eb30ca8b435c4656290db4b2a448de547ab6b676c7706e52f9" },
     { version: 14, sha256: "5e98994ff75d8606df7b0559c88eae8ef7e655abe9fb4b5e0a04bfb077bf1387" },
     { version: 15, sha256: "f705ea66671db73f6093f3e5842253b10c41e5bab5a83d9b2aac2e82bc2e104a" },
+    { version: 16, sha256: "6244859862034a971f2861492540de132de144c0855a5b80a7579ddf6043b03f" },
   ]),
 };
 

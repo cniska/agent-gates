@@ -44,15 +44,15 @@ function unparsed(line: number, reason: string): Reading {
 }
 
 const KEPT_IN_JAVASCRIPT =
-  "kept in JavaScript and TypeScript: `#__PURE__` or `@__PURE__` alone; a leading `/// <reference …/>` holding only its attributes; one `SPDX-License-Identifier:` line; a gate marker on a line of its own";
+  "kept in JavaScript and TypeScript: `#__PURE__` or `@__PURE__` alone; a leading `/// <reference …/>` holding only its attributes; a gate marker on a line of its own";
 
-const KEPT_IN_RUST = "kept in Rust: one `SPDX-License-Identifier:` line; a gate marker on a line of its own";
+const KEPT_IN_RUST = "kept in Rust: a gate marker on a line of its own";
 
 const KEPT_IN_GO =
-  'kept in Go: `//go:build` and `//go:debug` with their argument, before `package`; `//go:embed` with its patterns, above a `var`; `//go:generate`, `//go:linkname`, `//go:wasmimport`, `//go:wasmexport` and `//go:fix` with their arguments, and `//go:noinline`, `//go:nosplit`, `//go:noescape`, `//go:norace`, `//go:nocheckptr`, `//go:uintptrescapes` and `//go:uintptrkeepalive` alone, at column 1; `//line file:N` at column 1, and `/*line file:N*/`; `//export Name` above the top-level func `Name`, in a file that imports `"C"`; the cgo preamble above `import "C"`, holding no C comment, `#if 0`, `#error`, `#warning` or `#pragma message`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own';
+  'kept in Go: `//go:build` and `//go:debug` with their argument, before `package`; `//go:embed` with its patterns, above a `var`; `//go:generate`, `//go:linkname`, `//go:wasmimport`, `//go:wasmexport` and `//go:fix` with their arguments, and `//go:noinline`, `//go:nosplit`, `//go:noescape`, `//go:norace`, `//go:nocheckptr`, `//go:uintptrescapes` and `//go:uintptrkeepalive` alone, at column 1; `//line file:N` at column 1, and `/*line file:N*/`; `//export Name` above the top-level func `Name`, in a file that imports `"C"`; the cgo preamble above `import "C"`, holding no C comment, `#if 0`, `#error`, `#warning` or `#pragma message`; a gate marker on a line of its own';
 
 const KEPT_IN_PYTHON =
-  "kept in Python: the first-line shebang, with no `#` word or `\\c` after `#!`; the PEP 263 coding declaration of a non-UTF-8 encoding on line 1, or on line 2 under a blank or comment line; a PEP 723 `# /// script` block of TOML holding only the keys `requires-python`, `dependencies` and `tool`, and no comment; one `SPDX-License-Identifier:` line; a gate marker on a line of its own";
+  "kept in Python: the first-line shebang, with no `#` word or `\\c` after `#!`; the PEP 263 coding declaration of a non-UTF-8 encoding on line 1, or on line 2 under a blank or comment line; a PEP 723 `# /// script` block of TOML holding only the keys `requires-python`, `dependencies` and `tool`, and no comment; a gate marker on a line of its own";
 
 function refusalText(listing: readonly string[], kept: readonly string[] = [KEPT_IN_JAVASCRIPT]): string {
   const count = listing.filter((line) => line.startsWith("  ")).length;
@@ -1470,32 +1470,14 @@ describe("the pre-commit hook", () => {
           '  1  #[doc = "why"]',
         ],
         [
-          "kept in Dart: `// @dart = x.y` alone, before any code; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
-          "kept in SQL: drizzle's `--> statement-breakpoint`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
-          "kept in shell: the first-line shebang, with no `#` word or `\\c` after `#!`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own",
+          "kept in Dart: `// @dart = x.y` alone, before any code; a gate marker on a line of its own",
+          "kept in SQL: drizzle's `--> statement-breakpoint`; a gate marker on a line of its own",
+          "kept in shell: the first-line shebang, with no `#` word or `\\c` after `#!`; a gate marker on a line of its own",
           KEPT_IN_RUST,
           KEPT_IN_GO,
           KEPT_IN_PYTHON,
         ],
       ),
-    });
-  });
-
-  test("keeps one SPDX-License-Identifier line in every language, and nothing more with it", () => {
-    const dir = repo();
-    installGates(dir, ["no-comments-javascript", "no-comments-sql", "no-comments-shell", "no-comments-rust"]);
-    writeFiles(dir, {
-      "a.ts":
-        "// SPDX-License-Identifier: MIT\n/* SPDX-License-Identifier: Apache-2.0 OR MIT */\nexport {};\n",
-      "b.ts":
-        "// SPDX-License-Identifier: MIT because\n/*\n * SPDX-License-Identifier: MIT\n */\nexport {};\n",
-      "a.sql": "-- SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0\nselect 1;\n",
-      "a.sh": "#!/bin/sh\n# SPDX-License-Identifier: LicenseRef-Own\n",
-      "a.rs": "// SPDX-License-Identifier: MIT\nfn f() {}\n",
-    });
-    expect(commit(dir)).toEqual({
-      status: 1,
-      stderr: refusalText(["b.ts", "  1  // SPDX-License-Identifier: MIT because", "  2  /*"]),
     });
   });
 
