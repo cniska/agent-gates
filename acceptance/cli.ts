@@ -68,8 +68,8 @@ function hermetic(env: Env): Env {
   };
 }
 
-function run(command: string, args: readonly string[], cwd: string, env: Env = {}): Ran {
-  const ran = spawnSync(command, args, { cwd, env: hermetic(env), encoding: "utf8" });
+function run(command: string, args: readonly string[], cwd: string, env: Env = {}, input = ""): Ran {
+  const ran = spawnSync(command, args, { cwd, env: hermetic(env), encoding: "utf8", input });
   return { status: ran.status, stdout: ran.stdout, stderr: ran.stderr };
 }
 
@@ -184,8 +184,8 @@ export function cloneOf(dir: string): string {
   return clone;
 }
 
-export function shell(dir: string, script: string, env: Env = {}): Ran {
-  return run("sh", ["-c", script], dir, env);
+export function shell(dir: string, script: string, env: Env = {}, input = ""): Ran {
+  return run("sh", ["-c", script], dir, env, input);
 }
 
 export function pathOf(tools: readonly string[]): string {

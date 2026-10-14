@@ -142,9 +142,27 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **FR-94** — The format workflow runs `.githooks/ci-setup`, then the hook with `--check`, which runs the command and refuses each tracked file it changes, naming it.
 - **FR-95** — `doctor` fails when the format command's program is not on `PATH`, and warns when no CI setup command is installed or its program is not on `PATH`.
 
+### 2.12 No comments: one file
+
+- **FR-96** — `scan.cjs --file <path>` judges the one file at `<path>`, relative to the working directory or absolute, as the working tree holds it, whatever the index holds.
+- **FR-97** — `--file` does not judge a file a commit would not judge (FR-55, FR-57), a file git ignores, or a path holding no file.
+- **FR-98** — `--file` on a path outside the checkout it runs in exits 2, naming the path and the checkout.
+- **FR-99** — Under `--file`, a comment is added unless the file held it at `HEAD` under the same path; so every comment of a file new, moved or renamed since `HEAD`, and a comment moved in from another file, is added.
+- **FR-100** — `--file` writes nothing: the working tree and the index stay as they were.
+
+### 2.13 The Claude Code plugin
+
+- **FR-101** — The `cniska-gates` plugin runs its hook after each `Edit`, `Write` or `MultiEdit`.
+- **FR-102** — The hook runs `scan.cjs --file` on the edited file, a relative path read from the edit's working directory, in the checkout holding the file.
+- **FR-103** — When the scanner refuses, the hook prints its reply as the PostToolUse `additionalContext`; otherwise it prints nothing.
+- **FR-104** — The hook exits 0 whatever happens, and changes no file.
+- **FR-105** — The hook does nothing for input naming no file, a file outside a checkout, or a checkout without `.githooks/no-comments/scan.cjs`.
+- **FR-106** — Without `jq` or `node` on `PATH`, with input that is not JSON, or with a scanner that exits other than 0 or 1, the hook prints nothing and writes to stderr a note naming why the edit was not judged.
+
 ## 3. Non-functional requirements
 
 - **NF-1** — The installed gates run with git, a POSIX shell and `node` alone: nothing installed in the project, and neither agent-gates nor Bun on `PATH`. The `format` gate also runs the project's own format command.
+- **NF-2** — The plugin's hook runs with bash, git, `node` and `jq` alone.
 
 ## 4. Out of scope
 
@@ -192,13 +210,17 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **AC-32** — Commit with the gate installed: a file staged whole is committed formatted; a partly staged file the command changes is refused, naming it, with the index unchanged; a partly staged file it leaves alone is committed; another file it changed stays unstaged and is listed; a failing command refuses the commit with its output; a merge commit is made without running it. (FR-89, FR-90, FR-91, FR-92, FR-93)
 - **AC-33** — Run the format workflow's steps before and after `--setup` is given: the setup step does nothing, then runs the command; the `--check` step passes over formatted files and refuses a file the command changes, naming it. (FR-86, FR-94)
 - **AC-34** — `doctor` with a command whose program is not on `PATH`: it fails; with no setup command, or one whose program is not on `PATH`: it warns; with the hook's command emptied: it fails the hook with install's refusal. (FR-30, FR-95)
+- **AC-35** — Run `scan.cjs --file` on a tracked file whose working tree adds a comment to one `HEAD` holds, a comment the index does not hold, from the checkout's root, from the file's directory, and by an absolute path from another directory; on a file whose index adds a comment its working tree removed; on an ignored, a generated and a binary file, a symlink and a missing path; on a new file, a renamed file and a file a comment moved into; and on a file outside the checkout: the first is refused with the reply naming only the new comment, the same each way; the next six pass; the next three are refused; the last exits 2 naming the path and the checkout; the files and git's status are unchanged. (FR-96, FR-97, FR-98, FR-99, FR-100)
+- **AC-36** — Run the hook as `hooks.json` registers it, with only a shell to run the command, bash, git, `node` and `jq` on `PATH`, after an edit adding a comment, named by an absolute path and by a path relative to a subdirectory: it exits 0, printing the scanner's reply as the PostToolUse context, the file unchanged; after a clean edit, for a file outside a checkout, in a checkout without the gate, and for input naming no file: it exits 0, printing nothing. (FR-101, FR-102, FR-103, FR-104, FR-105, NF-2)
+- **AC-37** — Run the hook without `jq`, without `node`, with input that is not JSON, and with a scanner that exits 2: each exits 0, prints nothing, and writes a note naming why. (FR-104, FR-106)
 
 ## 6. Deliverables
 
 - **D-1** — The `agent-gates` CLI, run by Bun from a checkout and linked onto `PATH` by `mise install` in the primary checkout, never in a worktree.
 - **D-2** — The gate files in `gates/`, installed byte for byte, the `no-comments` scanner and adapters bundled into them from `src/`.
 - **D-3** — `README.md` (install, the gates, what each refuses and keeps, the commands), `AGENTS.md` (repository rules), `src/README.md` (module map), and this spec.
-- **D-4** — The test suite, run by `bun run check`, and the acceptance suite in `acceptance/`, run by `bun run acceptance`. The acceptance suite drives the CLI, the installed hooks through git, the installed scanner through `node`, and the installed workflows' steps with the environment GitHub Actions gives them; it imports nothing from `src/`.
+- **D-4** — The test suite, run by `bun run check`, and the acceptance suite in `acceptance/`, run by `bun run acceptance`. The acceptance suite drives the CLI, the installed hooks through git, the installed scanner through `node`, the installed workflows' steps with the environment GitHub Actions gives them, and the plugin's hook as its `hooks.json` registers it; it imports nothing from `src/`.
+- **D-5** — The optional `cniska-gates` Claude Code plugin in `plugin/`.
 
 ## 7. Constraints (fixed)
 
@@ -222,8 +244,6 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 ## 9. Open questions and known gaps
 
 Each requirement still needs the owner's confirmation before it is contract.
-
-- **Not yet specified.** `scan.cjs --file <path>` and the `cniska-gates` Claude Code plugin landed while this spec was written, and are left to the work that added them.
 
 - **The format hook misses paths git quotes.** It reads git's path lists one per line, and git quotes a path holding a control character, a double quote or a backslash even with `core.quotePath` off. So a partly staged file with such a name that the command changes is committed unformatted instead of refused (FR-91).
 
