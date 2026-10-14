@@ -100,6 +100,8 @@ const REFUSED: readonly Lookalike[] = [
   { language: "python", path: "a.py", text: "x = 1\n# coding: utf-8\n" },
   { language: "python", path: "a.py", text: "# coding: utf-8\n# coding: latin-1\nx = 1\n" },
   at("python", "# /// script\n# x = 1 # why\n# ///"),
+  at("python", "# /// script\n# dependencies = [] # why\n# ///"),
+  at("python", "# /// script\n# this is prose explaining why\n# ///"),
   at("python", '"""A docstring."""'),
 ];
 

@@ -1,3 +1,4 @@
+import { parse, TomlDate, TomlError, type TomlTable, type TomlValue } from "smol-toml";
 import {
   adapter,
   type CommentRead,
@@ -70,7 +71,13 @@ const SCRIPT_CLOSE = "# ///";
 
 const SCRIPT_CONTENT = /^#(?: .*)?$/;
 
-const TOML_STRING = /"(?:[^"\\]|\\.)*"|'[^']*'/g;
+const SCRIPT_PREFIX = /^# ?/;
+
+const TOML_STRINGS = /"""(?:[^\\]|\\[\s\S])*?"{3,5}|'''[\s\S]*?'{3,5}|"(?:[^"\\\n]|\\.)*"|'[^'\n]*'/g;
+
+const SCRIPT_KEYS = new Set(["requires-python", "dependencies"]);
+
+const TOOL_TABLE = "tool";
 
 type Code = {
   readonly kind: "string" | "newline" | "semicolon" | "header" | "open" | "close" | "other";
@@ -368,11 +375,34 @@ function commentSpans(text: string): Lexed<PythonSpan, null> {
 
 type Read = CommentRead<PythonSpan, null>;
 
-function holdsNoTomlComment(body: string): boolean {
+function scriptToml(body: string): string {
   return body
     .split("\n")
     .slice(1, -1)
-    .every((line) => !line.replace(/^#/, "").replace(TOML_STRING, "").includes("#"));
+    .map((line) => line.replace(SCRIPT_PREFIX, ""))
+    .join("\n");
+}
+
+function tomlOf(toml: string): TomlTable | null {
+  try {
+    return parse(toml);
+  } catch (error) {
+    if (error instanceof TomlError) return null;
+    throw error;
+  }
+}
+
+function isTable(value: TomlValue): boolean {
+  return typeof value === "object" && !Array.isArray(value) && !(value instanceof TomlDate);
+}
+
+function isScriptMetadata(body: string): boolean {
+  const toml = scriptToml(body);
+  const table = tomlOf(toml);
+  if (table === null || toml.replace(TOML_STRINGS, "").includes("#")) return false;
+  return Object.entries(table).every(
+    ([key, value]) => SCRIPT_KEYS.has(key) || (key === TOOL_TABLE && isTable(value)),
+  );
 }
 
 const KEPT: readonly KeptForm<Read>[] = [
@@ -382,8 +412,9 @@ const KEPT: readonly KeptForm<Read>[] = [
     where: ({ span }) => span.cookieLine,
   }),
   {
-    shown: "a PEP 723 `# /// script` block whose TOML holds no comment",
-    keeps: ({ span, body }) => span.style === "block" && holdsNoTomlComment(body),
+    shown:
+      "a PEP 723 `# /// script` block of TOML holding only `requires-python`, `dependencies` and `[tool.*]`, and no comment",
+    keeps: ({ span, body }) => span.style === "block" && isScriptMetadata(body),
   },
 ];
 
