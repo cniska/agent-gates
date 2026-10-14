@@ -93,12 +93,7 @@ test("AC-37 leaves only a note when it cannot judge the edit", () => {
     ...QUIET,
     stderr: note("node is not on PATH"),
   });
-  const unparsed = hookRan("not json");
-  expect([
-    unparsed.status,
-    unparsed.stdout,
-    unparsed.stderr.endsWith(note("the hook input did not parse as JSON")),
-  ]).toEqual([0, "", true]);
+  expect(hookRan("not json")).toEqual({ ...QUIET, stderr: note("the hook input did not parse as JSON") });
 
   writeFiles(dir, {
     ".githooks/no-comments/scan.cjs":

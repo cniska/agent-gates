@@ -97,9 +97,7 @@ describe("the plugin's no-comments hook", () => {
     expect(ran("not json")).toEqual({
       status: 0,
       stdout: "",
-      stderr: expect.stringContaining(
-        "cniska-gates: the hook input did not parse as JSON, so the edit's comments were not judged\n",
-      ),
+      stderr: "cniska-gates: the hook input did not parse as JSON, so the edit's comments were not judged\n",
     });
     writeFileSync(
       join(dir, ".githooks/no-comments/scan.cjs"),

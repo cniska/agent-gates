@@ -9,7 +9,7 @@ note() {
 }
 
 edited_file() {
-  jq -r '(.tool_input.file_path // "") as $file | if ($file | startswith("/")) or $file == "" then $file else "\(.cwd)/\($file)" end'
+  jq -r '(.tool_input.file_path // "") as $file | if ($file | startswith("/")) or $file == "" then $file else "\(.cwd)/\($file)" end' 2>/dev/null
 }
 
 main() {
