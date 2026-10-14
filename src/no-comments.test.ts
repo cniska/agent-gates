@@ -1213,6 +1213,8 @@ describe("the python adapter", () => {
       ["x = [1,\n2\n", "Unterminated bracket"],
       ["x = (1\n", "Unterminated parenthesis"],
       ["x = 1 + \\", "Unterminated line continuation"],
+      ["x = 1 \\\n", "Unterminated line continuation"],
+      ["x = 1 \\\r\n", "Unterminated line continuation"],
     ] as const)
       expect([open, pythonComments("a.py", `y = 0\n${open}`)]).toEqual([open, unparsed(2, reason)]);
     expect(pythonComments("a.py", "x = 1)\nif x:\n    y\n  z\n")).toEqual(read([]));

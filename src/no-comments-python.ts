@@ -234,11 +234,12 @@ function tokensOf(text: string): Tokenized {
     }
     if (char === "\\") {
       const next = text.startsWith("\r\n", at + 1) ? 3 : 2;
-      if (text[at + next - 1] === "\n") {
+      const joinsLines = text[at + next - 1] === "\n";
+      if (at + (joinsLines ? next : 1) >= text.length) return unterminated(at, "line continuation");
+      if (joinsLines) {
         at += next;
         continue;
       }
-      if (at + 1 >= text.length) return unterminated(at, "line continuation");
     }
     if (char === "'" || char === '"') {
       const stopped = string(start, "");
