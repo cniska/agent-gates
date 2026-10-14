@@ -26,6 +26,10 @@ const NON_DECIMAL_PREFIX = /^0[xXoObB]/;
 
 const STRING_PREFIXES = new Set(["r", "u", "b", "f", "t", "br", "rb", "fr", "rf", "tr", "rt"]);
 
+const LINE_ENDINGS = ["\r\n", "\n"] as const;
+
+const BACKSLASH = "\\";
+
 const BLANKS = new Set([" ", "\t", "\f", "\r"]);
 
 const BRACKET_NAMES: ReadonlyMap<string, string> = new Map([
@@ -94,6 +98,14 @@ type Tokenized =
   | Stopped;
 
 type PythonSpan = Span & { readonly cookieLine: boolean };
+
+function lineEndingAt(text: string, at: number): string {
+  return LINE_ENDINGS.find((ending) => text.startsWith(ending, at)) ?? "";
+}
+
+function escapedAt(text: string, at: number): string {
+  return lineEndingAt(text, at) || text.charAt(at);
+}
 
 function tokensOf(text: string): Tokenized {
   const code: Code[] = [];
@@ -206,7 +218,7 @@ function tokensOf(text: string): Tokenized {
       }
       const char = text[at];
       if (!triple && char === "\n") break;
-      if (char === "\\") at += text.startsWith("\r\n", at + 1) ? 3 : 2;
+      if (char === BACKSLASH) at += BACKSLASH.length + escapedAt(text, at + BACKSLASH.length).length;
       else if (formatted && char === "{" && text[at + 1] === "{") at += 2;
       else if (formatted && char === "{") {
         const stopped = field(start, triple);
@@ -232,12 +244,12 @@ function tokensOf(text: string): Tokenized {
       comment();
       continue;
     }
-    if (char === "\\") {
-      const next = text.startsWith("\r\n", at + 1) ? 3 : 2;
-      const joinsLines = text[at + next - 1] === "\n";
-      if (at + (joinsLines ? next : 1) >= text.length) return unterminated(at, "line continuation");
-      if (joinsLines) {
-        at += next;
+    if (char === BACKSLASH) {
+      const ending = lineEndingAt(text, at + BACKSLASH.length);
+      const end = at + BACKSLASH.length + ending.length;
+      if (end >= text.length) return unterminated(at, "line continuation");
+      if (ending !== "") {
+        at = end;
         continue;
       }
     }
