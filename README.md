@@ -155,4 +155,32 @@ Another SQL dialect (MySQL, BigQuery, Snowflake) would need per-dialect lexer ru
 
 ## Development
 
-`bun run check` runs lint, typecheck and tests. `bun run acceptance` proves the criteria in [`SPEC.md`](SPEC.md) through the CLI and the files it installs alone, as the spec's D-4 says; each test in `acceptance/` is named for the criteria it proves, and a check in `bun run check` fails when a criterion has no test or todo, or a test cites none. A change to any file in `gates/` bumps its version first; see [AGENTS.md](AGENTS.md).
+### Setup
+
+```bash
+mise trust && mise install
+agent-worktree create <name>
+bin/agent-gates doctor
+```
+
+- `mise install` sets up the clone as [Install](#install) says, and the `bun install` its postinstall runs calls the `prepare` script, which points `core.hooksPath` at `.githooks/`.
+- `agent-worktree create <name>` makes a task worktree and runs `scripts/worktree-setup.sh` in it, which installs the same way without linking the CLI.
+- `.githooks/` holds the commit-subject, format and no-comments gates this repo installs on itself, and `bin/agent-gates doctor` reports their health.
+
+### Checks
+
+- `bun run check` runs lint, typecheck and tests, and `.githooks/pre-commit.d/check` runs it before each commit.
+- `bun run acceptance` proves the criteria in [`SPEC.md`](SPEC.md) through the CLI and the files it installs alone, as the spec's D-4 says; each test in `acceptance/` is named for the criteria it proves, and `src/spec.test.ts`, in the check, fails when the tests and the criteria do not cite each other.
+- `bun run format` formats `src/` and `acceptance/` with Biome, and the format gate runs it with the linter off before each commit and stages what it changes in the staged files, as [Format](#format) says.
+- `bun run gates:bundle` bundles `gates/no-comments/*.cjs` from `src/`.
+- `.github/workflows/check.yml` runs the check and the acceptance suite on each push and pull request, and `commits.yml`, `format.yml` and `no-comments.yml` run the gates.
+
+### Layout
+
+- `gates/` holds each gate file as it is installed, and a change to one bumps its version first, as [`AGENTS.md`](AGENTS.md) describes.
+- [`docs/no-comments-measurements.md`](docs/no-comments-measurements.md) holds the measurements the no-comments reply cap is taken from.
+- [`src/README.md`](src/README.md) maps the modules and the boundaries between them.
+
+### Rules
+
+[`AGENTS.md`](AGENTS.md) holds the repository's rules, and [`SPEC.md`](SPEC.md) states what must hold.
