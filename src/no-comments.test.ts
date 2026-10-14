@@ -1212,7 +1212,7 @@ describe("the python adapter", () => {
     for (const block of [
       "# /// script\n# this is prose explaining why\n# ///",
       '# /// script\n# requires-python = ">=3.12"\n# note = "pinned because upstream broke"\n# ///',
-      "# /// script\n# tool = 1\n# ///",
+      '# /// script\n# requires-python #">=3.12"\n# ///',
       '# /// script\n# [tool.x]\n# a = """\n# x"""  # why "\n# ///',
     ])
       expect([block, pythonComments("a.py", `${block}\nx = 1\n`)]).toEqual([

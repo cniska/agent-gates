@@ -1,4 +1,4 @@
-import { parse, TomlDate, TomlError, type TomlTable, type TomlValue } from "smol-toml";
+import { parse, TomlError, type TomlTable } from "smol-toml";
 import {
   adapter,
   type CommentRead,
@@ -73,11 +73,11 @@ const SCRIPT_CONTENT = /^#(?: .*)?$/;
 
 const SCRIPT_PREFIX = /^# ?/;
 
-const TOML_STRINGS = /"""(?:[^\\]|\\[\s\S])*?"{3,5}|'''[\s\S]*?'{3,5}|"(?:[^"\\\n]|\\.)*"|'[^'\n]*'/g;
+const TOML_COMMENT_START = "#";
 
-const SCRIPT_KEYS = new Set(["requires-python", "dependencies"]);
+const TOML_INVALID_WHERE_A_COMMENT_STARTS = "=";
 
-const TOOL_TABLE = "tool";
+const SCRIPT_KEYS = new Set(["requires-python", "dependencies", "tool"]);
 
 type Code = {
   readonly kind: "string" | "newline" | "semicolon" | "header" | "open" | "close" | "other";
@@ -393,17 +393,15 @@ function tomlOf(toml: string): TomlTable | null {
   }
 }
 
-function isTable(value: TomlValue): boolean {
-  return typeof value === "object" && !Array.isArray(value) && !(value instanceof TomlDate);
+function holdsNoComment(toml: string): boolean {
+  return tomlOf(toml.replaceAll(TOML_COMMENT_START, TOML_INVALID_WHERE_A_COMMENT_STARTS)) !== null;
 }
 
 function isScriptMetadata(body: string): boolean {
   const toml = scriptToml(body);
   const table = tomlOf(toml);
-  if (table === null || toml.replace(TOML_STRINGS, "").includes("#")) return false;
-  return Object.entries(table).every(
-    ([key, value]) => SCRIPT_KEYS.has(key) || (key === TOOL_TABLE && isTable(value)),
-  );
+  if (table === null || !holdsNoComment(toml)) return false;
+  return Object.keys(table).every((key) => SCRIPT_KEYS.has(key));
 }
 
 const KEPT: readonly KeptForm<Read>[] = [
