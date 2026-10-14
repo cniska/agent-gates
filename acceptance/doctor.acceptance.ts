@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { readdirSync, realpathSync, rmSync } from "node:fs";
+import { readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import {
   agentGates,
@@ -155,7 +155,6 @@ test("AC-29 installs the gate of each tracked language, and refuses when none is
 
   const untyped = checkout({ "notes.txt": "a note\n" });
   git(untyped, ["add", "-A"]);
-  const root = realpathSync(untyped);
   const refused = agentGates(untyped, ["install", "no-comments"]);
   expect([refused.status, refused.stdout]).toEqual([1, ""]);
   expect(jsonLine(refused.stderr)).toEqual({
@@ -164,8 +163,8 @@ test("AC-29 installs the gate of each tracked language, and refuses when none is
     error: {
       kind: "refusal",
       code: "no_language_tracked",
-      message: `${root} tracks no file a no-comments gate reads, so there is no language to install`,
-      meta: { root },
+      message: `${untyped} tracks no file a no-comments gate reads, so there is no language to install`,
+      meta: { root: untyped },
       resolve: `stop and ask the owner which gates the project runs, then ${INSTALL_USAGE}`,
     },
   });
