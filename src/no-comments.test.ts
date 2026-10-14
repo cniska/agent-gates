@@ -53,7 +53,7 @@ const KEPT_IN_GO =
   'kept in Go: `//go:build` and `//go:debug` with their argument, before `package`; `//go:embed` with its patterns, above a `var`; `//go:generate`, `//go:linkname`, `//go:wasmimport`, `//go:wasmexport` and `//go:fix` with their arguments, and `//go:noinline`, `//go:nosplit`, `//go:noescape`, `//go:norace`, `//go:nocheckptr`, `//go:uintptrescapes` and `//go:uintptrkeepalive` alone, at column 1; `//line file:N` at column 1, and `/*line file:N*/`; `//export Name` above the top-level func `Name`, in a file that imports `"C"`; the cgo preamble above `import "C"`, holding no C comment, `#if 0`, `#error`, `#warning` or `#pragma message`; a gate marker on a line of its own';
 
 const KEPT_IN_PYTHON =
-  "kept in Python: the first-line shebang, with no `#` word or `\\c` after `#!`; the PEP 263 coding declaration of a non-UTF-8 encoding on line 1, or on line 2 under a blank or comment line; a PEP 723 `# /// script` block of TOML holding only the keys `requires-python`, `dependencies` and `tool`, and no comment; a gate marker on a line of its own";
+  "kept in Python: the first-line shebang, with no `#` word or `\\c` after `#!`; a gate marker on a line of its own";
 
 function refusalText(listing: readonly string[], kept: readonly string[] = [KEPT_IN_JAVASCRIPT]): string {
   const count = listing.filter((line) => line.startsWith("  ")).length;
@@ -1143,7 +1143,6 @@ describe("the python adapter", () => {
   test("refuses each comment, and reads none inside a string of any prefix or quote", () => {
     const lines = [
       "#!/usr/bin/env python3",
-      "# -*- coding: latin-1 -*-",
       "x = '#' + \"#\" + r'\\#' + b'#'  # trailing",
       "y = '''",
       "# inside",
@@ -1156,8 +1155,8 @@ describe("the python adapter", () => {
     ];
     expect(pythonComments("a.py", lines.join("\n"))).toEqual(
       read([
-        { line: 3, text: "# trailing" },
-        { line: 9, text: "# a comment in a field" },
+        { line: 2, text: "# trailing" },
+        { line: 8, text: "# a comment in a field" },
       ]),
     );
   });
@@ -1228,41 +1227,18 @@ describe("the python adapter", () => {
     );
   });
 
-  test("keeps a PEP 723 script block only when it closes and its TOML holds no comment", () => {
-    expect(pythonComments("a.py", '# /// script\n# dependencies = ["httpx"]\n# ///\nx = 1\n')).toEqual(
-      read([]),
+  test("refuses every coding declaration and PEP 723 script block, a comment per line", () => {
+    const lines = [
+      "# -*- coding: latin-1 -*-",
+      "# vim: set fileencoding=shift_jis :",
+      "# /// script",
+      '# dependencies = ["httpx"]',
+      "# ///",
+      "x = 1",
+    ];
+    expect(pythonComments("a.py", lines.join("\n"))).toEqual(
+      read(lines.slice(0, -1).map((text, index) => ({ line: index + 1, text }))),
     );
-    expect(pythonComments("a.py", "# /// script\n# dependencies = []\nx = 1\n")).toEqual(
-      read([
-        { line: 1, text: "# /// script" },
-        { line: 2, text: "# dependencies = []" },
-      ]),
-    );
-    expect(
-      pythonComments("a.py", "# /// script\n# [tool.uv]\n# exclude-newer = 2024-01-01T00:00:00Z\n# ///\n"),
-    ).toEqual(read([]));
-    expect(
-      pythonComments("a.py", `# /// script\n# [tool.x]\n# a = """x " # y"""\n# b = '''x ' # y'''\n# ///\n`),
-    ).toEqual(read([]));
-    expect(pythonComments("a.py", "# /// pyproject\n# ///\n")).toEqual(
-      read([
-        { line: 1, text: "# /// pyproject" },
-        { line: 2, text: "# ///" },
-      ]),
-    );
-  });
-
-  test("refuses a PEP 723 script block that is not TOML, or holds a key other than `requires-python`, `dependencies` and `tool`", () => {
-    for (const block of [
-      "# /// script\n# this is prose explaining why\n# ///",
-      '# /// script\n# requires-python = ">=3.12"\n# note = "pinned because upstream broke"\n# ///',
-      '# /// script\n# requires-python #">=3.12"\n# ///',
-      '# /// script\n# [tool.x]\n# a = """\n# x"""  # why "\n# ///',
-    ])
-      expect([block, pythonComments("a.py", `${block}\nx = 1\n`)]).toEqual([
-        block,
-        read([{ line: 1, text: block }]),
-      ]);
   });
 
   test("names the line where a string, bracket or continuation that never closes opens", () => {

@@ -49,12 +49,6 @@ const KEPT: readonly Lookalike[] = [
   at("dart", "#!/usr/bin/env dart"),
   at("rust", "#!/usr/bin/env -S cargo +nightly -Zscript"),
   at("shell", "#!/opt/a#b/bin/sh -e"),
-  at("python", "# -*- coding: latin-1 -*-"),
-  at("python", "# coding=cp1252"),
-  at("python", "# vim: set fileencoding=shift_jis :"),
-  at("python", "# coding: utf8-sig"),
-  { language: "python", path: "a.py", text: "#!/usr/bin/env python3\n# -*- coding: latin-1 -*-\nx = 1\n" },
-  at("python", '# /// script\n# requires-python = ">=3.12"\n# dependencies = ["httpx # pinned"]\n# ///'),
 ];
 
 const REFUSED: readonly Lookalike[] = [
@@ -107,17 +101,8 @@ const REFUSED: readonly Lookalike[] = [
   at("python", "# fmt: off"),
   at("python", "# pragma: no cover"),
   at("python", " #!/usr/bin/env python3"),
-  at("python", "# coding: latin-1 because"),
-  { language: "python", path: "a.py", text: "x = 1\n# coding: latin-1\n" },
-  { language: "python", path: "a.py", text: "# coding: latin-1\n# coding: cp1252\nx = 1\n" },
-  at("python", "# -*- coding: utf-8 -*-"),
-  at("python", "# coding=UTF8"),
-  at("python", "# coding: utf_8"),
-  at("python", "# vim: set fileencoding=utf-8-sig :"),
-  { language: "python", path: "a.py", text: "#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\nx = 1\n" },
-  at("python", "# /// script\n# x = 1 # why\n# ///"),
-  at("python", "# /// script\n# dependencies = [] # why\n# ///"),
-  at("python", "# /// script\n# this is prose explaining why\n# ///"),
+  at("python", "# -*- coding: latin-1 -*-"),
+  at("python", "# coding=cp1252"),
   at("python", '"""A docstring."""'),
 ];
 

@@ -79,7 +79,7 @@ A comment stays only when a tool reads it, and deleting it changes what that too
 | shell | the first-line shebang, with no `#` word or `\c` after `#!` |
 | Rust | the first-line shebang, with no `#` word or `\c` after `#!` |
 | Go | `//go:build` and `//go:debug` with their argument, before `package`; `//go:embed` with its patterns, above a `var`; `//go:generate`, `//go:linkname`, `//go:wasmimport`, `//go:wasmexport` and `//go:fix` with their arguments, and `//go:noinline`, `//go:nosplit`, `//go:noescape`, `//go:norace`, `//go:nocheckptr`, `//go:uintptrescapes` and `//go:uintptrkeepalive` alone, at column 1; `//line file:N` at column 1, and `/*line file:N*/`; `//export Name` above the top-level func `Name`, in a file that imports `"C"`; the cgo preamble above `import "C"`, holding no C comment, `#if 0`, `#error`, `#warning` or `#pragma message` |
-| Python | the first-line shebang, with no `#` word or `\c` after `#!`; the PEP 263 coding declaration of a non-UTF-8 encoding on line 1, or on line 2 under a blank or comment line; a PEP 723 `# /// script` block of TOML holding only the keys `requires-python`, `dependencies` and `tool`, and no comment |
+| Python | the first-line shebang, with no `#` word or `\c` after `#!` |
 | Every language | a gate marker on a line of its own |
 
 - Every kept form stands alone in its comment: no reason, no trailing text. A directive in a block comment that spans lines is refused.
@@ -93,7 +93,7 @@ How each language is read:
 - **SQL** as PostgreSQL, with dollar quotes and `E''` strings. A dollar-quoted body that parses as SQL is judged as code; one that does not is text.
 - **Dart, shell, Rust, Go and Python** by lexers that find the comments the language's own tokenizer finds. Shell treats `#` as a comment only where a word starts.
 - **Rust** reads an attribute carrying `doc = …` anywhere, such as `#[cfg_attr(docsrs, doc = …)]`, as a doc comment; `#[doc(hidden)]` is code.
-- **Python** judges a string that stands alone as a statement, a docstring included, as a comment, and reads a closed `# /// script` block as one comment. Indentation is not checked.
+- **Python** judges a string that stands alone as a statement, a docstring included, as a comment. Indentation is not checked.
 - **Go** groups comments as `go/parser` does, so `//go:embed` and `//export` count only in the group on the line above their declaration, and the cgo preamble is the group above `import "C"`.
 
 ## Commands

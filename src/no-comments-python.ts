@@ -1,14 +1,5 @@
-import { parse, TomlError, type TomlTable } from "smol-toml";
-import {
-  adapter,
-  type CommentRead,
-  directive,
-  type KeptForm,
-  type Lexed,
-  SHEBANG,
-  type Span,
-} from "./no-comments-adapter";
-import { firstLine, lineCounter, lineEnd, type Stopped, textStart, unterminated } from "./no-comments-spans";
+import { adapter, type Lexed, SHEBANG, type Span } from "./no-comments-adapter";
+import { lineEnd, type Stopped, textStart, unterminated } from "./no-comments-spans";
 
 const OPENER = 1;
 
@@ -62,29 +53,6 @@ const SOFT_COMPOUND = "case";
 
 const NAME_USES = new Set([":", ".", "="]);
 
-const BLANK_LINE = /^[ \t\f]*(?:[#\r\n]|$)/;
-
-const COOKIE = /^[ \t\f]*#.*?coding[:=][ \t]*(?<encoding>[-\w.]+)/;
-
-const CODING =
-  /[ \t\f]*(?:-\*-[ \t]*coding[:=][ \t]*[-\w.]+[ \t]*-\*-|coding[:=][ \t]*[-\w.]+|vim:[ \t]*set[ \t]+fileencoding=[-\w.]+[ \t]*:)/;
-
-const UTF_8 = /^(?:utf[-_]8(?:[-_]|$)|utf8$)/i;
-
-const SCRIPT_OPEN = "# /// script";
-
-const SCRIPT_CLOSE = "# ///";
-
-const SCRIPT_CONTENT = /^#(?: .*)?$/;
-
-const SCRIPT_PREFIX = /^# ?/;
-
-const TOML_COMMENT_START = "#";
-
-const TOML_INVALID_WHERE_A_COMMENT_STARTS = "=";
-
-const SCRIPT_KEYS = new Set(["requires-python", "dependencies", "tool"]);
-
 type Code = {
   readonly kind: "string" | "newline" | "semicolon" | "header" | "open" | "close" | "other";
   readonly start: number;
@@ -98,8 +66,6 @@ type Range = { readonly start: number; readonly end: number };
 type Tokenized =
   | { readonly kind: "tokenized"; readonly code: readonly Code[]; readonly comments: readonly Range[] }
   | Stopped;
-
-type PythonSpan = Span & { readonly cookieLine: boolean };
 
 function lineEndingAt(text: string, at: number): string | null {
   return LINE_ENDINGS.find((ending) => text.startsWith(ending, at)) ?? null;
@@ -325,116 +291,23 @@ function loneStrings(code: readonly Code[]): Range[] {
   return found;
 }
 
-function scriptBlocks(text: string, comments: readonly Range[]): Range[] {
-  const textOf = (comment: Range) => text.slice(comment.start, comment.end).replace(/\r$/, "");
-  const ownLine = (comment: Range) => comment.start === 0 || text[comment.start - 1] === "\n";
-  const follows = (previous: Range, line: Range) =>
-    ownLine(line) && text.slice(previous.end, line.start).replace(/\r/g, "") === "\n";
-
-  function blockEnd(open: number): number | null {
-    for (let at = open + 1; ; at++) {
-      const line = comments[at];
-      const previous = comments[at - 1];
-      if (line === undefined || previous === undefined || !follows(previous, line)) return null;
-      if (textOf(line) === SCRIPT_CLOSE) return at;
-      if (!SCRIPT_CONTENT.test(textOf(line))) return null;
-    }
-  }
-
-  const merged: Range[] = [];
-  let index = 0;
-  while (index < comments.length) {
-    const open = comments[index];
-    if (open === undefined) break;
-    const end = ownLine(open) && textOf(open) === SCRIPT_OPEN ? blockEnd(index) : null;
-    const close = end === null ? undefined : comments[end];
-    if (end !== null && close !== undefined) {
-      merged.push({ start: open.start, end: close.end });
-      index = end + 1;
-    } else {
-      merged.push(open);
-      index++;
-    }
-  }
-  return merged;
-}
-
-function commentSpans(text: string): Lexed<PythonSpan, null> {
+function commentSpans(text: string): Lexed<Span, null> {
   const tokenized = tokensOf(text);
   if (tokenized.kind === "stopped") return tokenized;
-  const head = firstLine(text);
-  const secondLineCounts = BLANK_LINE.test(head) && !COOKIE.test(head);
-  const lineAt = lineCounter(text);
-  const comments = scriptBlocks(text, tokenized.comments).map((comment) => ({
-    ...comment,
-    style: text.slice(comment.start, comment.end).includes("\n") ? ("block" as const) : ("line" as const),
-  }));
+  const comments = tokenized.comments.map((comment) => ({ ...comment, style: "line" as const }));
   const strings = loneStrings(tokenized.code).map((comment) => ({ ...comment, style: "docstring" as const }));
   const spans = [...comments, ...strings]
     .sort((a, b) => a.start - b.start)
-    .map(({ start, end, style }): PythonSpan => {
-      const line = lineAt(start);
-      return {
+    .map(
+      ({ start, end, style }): Span => ({
         start,
         end,
         bodyStart: style === "docstring" ? start : start + OPENER,
         bodyEnd: end,
         style,
-        cookieLine: style === "line" && (line === 1 || (line === 2 && secondLineCounts)),
-      };
-    });
+      }),
+    );
   return { kind: "lexed", spans, facts: null };
 }
 
-type Read = CommentRead<PythonSpan, null>;
-
-function scriptToml(body: string): string {
-  return body
-    .split("\n")
-    .slice(1, -1)
-    .map((line) => line.replace(SCRIPT_PREFIX, ""))
-    .join("\n");
-}
-
-function tomlOf(toml: string): TomlTable | null {
-  try {
-    return parse(toml);
-  } catch (error) {
-    if (error instanceof TomlError) return null;
-    throw error;
-  }
-}
-
-function holdsNoComment(toml: string): boolean {
-  return tomlOf(toml.replaceAll(TOML_COMMENT_START, TOML_INVALID_WHERE_A_COMMENT_STARTS)) !== null;
-}
-
-function isScriptMetadata(body: string): boolean {
-  const toml = scriptToml(body);
-  const table = tomlOf(toml);
-  if (table === null || !holdsNoComment(toml)) return false;
-  return Object.keys(table).every((key) => SCRIPT_KEYS.has(key));
-}
-
-function namesUtf8(cookie: string): boolean {
-  const name = COOKIE.exec(cookie)?.groups?.encoding;
-  return name !== undefined && UTF_8.test(name);
-}
-
-const KEPT: readonly KeptForm<Read>[] = [
-  SHEBANG,
-  directive(
-    "the PEP 263 coding declaration of a non-UTF-8 encoding on line 1, or on line 2 under a blank or comment line",
-    {
-      pattern: CODING,
-      where: ({ span, text }) => span.cookieLine && !namesUtf8(text),
-    },
-  ),
-  {
-    shown:
-      "a PEP 723 `# /// script` block of TOML holding only the keys `requires-python`, `dependencies` and `tool`, and no comment",
-    keeps: ({ span, body }) => span.style === "block" && isScriptMetadata(body),
-  },
-];
-
-export const { comments, kept } = adapter({ lex: commentSpans, kept: KEPT });
+export const { comments, kept } = adapter({ lex: commentSpans, kept: [SHEBANG] });
