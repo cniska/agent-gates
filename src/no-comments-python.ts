@@ -103,12 +103,8 @@ type Tokenized =
 
 type PythonSpan = Span & { readonly cookieLine: boolean };
 
-function lineEndingAt(text: string, at: number): string {
-  return LINE_ENDINGS.find((ending) => text.startsWith(ending, at)) ?? "";
-}
-
-function escapedAt(text: string, at: number): string {
-  return lineEndingAt(text, at) || text.charAt(at);
+function lineEndingAt(text: string, at: number): string | null {
+  return LINE_ENDINGS.find((ending) => text.startsWith(ending, at)) ?? null;
 }
 
 function tokensOf(text: string): Tokenized {
@@ -222,8 +218,10 @@ function tokensOf(text: string): Tokenized {
       }
       const char = text[at];
       if (!triple && char === "\n") break;
-      if (char === BACKSLASH) at += BACKSLASH.length + escapedAt(text, at + BACKSLASH.length).length;
-      else if (formatted && char === "{" && text[at + 1] === "{") at += 2;
+      if (char === BACKSLASH) {
+        const escaped = at + BACKSLASH.length;
+        at = escaped + (lineEndingAt(text, escaped) ?? text.charAt(escaped)).length;
+      } else if (formatted && char === "{" && text[at + 1] === "{") at += 2;
       else if (formatted && char === "{") {
         const stopped = field(start, triple);
         if (stopped !== null) return stopped;
@@ -250,9 +248,9 @@ function tokensOf(text: string): Tokenized {
     }
     if (char === BACKSLASH) {
       const ending = lineEndingAt(text, at + BACKSLASH.length);
-      const end = at + BACKSLASH.length + ending.length;
+      const end = at + BACKSLASH.length + (ending?.length ?? 0);
       if (end >= text.length) return unterminated(at, "line continuation");
-      if (ending !== "") {
+      if (ending !== null) {
         at = end;
         continue;
       }
