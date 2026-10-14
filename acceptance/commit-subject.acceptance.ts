@@ -155,32 +155,17 @@ type Push = {
   readonly ref: string;
 };
 
-type Judged = { readonly range: string; readonly status: number | null; readonly stderr: string };
+type Judged = { readonly status: number | null; readonly stderr: string };
 
 function runWorkflow(dir: string, push: Push): Judged {
   const workflow = readText(dir, ".github/workflows/commits.yml");
-  const resolve = stepScript(
-    workflow,
-    "Resolve the pushed range, from the default branch when the push opens a branch",
-  );
-  const judge = stepScript(workflow, "Judge each subject");
-  const runner = scratchDir();
-  const output = join(runner, "output");
-  writeFileSync(output, "");
-  const github = { GITHUB_OUTPUT: output, RUNNER_TEMP: runner };
-  const resolved = githubStep(dir, resolve, {
-    ...github,
+  const judged = githubStep(dir, stepScript(workflow, "Judge each commit the push brings"), {
     BASE_SHA: push.base,
     HEAD_SHA: push.head,
     PUSHED_REF: push.ref,
     DEFAULT_BRANCH: "main",
   });
-  if (resolved.status !== 0) throw new Error(`the range step failed: ${resolved.stderr}`);
-  const range = readText(runner, "output")
-    .replace(/^range=/, "")
-    .trimEnd();
-  const judged = githubStep(dir, judge, { ...github, RANGE: range });
-  return { range, status: judged.status, stderr: judged.stderr };
+  return { status: judged.status, stderr: judged.stderr };
 }
 
 function upstream(): string {
@@ -212,17 +197,15 @@ test("AC-18 judges every commit the pushed range holds in CI", () => {
   mergeSide(clone);
   const head = git(clone, ["rev-parse", "HEAD"]);
   const toDefault = { base: before, head, ref: "refs/heads/main" };
-  expect(runWorkflow(clone, toDefault)).toEqual({ range: `${before}..${head}`, status: 0, stderr: "" });
+  expect(runWorkflow(clone, toDefault)).toEqual({ status: 0, stderr: "" });
   const fixup = commitAs(clone, "fixup! feat: add a new thing");
   expect(runWorkflow(clone, { ...toDefault, head: fixup })).toEqual({
-    range: `${before}..${fixup}`,
     status: 1,
     stderr: autosquashRefusal(fixup),
   });
   git(clone, ["reset", "-q", "--hard", head]);
   const badHead = commitAs(clone, "Add a new thing");
   expect(runWorkflow(clone, { ...toDefault, head: badHead })).toEqual({
-    range: `${before}..${badHead}`,
     status: 1,
     stderr: `commit-msg: ${NOT_CONVENTIONAL}\n  got: Add a new thing\n`,
   });
@@ -234,7 +217,6 @@ test("AC-18 judges every commit the pushed range holds in CI", () => {
   const branchHead = git(branch, ["rev-parse", "HEAD"]);
   const opening = { base: NO_COMMIT, head: branchHead, ref: "refs/heads/feature" };
   expect(runWorkflow(branch, opening)).toEqual({
-    range: `origin/main..${branchHead}`,
     status: 0,
     stderr: "",
   });
@@ -242,7 +224,6 @@ test("AC-18 judges every commit the pushed range holds in CI", () => {
     git(branch, ["reset", "-q", "--hard", branchHead]);
     const sha = commitAs(branch, `${squash}\n\nfeat: add a branch thing`);
     expect(runWorkflow(branch, { ...opening, head: sha })).toEqual({
-      range: `origin/main..${sha}`,
       status: 1,
       stderr: autosquashRefusal(sha),
     });
@@ -254,14 +235,12 @@ test("AC-18 judges every commit the pushed range holds in CI", () => {
     ref: "refs/pull/1/merge",
   };
   expect(runWorkflow(branch, pullRequest)).toEqual({
-    range: `${pullRequest.base}..${branchHead}`,
     status: 0,
     stderr: "",
   });
 
   const firstPush = { base: NO_COMMIT, head: git(origin, ["rev-parse", "HEAD"]), ref: "refs/heads/main" };
   expect(runWorkflow(origin, firstPush)).toEqual({
-    range: firstPush.head,
     status: 1,
     stderr: `commit-msg: ${NOT_CONVENTIONAL}\n  got: Add an old thing\n`,
   });
@@ -270,7 +249,6 @@ test("AC-18 judges every commit the pushed range holds in CI", () => {
   git(lone, ["checkout", "-q", "-b", "feature"]);
   const loneHead = commitAs(lone, "feat: add a branch thing");
   expect(runWorkflow(lone, { base: NO_COMMIT, head: loneHead, ref: "refs/heads/feature" })).toEqual({
-    range: loneHead,
     status: 1,
     stderr: `commit-msg: ${NOT_CONVENTIONAL}\n  got: Add an old thing\n`,
   });

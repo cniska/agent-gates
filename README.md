@@ -25,11 +25,11 @@ agent-gates doctor
 
 ## Gates
 
-| Gate | Hook | Workflow | Refuses |
+| Gate | Hooks | Workflow | Refuses |
 | --- | --- | --- | --- |
-| `commit-subject` | `.githooks/commit-msg` | `commits.yml` | A subject that is not a Conventional Commit, is over 50 characters or is not ASCII, and any message body |
+| `commit-subject` | `.githooks/commit-msg`, `.githooks/pre-push.d/commit-subject` | `commits.yml` | A subject that is not a Conventional Commit, is over 50 characters or is not ASCII, and any message body; on push, a `fixup!`, `squash!` or `amend!` commit |
 | `format` | `.githooks/pre-commit.d/format` | `format.yml` | A partly staged file the format command changes, and a failing command; anything else it formats into the commit |
-| `no-comments-<language>` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment the change adds, other than a [kept form](#kept-comments) |
+| `no-comments-<language>` | `.githooks/pre-commit.d/no-comments`, `.githooks/pre-push.d/no-comments` | `no-comments.yml` | A comment the change adds, other than a [kept form](#kept-comments) |
 
 The languages are `javascript` (JavaScript and TypeScript), `dart`, `sql` (PostgreSQL), `shell`, `rust` and `python`. `agent-gates install no-comments` installs the gate for each language the tracked files hold, and refuses when they hold none.
 
@@ -42,13 +42,15 @@ Install also points `core.hooksPath` at `.githooks` in the current clone, and `.
 
 `.githooks/pre-commit` runs the `format` step first, then each other executable in `.githooks/pre-commit.d/` in name order, and stops at the first failure. Your own pre-commit step belongs there.
 
+`.githooks/pre-push` runs each executable in `.githooks/pre-push.d/` in name order, handing each git's arguments and pushed refs, and stops at the first failure. Your own pre-push step belongs there. The `commit-subject` and `no-comments` steps judge each pushed ref with `.githooks/judge-push`, the script their workflows run in CI, so a push the workflows would refuse never leaves: the range starts at the remote's tip, or, for a new branch, at the remote's default branch.
+
 No gate judges a merge commit locally.
 
 ### Commit subjects
 
 Allowed types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `style`, `perf`, `build` and `ci`, with an optional lowercase scope and `!`.
 
-`commits.yml` checks every non-merge commit a push or pull request brings. Set the repository's squash-merge message to the pull request title alone, because GitHub's default squash body is refused. Revert messages and `fixup!`, `squash!` and `amend!` commits are refused too.
+`commits.yml` and the pre-push step check every non-merge commit a push or pull request brings. Set the repository's squash-merge message to the pull request title alone, because GitHub's default squash body is refused. Revert messages are refused too. The `commit-msg` hook lets a `fixup!`, `squash!` or `amend!` commit through, judging the subject it carries, and the push refuses it, so it is squashed before it leaves.
 
 ### Format
 
@@ -64,7 +66,7 @@ The `format` step runs before every other `pre-commit.d/` step, so each of them 
 
 ### No comments
 
-A comment is where a coding agent excuses a workaround instead of fixing it, and a reviewer reading the diff tends to accept it. Without comments, the reason for a choice goes into a name, a test or the docs, and a workaround is fixed or left visibly unfinished. Cursor's [pstack `/no-comments`](https://github.com/cursor/plugins/blob/main/pstack/skills/no-comments/SKILL.md) skill works from the same idea; these gates enforce it at commit time and in CI.
+A comment is where a coding agent excuses a workaround instead of fixing it, and a reviewer reading the diff tends to accept it. Without comments, the reason for a choice goes into a name, a test or the docs, and a workaround is fixed or left visibly unfinished. Cursor's [pstack `/no-comments`](https://github.com/cursor/plugins/blob/main/pstack/skills/no-comments/SKILL.md) skill works from the same idea; these gates enforce it on commit, on push and in CI.
 
 What is judged:
 

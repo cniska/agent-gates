@@ -5,7 +5,7 @@ export const HOOKS_DIR = ".githooks";
 
 export const PRE_COMMIT_STEPS = `${HOOKS_DIR}/pre-commit.d`;
 
-const PRE_PUSH_STEPS = `${HOOKS_DIR}/pre-push.d`;
+export const PRE_PUSH_STEPS = `${HOOKS_DIR}/pre-push.d`;
 
 export const STEP_DIRS: readonly string[] = [PRE_COMMIT_STEPS, PRE_PUSH_STEPS];
 
@@ -107,6 +107,24 @@ const PRE_COMMIT: GateFile = {
   ],
 };
 
+const PRE_PUSH: GateFile = {
+  part: "githooks",
+  source: "pre-push",
+  target: `${HOOKS_DIR}/pre-push`,
+  executable: true,
+  fills: null,
+  versions: [{ version: 1, sha256: "443fe4074befc4de131324f78f78b12c5d2c746febb87f17bb43aa150a857cf9" }],
+};
+
+const JUDGE_PUSH: GateFile = {
+  part: "githooks",
+  source: "judge-push",
+  target: `${HOOKS_DIR}/judge-push`,
+  executable: false,
+  fills: null,
+  versions: [{ version: 1, sha256: "96729bf4e237ca325315e1fe8f456d03b2b2705c501a4488fe7976b178f535eb" }],
+};
+
 const CI_SETUP: GateFile = {
   part: "githooks",
   source: "ci-setup",
@@ -167,6 +185,14 @@ const NO_COMMENTS_SHARED: readonly GateFile[] = [
       { version: 2, sha256: "f182a3518696f42433f24c131376f0851cb976982af89cf52e4e11aaacf98d55" },
     ],
   },
+  {
+    part: "no-comments",
+    source: "no-comments/pre-push",
+    target: `${PRE_PUSH_STEPS}/no-comments`,
+    executable: true,
+    fills: null,
+    versions: [{ version: 1, sha256: "9ed4a0cfe0d573f9058c93c13cab4995c331b640c5704d61a269238576359448" }],
+  },
   SCANNER_FILE,
   {
     part: "no-comments",
@@ -178,6 +204,7 @@ const NO_COMMENTS_SHARED: readonly GateFile[] = [
       { version: 1, sha256: "40c64a59e2409c91c2d07df092eeb9384811a991784e2f3300b8aa43e6c78dd9" },
       { version: 2, sha256: "3b83b0cbd4e92e31034e16bbc5d80bd285d41c0612c6ad3fb81239ffc99eb9a1" },
       { version: 3, sha256: "e226a011a732f4af4a218046de9df61ab64920ab242251e61a5dd889b1fa4246" },
+      { version: 4, sha256: "a76f92319ca5213895528ab08cf71b4574b8be2146af931d65b412daef4214c5" },
     ],
   },
 ];
@@ -345,7 +372,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
 };
 
 function noCommentsFiles(language: Language): readonly GateFile[] {
-  return [GITATTRIBUTES, PRE_COMMIT, ...NO_COMMENTS_SHARED, ADAPTER_FILES[language]];
+  return [GITATTRIBUTES, PRE_COMMIT, PRE_PUSH, ...NO_COMMENTS_SHARED, JUDGE_PUSH, ADAPTER_FILES[language]];
 }
 
 export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
@@ -371,9 +398,20 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
         { version: 1, sha256: "cba3046993d4ca84942aa37b60c17cf77af0123f1a6152482db0301a933587ba" },
         { version: 2, sha256: "f5863ec0ebb55f68779bd8f5693406178e5adbfb1dfbe09db12550286487656f" },
         { version: 3, sha256: "f28727dbb2e815970fe0e9233c753274cf66c04ae8ac608da31d433e97c3df87" },
+        { version: 4, sha256: "b9cfeeffce066c96a0982c4d29f7832ff9148f5527349ae16602e5f484d59d8d" },
       ],
     },
     GITATTRIBUTES,
+    PRE_PUSH,
+    {
+      part: "commit-subject",
+      source: "commit-subject/pre-push",
+      target: `${PRE_PUSH_STEPS}/commit-subject`,
+      executable: true,
+      fills: null,
+      versions: [{ version: 1, sha256: "eba04ee129872ff8b8305b51a0679d540420e71ee7f94361ac880c6910b0b5f6" }],
+    },
+    JUDGE_PUSH,
   ],
   format: [
     {

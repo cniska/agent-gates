@@ -89,11 +89,15 @@ describe("this repo", () => {
       ".githooks/commit-msg",
       ".github/workflows/commits.yml",
       ".githooks/.gitattributes",
+      ".githooks/pre-push",
+      ".githooks/pre-push.d/commit-subject",
+      ".githooks/judge-push",
       ".githooks/pre-commit.d/format",
       ".github/workflows/format.yml",
       ".githooks/ci-setup",
       ".githooks/pre-commit",
       ".githooks/pre-commit.d/no-comments",
+      ".githooks/pre-push.d/no-comments",
       ".githooks/no-comments/scan.cjs",
       ".github/workflows/no-comments.yml",
       ".githooks/no-comments/javascript.cjs",
@@ -118,6 +122,9 @@ describe("install", () => {
         { target: ".githooks/commit-msg", state: "missing", backup: null },
         { target: ".github/workflows/commits.yml", state: "missing", backup: null },
         { target: ".githooks/.gitattributes", state: "missing", backup: null },
+        { target: ".githooks/pre-push", state: "missing", backup: null },
+        { target: ".githooks/pre-push.d/commit-subject", state: "missing", backup: null },
+        { target: ".githooks/judge-push", state: "missing", backup: null },
       ],
       prepare: "absent",
       fills: { command: null, setup: null },
@@ -125,12 +132,18 @@ describe("install", () => {
     expect(hooksPath(dir)).toBe(".githooks");
     expect(modeOf(dir, ".githooks/commit-msg")).toBe(0o755);
     expect(modeOf(dir, ".github/workflows/commits.yml")).toBe(0o644);
+    expect(modeOf(dir, ".githooks/pre-push")).toBe(0o755);
+    expect(modeOf(dir, ".githooks/pre-push.d/commit-subject")).toBe(0o755);
+    expect(modeOf(dir, ".githooks/judge-push")).toBe(0o644);
     expect(gatesDoctor(dir)).toEqual({
       checks: [
         { name: "gates", state: "ok", detail: "commit-subject", fix: null },
         { name: ".githooks/commit-msg", state: "ok", detail: "installed", fix: null },
         { name: ".github/workflows/commits.yml", state: "ok", detail: "installed", fix: null },
         { name: ".githooks/.gitattributes", state: "ok", detail: "installed", fix: null },
+        { name: ".githooks/pre-push", state: "ok", detail: "installed", fix: null },
+        { name: ".githooks/pre-push.d/commit-subject", state: "ok", detail: "installed", fix: null },
+        { name: ".githooks/judge-push", state: "ok", detail: "installed", fix: null },
         { name: "hooksPath", state: "ok", detail: "core.hooksPath is .githooks", fix: null },
         {
           name: "prepare",
@@ -141,11 +154,7 @@ describe("install", () => {
       ],
       failing: 0,
     });
-    expect(Object.values(statesOf(installGates(dir, [], NO_FILLS)))).toEqual([
-      "installed",
-      "installed",
-      "installed",
-    ]);
+    expect(new Set(Object.values(statesOf(installGates(dir, [], NO_FILLS))))).toEqual(new Set(["installed"]));
   });
 
   test("the installed hook refuses a bad subject and lets a good one through", () => {
@@ -235,6 +244,9 @@ describe("file states", () => {
       ".githooks/commit-msg": "fail",
       ".github/workflows/commits.yml": "warn",
       ".githooks/.gitattributes": "warn",
+      ".githooks/pre-push": "ok",
+      ".githooks/pre-push.d/commit-subject": "ok",
+      ".githooks/judge-push": "ok",
       hooksPath: "ok",
       prepare: "ok",
     });
@@ -246,6 +258,9 @@ describe("file states", () => {
         backup: ".github/workflows/commits.yml.agent-gates-backup",
       },
       { target: ".githooks/.gitattributes", state: "behind", backup: null },
+      { target: ".githooks/pre-push", state: "installed", backup: null },
+      { target: ".githooks/pre-push.d/commit-subject", state: "installed", backup: null },
+      { target: ".githooks/judge-push", state: "installed", backup: null },
     ]);
     expect(read(dir, ".github/workflows/commits.yml.agent-gates-backup")).toEndWith("# local\n");
     expect(modeOf(dir, ".github/workflows/commits.yml.agent-gates-backup") & 0o111).toBe(0);
@@ -398,7 +413,7 @@ describe("refusals", () => {
       name: ".githooks/commit-msg",
       state: "fail",
       detail: `${dir} has its own .githooks/commit-msg, which a gate would replace`,
-      fix: `stop and hand this error to the owner: ${dir}'s .githooks/commit-msg must move out before the gates install; a step that runs before each commit belongs in .githooks/pre-commit.d/<name>, and commit-subject owns .githooks/commit-msg`,
+      fix: `stop and hand this error to the owner: ${dir}'s .githooks/commit-msg must move out before the gates install; a step that runs before each commit belongs in .githooks/pre-commit.d/<name>, one that runs before each push in .githooks/pre-push.d/<name>, and commit-subject owns .githooks/commit-msg`,
     });
   });
 

@@ -1361,7 +1361,7 @@ describe("the pre-commit dispatcher", () => {
 describe("the no-comments workflow", () => {
   function judgeStep(): string {
     const text = readFileSync(join(SOURCE_DIR, "no-comments.yml"), "utf8");
-    const run = /^ {8}run: \|\n((?: {10}.*\n)+)/m.exec(text)?.[1];
+    const run = /^ {8}run: (.+)$/m.exec(text)?.[1];
     if (run === undefined) throw new Error("no-comments.yml runs no command");
     return run;
   }
@@ -1554,7 +1554,7 @@ describe("install and doctor", () => {
       name: ".githooks/pre-commit",
       state: "fail",
       detail: `${dir} has its own .githooks/pre-commit, which a gate would replace`,
-      fix: `stop and hand this error to the owner: ${dir}'s .githooks/pre-commit must move out before the gates install; a step that runs before each commit belongs in .githooks/pre-commit.d/<name>, and commit-subject owns .githooks/commit-msg`,
+      fix: `stop and hand this error to the owner: ${dir}'s .githooks/pre-commit must move out before the gates install; a step that runs before each commit belongs in .githooks/pre-commit.d/<name>, one that runs before each push in .githooks/pre-push.d/<name>, and commit-subject owns .githooks/commit-msg`,
     });
   });
 

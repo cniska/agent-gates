@@ -34,18 +34,28 @@ const GITATTRIBUTES_V1 = "# agent-gate:githooks:1\n* linguist-generated\n";
 
 const OWN_HOOK = "#!/bin/sh\nexit 0\n";
 
+const PUSH_FILES = [".githooks/pre-push", ".githooks/judge-push"];
+
 const COMMIT_SUBJECT_FILES = [
   ".githooks/commit-msg",
   ".github/workflows/commits.yml",
   ".githooks/.gitattributes",
+  ".githooks/pre-push",
+  ".githooks/pre-push.d/commit-subject",
+  ".githooks/judge-push",
 ];
 
 const NO_COMMENTS_FILES = [
   ".githooks/pre-commit",
+  ".githooks/pre-push",
   ".githooks/pre-commit.d/no-comments",
+  ".githooks/pre-push.d/no-comments",
   ".githooks/no-comments/scan.cjs",
   ".github/workflows/no-comments.yml",
+  ".githooks/judge-push",
 ];
+
+const NO_COMMENTS_AFTER_COMMIT_SUBJECT = NO_COMMENTS_FILES.filter((path) => !PUSH_FILES.includes(path));
 
 function currentBytes(gates: readonly string[], path: string): string {
   const reference = checkout();
@@ -62,7 +72,9 @@ test("AC-3 installs commit-subject at the checkout's root and wires the hooks", 
     prepare: "absent",
   });
   expect(readdirSync(join(dir, "sub"))).toEqual([]);
-  expect(COMMIT_SUBJECT_FILES.map((path) => modeOf(dir, path))).toEqual([0o755, 0o644, 0o644]);
+  expect(COMMIT_SUBJECT_FILES.map((path) => modeOf(dir, path))).toEqual([
+    0o755, 0o644, 0o644, 0o755, 0o755, 0o644,
+  ]);
   expect(readText(dir, ".githooks/commit-msg")).toMatch(/^# agent-gate:commit-subject:\d+$/m);
   expect(readText(dir, ".github/workflows/commits.yml")).toMatch(/^# agent-gate:commit-subject:\d+$/m);
   expect(readText(dir, ".githooks/.gitattributes")).toMatch(
@@ -81,7 +93,9 @@ test("AC-4 installs each no-comments language, and reads the gates back from the
       files: each("missing", files),
       prepare: "absent",
     });
-    expect(files.map((path) => modeOf(dir, path))).toEqual([0o644, 0o755, 0o755, 0o644, 0o644, 0o644]);
+    expect(files.map((path) => modeOf(dir, path))).toEqual([
+      0o644, 0o755, 0o755, 0o755, 0o755, 0o644, 0o644, 0o644, 0o644,
+    ]);
     expect(readText(dir, adapter)).toMatch(new RegExp(`^// agent-gate:no-comments-${language}:\\d+$`, "m"));
   }
 
@@ -92,7 +106,7 @@ test("AC-4 installs each no-comments language, and reads the gates back from the
     gates,
     files: each("installed", [
       ...COMMIT_SUBJECT_FILES,
-      ...NO_COMMENTS_FILES,
+      ...NO_COMMENTS_AFTER_COMMIT_SUBJECT,
       ...LANGUAGES.map((language) => `.githooks/no-comments/${language}.cjs`),
     ]),
     prepare: "absent",
@@ -172,7 +186,8 @@ test("AC-6 acts on each file's state, keeping a backup of each hand edit", () =>
     },
   ]);
 
-  const untouched = [...NO_COMMENTS_FILES.slice(1), ".githooks/no-comments/javascript.cjs"];
+  const pushFiles = COMMIT_SUBJECT_FILES.slice(3);
+  const untouched = [...NO_COMMENTS_AFTER_COMMIT_SUBJECT.slice(1), ".githooks/no-comments/javascript.cjs"];
   installs(dir, [], {
     gates,
     files: [
@@ -183,6 +198,7 @@ test("AC-6 acts on each file's state, keeping a backup of each hand edit", () =>
         backup: ".github/workflows/commits.yml.agent-gates-backup",
       },
       { target: ".githooks/.gitattributes", state: "behind", backup: null },
+      ...each("installed", pushFiles),
       { target: ".githooks/pre-commit", state: "not-executable", backup: null },
       ...each("installed", untouched),
     ],
@@ -205,7 +221,7 @@ test("AC-6 acts on each file's state, keeping a backup of each hand edit", () =>
         state: "changed",
         backup: ".github/workflows/commits.yml.agent-gates-backup-2",
       },
-      ...each("installed", [".githooks/.gitattributes", ".githooks/pre-commit", ...untouched]),
+      ...each("installed", [".githooks/.gitattributes", ...pushFiles, ".githooks/pre-commit", ...untouched]),
     ],
     prepare: "absent",
   });
@@ -223,7 +239,7 @@ test("AC-7 refuses a project's own hook, and sets aside its own workflow", () =>
     const dir = checkout({ [target]: OWN_HOOK });
     chmodSync(join(dir, target), 0o755);
     const message = `${dir} has its own ${target}, which a gate would replace`;
-    const resolve = `stop and hand this error to the owner: ${dir}'s ${target} must move out before the gates install; a step that runs before each commit belongs in .githooks/pre-commit.d/<name>, and commit-subject owns .githooks/commit-msg`;
+    const resolve = `stop and hand this error to the owner: ${dir}'s ${target} must move out before the gates install; a step that runs before each commit belongs in .githooks/pre-commit.d/<name>, one that runs before each push in .githooks/pre-push.d/<name>, and commit-subject owns .githooks/commit-msg`;
     refuses(dir, [gate], {
       kind: "refusal",
       code: "hook_occupied",
@@ -261,7 +277,7 @@ test("AC-7 refuses a project's own hook, and sets aside its own workflow", () =>
         state: "changed",
         backup: ".github/workflows/commits.yml.agent-gates-backup",
       },
-      { target: ".githooks/.gitattributes", state: "missing", backup: null },
+      ...each("missing", COMMIT_SUBJECT_FILES.slice(2)),
     ],
     prepare: "absent",
   });

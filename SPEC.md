@@ -8,7 +8,7 @@ This document states what must hold, not how. [`README.md`](README.md) lists the
 
 ## 1. Purpose & context
 
-A coding agent excuses a workaround in a comment, writes a commit message nobody can scan, or commits unformatted code that fails the project's check, and a reviewer reading the diff tends to accept all of it. agent-gates installs gates that git hooks enforce at commit time and GitHub workflows enforce again in CI, for every developer: the commit subject, the format and no added comments, and the hooks run the project's own check steps, which `doctor` holds CI to running. The gates are files committed with the project, so contributors and CI are gated without installing agent-gates; agent-gates installs them, brings them up to date, and judges their health. The optional `cniska-gates` Claude Code plugin optimizes the agent's loop: it shows the agent the comments each edit added, before a gate refuses the commit.
+A coding agent excuses a workaround in a comment, writes a commit message nobody can scan, or commits unformatted code that fails the project's check, and a reviewer reading the diff tends to accept all of it. agent-gates installs gates that git hooks enforce on commit and push and GitHub workflows enforce again in CI, for every developer: the commit subject, the format and no added comments, and the hooks run the project's own check steps, which `doctor` holds CI to running. The gates are files committed with the project, so contributors and CI are gated without installing agent-gates; agent-gates installs them, brings them up to date, and judges their health. The optional `cniska-gates` Claude Code plugin optimizes the agent's loop: it shows the agent the comments each edit added, before a gate refuses the commit.
 
 **Primary user:** coding agents and their owner, installing gates into a project, reading why a commit was refused, and running the plugin in the agent's sessions. Not the audience: projects that want a configurable linter; a gate here has no options.
 
@@ -28,16 +28,16 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 - **FR-8** — The gates are `commit-subject`, `format`, and `no-comments-<language>` for each of `javascript`, `dart`, `sql`, `shell`, `rust` and `python`.
 - **FR-9** — `install` installs the named gates and every gate already installed. Named none with none installed, it is refused as `no_gates_chosen`.
-- **FR-10** — `commit-subject` installs `.githooks/commit-msg`, `.github/workflows/commits.yml` and `.githooks/.gitattributes`.
-- **FR-11** — `no-comments-<language>` installs `.githooks/pre-commit`, `.githooks/pre-commit.d/no-comments`, `.githooks/no-comments/scan.cjs`, `.githooks/no-comments/<language>.cjs`, `.github/workflows/no-comments.yml` and `.githooks/.gitattributes`.
-- **FR-12** — The installed hooks are executable, and the other installed files are not.
+- **FR-10** — `commit-subject` installs `.githooks/commit-msg`, `.github/workflows/commits.yml`, `.githooks/.gitattributes`, `.githooks/pre-push`, `.githooks/pre-push.d/commit-subject` and `.githooks/judge-push`.
+- **FR-11** — `no-comments-<language>` installs `.githooks/pre-commit`, `.githooks/pre-commit.d/no-comments`, `.githooks/pre-push`, `.githooks/pre-push.d/no-comments`, `.githooks/judge-push`, `.githooks/no-comments/scan.cjs`, `.githooks/no-comments/<language>.cjs`, `.github/workflows/no-comments.yml` and `.githooks/.gitattributes`.
+- **FR-12** — The installed hooks and hook steps are executable, and the other installed files are not.
 - **FR-13** — Each installed file carries a marker, `agent-gate:<part>:<version>`, and the installed gates are read back from these markers alone; deleting a language's adapter uninstalls that language's gate.
 - **FR-14** — `.githooks/.gitattributes` marks every file under `.githooks` `linguist-generated` with LF line endings.
 - **FR-15** — A file holding an earlier release's bytes is `behind`, and install replaces it without a backup.
 - **FR-16** — A file matching no release is `changed`, and install copies it aside to `<file>.agent-gates-backup`, or to the first free `<file>.agent-gates-backup-<n>` from 2, before replacing it.
 - **FR-17** — A file whose marker names a later version of its part is `ahead`, and install leaves it.
 - **FR-18** — A hook holding the current bytes without its executable bit is `not-executable`, and install restores the bit without a backup.
-- **FR-19** — An executable gate file, a hook or a pre-commit step, with no `agent-gate` marker is `occupied`, and install is refused as `hook_occupied`, writing nothing. A gate file that is not executable and has no marker is `changed`.
+- **FR-19** — An executable gate file, a hook or a hook step, with no `agent-gate` marker is `occupied`, and install is refused as `hook_occupied`, writing nothing. A gate file that is not executable and has no marker is `changed`.
 - **FR-20** — Install's result names the gates it installed, each file's path, the file's state before install acted and its backup, the `prepare` script's state, and the format and CI setup commands installed, each `null` when there is none.
 - **FR-21** — Install sets `core.hooksPath` to `.githooks` when it is unset, and accepts any value that resolves to `.githooks`.
 - **FR-22** — When `core.hooksPath` names another directory, install is refused as `hooks_path_occupied`, writing nothing.
@@ -163,6 +163,13 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 - **FR-107** — With a gate installed, `doctor` warns about each executable file in `.githooks/pre-commit.d/` or `.githooks/pre-push.d/` that is no gate file and carries no `agent-gate` marker, while no workflow in `.github/workflows/` names its path, so CI never runs it; once a workflow names each, the check passes, and with no such file it is not reported.
 
+### 2.15 Judging a push before it leaves
+
+- **FR-108** — `.githooks/pre-push` runs each executable file in `.githooks/pre-push.d/` in name order, each given the arguments and the pushed refs git gives the hook, and stops at the first that fails, exiting with its status, so the push does not leave.
+- **FR-109** — Before a push, `commit-subject` judges each ref the push updates or creates by the commits workflow's rules (FR-46, FR-47), its range starting at the remote's tip of the ref, or, for a ref the push creates other than the remote's default branch, at that default branch as the remote's `HEAD` names it; with none of those, it holds every commit the head reaches. A ref the push deletes is not judged.
+- **FR-110** — Before a push, `no-comments` judges each ref the push updates or creates by the no-comments workflow's rules (FR-50), against its merge base with the base FR-109 names.
+- **FR-111** — The commits and no-comments workflows and the pre-push steps judge through one installed script, `.githooks/judge-push`, so a push is judged by the same rules before it leaves and in CI.
+
 ## 3. Non-functional requirements
 
 - **NF-1** — The installed gates run with git, a POSIX shell and `node` alone: nothing installed in the project, and neither agent-gates nor Bun on `PATH`. The `format` gate also runs the project's own format command.
@@ -186,8 +193,8 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 - **AC-1** — Run `agent-gates` alone, an unknown command, `doctor` with an argument and `install` with an unknown gate: the listing on stdout with exit 0, then three usage errors on stderr, each exiting 2 with its usage as the resolve and nothing on stdout, and nothing written. (FR-1, FR-3, FR-4, FR-5)
 - **AC-2** — Run `doctor` and `install` outside a git checkout, and with no git on `PATH`: a `not_a_checkout` refusal exiting 1, and a `git_unavailable` fault exiting 3. (FR-4, FR-6, FR-7)
-- **AC-3** — `install commit-subject` from a subdirectory of a fresh checkout: its three files at the checkout's root, the hook alone executable, each carrying its marker, `.githooks/.gitattributes` marking the hooks generated with LF endings, `core.hooksPath` set to `.githooks`, and one JSON line naming the gate, each file `missing` with no backup, and `prepare` `absent`. (FR-2, FR-6, FR-10, FR-12, FR-13, FR-14, FR-20, FR-21)
-- **AC-4** — Install each `no-comments-<language>` gate: its six files; then `install` with no gate named reinstalls every one, and after one adapter is deleted, `doctor` no longer names its gate. (FR-8, FR-9, FR-11, FR-13)
+- **AC-3** — `install commit-subject` from a subdirectory of a fresh checkout: its six files at the checkout's root, the hooks and the step alone executable, each carrying its marker, `.githooks/.gitattributes` marking the hooks generated with LF endings, `core.hooksPath` set to `.githooks`, and one JSON line naming the gate, each file `missing` with no backup, and `prepare` `absent`. (FR-2, FR-6, FR-10, FR-12, FR-13, FR-14, FR-20, FR-21)
+- **AC-4** — Install each `no-comments-<language>` gate: its nine files; then `install` with no gate named reinstalls every one, and after one adapter is deleted, `doctor` no longer names its gate. (FR-8, FR-9, FR-11, FR-13)
 - **AC-5** — `install` with no gate named in a checkout with none installed: refused as `no_gates_chosen`, and nothing written. (FR-9)
 - **AC-6** — Over an install, put an earlier release's bytes in one file, edit another by hand, mark a third with a later version and clear the hook's executable bit: `doctor` warns `behind`, `changed` and `ahead` and fails `not-executable`, exiting 1; `install` reports each state, restores the behind and not-executable files without a backup, sets the changed one aside before replacing it, and leaves the ahead one. Edit the same file again and install: the second backup takes the next free name. (FR-15, FR-16, FR-17, FR-18, FR-20, FR-30)
 - **AC-7** — A project's own `commit-msg` hook, and its own `pre-commit.d/no-comments` step, without a marker: `install` is refused as `hook_occupied` and writes nothing, and `doctor` fails the hook with the same message and fix. A project's own unmarked `commits.yml` is set aside and replaced instead. (FR-19, FR-30)
@@ -223,6 +230,9 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **AC-37** — Run the hook without `jq`, without `node`, with input that is not JSON, and with a scanner that exits 2: each exits 0, prints nothing, and writes a note naming why. (FR-104, FR-106)
 - **AC-38** — Over an install, add an executable step to `pre-commit.d` and one to `pre-push.d`, a step that is not executable and an executable one with a marker: `doctor` reports no step check before them, then, with a workflow naming only a longer path that starts with one of them, warns naming the first two, with a fix naming them; once a workflow runs both, the check passes. (FR-107)
 
+- **AC-39** — Steps in `.githooks/pre-push.d/` named to run in an order, one not executable, one failing with status 7: the executable steps before the failing one run in name order, each given the remote, its URL and the pushed refs, the rest do not, and the hook exits 7. (FR-108)
+- **AC-40** — Push from a clone with `commit-subject` and `no-comments-javascript` installed, over a default branch holding a bad subject: a `fixup!` commit the `commit-msg` hook let through, a bad subject and an added comment are each refused before the push leaves, naming it, with the remote unchanged; a clean commit pushes; a new branch is judged from the default branch alone, passing with a good subject and refused with a bad one; a branch's deletion pushes. The installed workflows run the same `.githooks/judge-push`. (FR-47, FR-108, FR-109, FR-110, FR-111)
+
 ## 6. Deliverables
 
 - **D-1** — The `agent-gates` CLI, run by Bun from a checkout and linked onto `PATH` by `mise install` in the primary checkout, never in a worktree.
@@ -248,7 +258,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - `ok` in a command's output means the command ran; `doctor`'s judgement is in its result and exit code (FR-27).
 - A missing or unexecutable gate file fails `doctor`; a file that differs from this release only warns, since the gate still runs (FR-30).
 - An executable gate file without a marker is refused rather than set aside, since it is the project's own hook or step; an unmarked file that is not executable is set aside (FR-19).
-- The commits workflow refuses autosquash commits the hook lets through locally, so they are squashed before they land (FR-43, FR-47).
+- The `commit-msg` hook lets an autosquash commit through, since a local fixup is fine until pushed; the pre-push step and the commits workflow refuse it, so it is squashed before it leaves (FR-43, FR-47, FR-109).
 
 ## 9. Open questions and known gaps
 

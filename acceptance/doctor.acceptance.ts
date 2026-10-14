@@ -27,9 +27,12 @@ const NO_PACKAGE_JSON = "no package.json, so each contributor runs git config co
 const NO_COMMENTS_FILES = [
   ".githooks/.gitattributes",
   ".githooks/pre-commit",
+  ".githooks/pre-push",
   ".githooks/pre-commit.d/no-comments",
+  ".githooks/pre-push.d/no-comments",
   ".githooks/no-comments/scan.cjs",
   ".github/workflows/no-comments.yml",
+  ".githooks/judge-push",
 ];
 
 function doctorReports(dir: string, checks: readonly Check[]): void {
@@ -54,7 +57,15 @@ test("AC-11 reports no gate, then every check passing", () => {
     ...[
       ".githooks/commit-msg",
       ".github/workflows/commits.yml",
-      ...NO_COMMENTS_FILES,
+      ".githooks/.gitattributes",
+      ".githooks/pre-push",
+      ".githooks/pre-push.d/commit-subject",
+      ".githooks/judge-push",
+      ".githooks/pre-commit",
+      ".githooks/pre-commit.d/no-comments",
+      ".githooks/pre-push.d/no-comments",
+      ".githooks/no-comments/scan.cjs",
+      ".github/workflows/no-comments.yml",
       ".githooks/no-comments/javascript.cjs",
     ].map((name) => passing(name, "installed")),
     passing("hooksPath", "core.hooksPath is .githooks"),

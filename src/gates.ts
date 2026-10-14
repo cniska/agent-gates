@@ -33,6 +33,7 @@ import {
   INSTALL_GATES,
   nameTheFill,
   PRE_COMMIT_STEPS,
+  PRE_PUSH_STEPS,
   STEP_DIRS,
   WORKFLOWS_DIR,
   type WritableState,
@@ -71,7 +72,7 @@ const gatesRefusal = refusals<{
   hook_occupied: {
     message: ({ root, target }) => `${root} has its own ${target}, which a gate would replace`,
     resolve: ({ root, target }) =>
-      `stop and hand this error to the owner: ${root}'s ${target} must move out before the gates install; a step that runs before each commit belongs in ${PRE_COMMIT_STEPS}/<name>, and commit-subject owns ${HOOKS_DIR}/commit-msg`,
+      `stop and hand this error to the owner: ${root}'s ${target} must move out before the gates install; a step that runs before each commit belongs in ${PRE_COMMIT_STEPS}/<name>, one that runs before each push in ${PRE_PUSH_STEPS}/<name>, and commit-subject owns ${HOOKS_DIR}/commit-msg`,
   },
   write_failed: {
     message: ({ path, detail }) => `${path} could not be written: ${detail}`,
