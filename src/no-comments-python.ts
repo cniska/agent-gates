@@ -69,6 +69,10 @@ const COOKIE = /^[ \t\f]*#.*?coding[:=][ \t]*[-\w.]+/;
 const CODING =
   /[ \t\f]*(?:-\*-[ \t]*coding[:=][ \t]*[-\w.]+[ \t]*-\*-|coding[:=][ \t]*[-\w.]+|vim:[ \t]*set[ \t]+fileencoding=[-\w.]+[ \t]*:)/;
 
+const ENCODING_NAME = /(?:coding[:=]|fileencoding=)[ \t]*([-\w.]+)/;
+
+const UTF_8 = /^utf[-_]?8(?:[-_]|$)/i;
+
 const SCRIPT_OPEN = "# /// script";
 
 const SCRIPT_CLOSE = "# ///";
@@ -416,12 +420,20 @@ function isScriptMetadata(body: string): boolean {
   return Object.keys(table).every((key) => SCRIPT_KEYS.has(key));
 }
 
+function namesUtf8(cookie: string): boolean {
+  const name = ENCODING_NAME.exec(cookie)?.[1];
+  return name !== undefined && UTF_8.test(name);
+}
+
 const KEPT: readonly KeptForm<Read>[] = [
   SHEBANG,
-  directive("the PEP 263 coding declaration on line 1, or on line 2 under a blank or comment line", {
-    pattern: CODING,
-    where: ({ span }) => span.cookieLine,
-  }),
+  directive(
+    "the PEP 263 coding declaration of a non-UTF-8 encoding on line 1, or on line 2 under a blank or comment line",
+    {
+      pattern: CODING,
+      where: ({ span, body }) => span.cookieLine && !namesUtf8(body),
+    },
+  ),
   {
     shown:
       "a PEP 723 `# /// script` block of TOML holding only `requires-python`, `dependencies` and `[tool.*]`, and no comment",
