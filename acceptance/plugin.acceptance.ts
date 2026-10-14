@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { symlinkSync } from "node:fs";
 import { join } from "node:path";
 import {
   checkout,
@@ -199,6 +200,8 @@ test("AC-42 judges each git command against the repo it targets, past heredoc bo
   );
   const fresh = join(scratchDir(), "state-n");
   const ungated = checkout();
+  const spaced = join(scratchDir(), "sp ace");
+  symlinkSync(dir, spaced);
 
   for (const command of [
     `mkdir -p ${fresh}; cd ${fresh}; git init -q; git commit -qm x --allow-empty --no-verify`,
@@ -210,11 +213,19 @@ test("AC-42 judges each git command against the repo it targets, past heredoc bo
 
   for (const command of [
     `cd ${dir} && git commit --no-verify -m x`,
-    `cd ${dir}/missing; git commit --no-verify -m x`,
+    `cd -P ${dir} && git commit --no-verify -m x`,
+    `cd "${spaced}" && git commit --no-verify -m x`,
     `git -C ${dir} commit --no-verify -m x`,
     `cd ~ && git -C ${dir} commit --no-verify -m x`,
   ])
     expect(ranCommand(ungated, command, tools)).toEqual(skipped);
+  for (const command of [
+    `cd ${ungated}/missing; git commit --no-verify -m x`,
+    `cd ${ungated} & git commit --no-verify -m x`,
+    `cd ${ungated} | cat; git commit --no-verify -m x`,
+    `cd ${ungated} && cd - && git commit --no-verify -m x`,
+  ])
+    expect(ranCommand(dir, command, tools)).toEqual(skipped);
   expect(
     ranCommand(dir, "cat > notes.md <<'EOF'\nthe owner's notes\nEOF\ngit commit --no-verify -m 'x'", tools),
   ).toEqual(skipped);

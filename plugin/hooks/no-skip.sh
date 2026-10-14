@@ -2,6 +2,8 @@
 set -uo pipefail
 
 readonly HOOKS=".githooks"
+readonly QUOTED_SPACE=$'\x1f'
+readonly DETACHED=$'\x1e'
 readonly HEREDOC="(^|[^<])<<-?[[:space:]]*[\"']?([A-Za-z0-9_.-]+)[\"']?(.*)$"
 
 note() {
@@ -34,24 +36,82 @@ without_heredoc_bodies() {
 }
 
 commands_of() {
-  printf '%s' "$1" | jq -rRs '.
-    | gsub("\"(?<q>[^\"]*)\""; .q | gsub("[\\s;&|]"; ""))
-    | gsub("'"'"'(?<q>[^'"'"']*)'"'"'"; .q | gsub("[\\s;&|]"; ""))
-    | gsub("&&|\\|\\||[;|&]"; "\n")'
+  printf '%s' "$1" | jq -rRs --arg space "$QUOTED_SPACE" --arg detached "$DETACHED" '.
+    | gsub("\"(?<q>[^\"]*)\""; .q | gsub("[;&|]"; "") | gsub("\\s"; $space))
+    | gsub("'"'"'(?<q>[^'"'"']*)'"'"'"; .q | gsub("[;&|]"; "") | gsub("\\s"; $space))
+    | gsub("&&|\\|\\||;"; "\n")
+    | gsub("[|&]"; " " + $detached + "\n")'
+}
+
+words_of() {
+  read -ra WORDS <<<"$1"
+  local at
+  for at in ${WORDS[@]+"${!WORDS[@]}"}; do
+    WORDS[at]="${WORDS[at]//$QUOTED_SPACE/ }"
+  done
 }
 
 dir_from() {
-  local base="$1" target="$2"
+  local base="$1" target="$2" rest
   case "$target" in
-    "~" | "\$HOME" | "\${HOME}") target="$HOME" ;;
-    \~/*) target="$HOME/${target#\~/}" ;;
-    "\$HOME/"*) target="$HOME/${target#"\$HOME/"}" ;;
-    "\${HOME}/"*) target="$HOME/${target#"\${HOME}/"}" ;;
+    "~" | "\$HOME" | "\${HOME}") rest="" ;;
+    \~/*) rest="/${target#\~/}" ;;
+    "\$HOME/"*) rest="/${target#"\$HOME/"}" ;;
+    "\${HOME}/"*) rest="/${target#"\${HOME}/"}" ;;
+    /*)
+      printf '%s' "$target"
+      return 0
+      ;;
+    *)
+      printf '%s/%s' "$base" "$target"
+      return 0
+      ;;
   esac
-  case "$target" in
-    /*) printf '%s' "$target" ;;
-    *) printf '%s/%s' "$base" "$target" ;;
-  esac
+  [ -n "${HOME:-}" ] || return 1
+  printf '%s%s' "$HOME" "$rest"
+}
+
+cd_target() {
+  local dir="$1" previous="$2"
+  shift 2
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --)
+        shift
+        break
+        ;;
+      -) break ;;
+      -*) shift ;;
+      *) break ;;
+    esac
+  done
+  local target="${1:-}"
+  [ -n "$target" ] || target='~'
+  if [ "$target" = - ]; then
+    printf '%s' "$previous"
+    return 0
+  fi
+  dir_from "$dir" "$target"
+}
+
+made_dirs() {
+  local dir="$1" word
+  shift
+  for word in "$@"; do
+    case "$word" in
+      -*) ;;
+      *) dir_from "$dir" "$word" && printf '\n' ;;
+    esac
+  done
+}
+
+is_made() {
+  local target="${1%/}/" made
+  while IFS= read -r made; do
+    [ -n "$made" ] || continue
+    [[ "${made%/}/" == "$target"* ]] && return 0
+  done <<<"$2"
+  return 1
 }
 
 gated_root_of() {
@@ -145,8 +205,8 @@ config_skip() {
 
 denial_of() {
   local dir="$1"
-  local -a words settings=()
-  read -ra words <<<"$2"
+  words_of "$2"
+  local -a words=(${WORDS[@]+"${WORDS[@]}"}) settings=()
   local at=0
   while [ "$at" -lt "${#words[@]}" ]; do
     case "${words[$at]}" in
@@ -166,7 +226,10 @@ denial_of() {
         ;;
       -C)
         at=$((at + 1))
-        dir="$(dir_from "$dir" "${words[$at]:-}")"
+        local named
+        if named="$(dir_from "$dir" "${words[$at]:-}")"; then
+          dir="$named"
+        fi
         ;;
       --git-dir | --work-tree | --namespace | --exec-path) at=$((at + 1)) ;;
       -*) ;;
@@ -250,14 +313,30 @@ main() {
     /*) ;;
     *) return 0 ;;
   esac
-  local dir="$cwd" line reason
-  local -a words
+  local dir="$cwd" previous="$cwd" made="" line target reason
   while IFS= read -r line; do
-    read -ra words <<<"$line"
-    if [ "${words[0]:-}" = cd ]; then
-      dir="$(dir_from "$dir" "${words[1]:-$HOME}")"
-      continue
+    local detached=false
+    if [[ "$line" == *" $DETACHED" ]]; then
+      detached=true
+      line="${line% "$DETACHED"}"
     fi
+    words_of "$line"
+    local -a words=(${WORDS[@]+"${WORDS[@]}"})
+    case "${words[0]:-}" in
+      cd)
+        if [ "$detached" = false ] &&
+          target="$(cd_target "$dir" "$previous" "${words[@]:1}")" &&
+          { [ -d "$target" ] || is_made "$target" "$made"; }; then
+          previous="$dir"
+          dir="$target"
+        fi
+        continue
+        ;;
+      mkdir)
+        made+="$(made_dirs "$dir" "${words[@]:1}")"$'\n'
+        continue
+        ;;
+    esac
     if reason="$(denial_of "$dir" "$line")"; then
       jq -cn --arg reason "cniska-gates: $reason" \
         '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $reason}}'
