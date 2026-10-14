@@ -23,10 +23,9 @@ export type FileState =
   | "ahead"
   | "not-executable"
   | "reconfigured"
-  | "occupied"
-  | "unresolved";
+  | "occupied";
 
-export type WritableState = Exclude<FileState, "occupied" | "unresolved">;
+export type WritableState = Exclude<FileState, "occupied">;
 
 export const FILL_NAMES = ["command", "setup"] as const;
 

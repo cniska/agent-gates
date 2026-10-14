@@ -22,6 +22,7 @@ import {
   type Fills,
   HOOKS_DIR,
   INSTALL_GATES,
+  NO_FILLS,
   nameTheFill,
   REINSTALL,
   SCANNER_FILE,
@@ -75,8 +76,7 @@ function fileHealth(planned: PlannedFile): Health {
     case "reconfigured":
       invariant(false, "doctor gives no command, so no file is reconfigured");
       break;
-    case "occupied":
-    case "unresolved":
+    case "refused":
       return refusedHealth(name, planned.refusal);
     default:
       return unreachable(planned);
@@ -288,7 +288,7 @@ function judged(root: string): Health[] {
       ...languagesHealth(root, []),
     ];
   const languages = installedLanguages(gates);
-  const planned = plannedFiles(root, gates);
+  const planned = plannedFiles(root, gates, NO_FILLS);
   const fills = fillsOf(planned);
   return [
     { name: "gates", state: "ok", detail: gates.join(", "), fix: null },

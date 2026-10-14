@@ -31,7 +31,6 @@ import {
   type GateFile,
   HOOKS_DIR,
   INSTALL_GATES,
-  NO_FILLS,
   nameTheFill,
   PRE_COMMIT_STEPS,
   STEP_DIRS,
@@ -109,8 +108,7 @@ type WritableFile = PlannedAt & {
 
 export type PlannedFile =
   | WritableFile
-  | (PlannedAt & { readonly state: "occupied"; readonly refusal: Refusal })
-  | (PlannedAt & { readonly state: "unresolved"; readonly refusal: Refusal });
+  | (PlannedAt & { readonly state: "refused"; readonly refusal: Refusal });
 
 export type StepsState = { readonly steps: readonly string[]; readonly unchecked: readonly string[] };
 
@@ -153,12 +151,7 @@ function templateOf(file: GateFile, text: string): string {
   return file.fills === null ? text : fillTemplateOf(text, file.fills);
 }
 
-function stateOf(
-  file: GateFile,
-  template: string,
-  source: string,
-  found: Found | null,
-): Exclude<FileState, "unresolved"> {
+function stateOf(file: GateFile, template: string, source: string, found: Found | null): FileState {
   if (found === null) return "missing";
   if (found.text === source) return file.executable && !found.executable ? "not-executable" : "installed";
   const text = templateOf(file, found.text);
@@ -198,17 +191,15 @@ function plannedFile(root: string, file: GateFile, given: Fills): PlannedFile {
   const found = foundAt(path);
   const render = rendered(root, file, template, given, found);
   const at = { target: file.target, file, path };
-  if (render.kind === "refused") return { ...at, state: "unresolved", refusal: render.refusal };
+  if (render.kind === "refused") return { ...at, state: "refused", refusal: render.refusal };
   const state = stateOf(file, template, render.source, found);
   if (state === "occupied")
-    return { ...at, state, refusal: gatesRefusal("hook_occupied", { root, target: file.target }) };
+    return { ...at, state: "refused", refusal: gatesRefusal("hook_occupied", { root, target: file.target }) };
   return { ...at, state, source: render.source, filled: render.filled };
 }
 
 function filledFor(planned: readonly PlannedFile[], fill: Fill): string | null {
-  for (const file of planned)
-    if (file.state !== "occupied" && file.state !== "unresolved" && file.file.fills === fill)
-      return file.filled;
+  for (const file of planned) if (file.state !== "refused" && file.file.fills === fill) return file.filled;
   return null;
 }
 
@@ -216,11 +207,7 @@ export function fillsOf(planned: readonly PlannedFile[]): Fills {
   return eachFill((fill) => filledFor(planned, fill));
 }
 
-export function plannedFiles(
-  root: string,
-  gates: readonly GateName[],
-  given: Fills = NO_FILLS,
-): PlannedFile[] {
+export function plannedFiles(root: string, gates: readonly GateName[], given: Fills): PlannedFile[] {
   const files = new Map(gates.flatMap((gate) => GATES[gate]).map((file) => [file.target, file]));
   return [...files.values()].map((file) => plannedFile(root, file, given));
 }
@@ -322,7 +309,7 @@ export function installGates(root: string, named: readonly GateName[], given: Fi
   const hooksPath = hooksPathState(root);
   if (hooksPath.kind === "occupied") throw hooksPath.refusal;
   const toWrite = plannedFiles(root, gates, given).map((planned) => {
-    if (planned.state === "occupied" || planned.state === "unresolved") throw planned.refusal;
+    if (planned.state === "refused") throw planned.refusal;
     return planned;
   });
   const prepare = prepareState(root);
