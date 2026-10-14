@@ -5,10 +5,12 @@ import {
   bypassing,
   checkout,
   commitAs,
+  committing,
   git,
   githubStep,
   gitRan,
   install,
+  type Outcome,
   readText,
   removeScratch,
   scratchDir,
@@ -26,8 +28,6 @@ const ZERO = "0".repeat(40);
 
 const SCISSORS = "# ------------------------ >8 ------------------------";
 
-type Outcome = { readonly status: number | null; readonly stderr: string; readonly made: boolean };
-
 function gated(): string {
   const dir = checkout();
   install(dir, ["commit-subject"]);
@@ -35,16 +35,10 @@ function gated(): string {
   return dir;
 }
 
-function commits(dir: string): string {
-  return git(dir, ["rev-list", "--count", "HEAD"]);
-}
-
 function commitMessage(dir: string, message: string, cleanup = "strip"): Outcome {
   const file = join(scratchDir(), "message");
   writeFileSync(file, message);
-  const before = commits(dir);
-  const ran = gitRan(dir, [
-    "commit",
+  return committing(dir, [
     "-q",
     "--allow-empty",
     "--allow-empty-message",
@@ -52,7 +46,6 @@ function commitMessage(dir: string, message: string, cleanup = "strip"): Outcome
     "-F",
     file,
   ]);
-  return { status: ran.status, stderr: ran.stderr, made: commits(dir) !== before };
 }
 
 function passes(dir: string, message: string, cleanup?: string): void {

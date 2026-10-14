@@ -19,6 +19,8 @@ export type Check = {
   readonly fix: string | null;
 };
 
+export type Outcome = { readonly status: number | null; readonly stderr: string; readonly made: boolean };
+
 type Judged = { readonly status: number | null; readonly checks: readonly Check[] };
 
 const scratchDirs: string[] = [];
@@ -92,6 +94,16 @@ export function install(dir: string, gates: readonly string[]): void {
 
 export function gitRan(dir: string, args: readonly string[]): Ran {
   return run("git", ["-C", dir, ...args], dir);
+}
+
+function commitCount(dir: string): string {
+  return git(dir, ["rev-list", "--count", "HEAD"]);
+}
+
+export function committing(dir: string, args: readonly string[]): Outcome {
+  const before = commitCount(dir);
+  const ran = gitRan(dir, ["commit", ...args]);
+  return { status: ran.status, stderr: ran.stderr, made: commitCount(dir) !== before };
 }
 
 export function git(dir: string, args: readonly string[]): string {
