@@ -82,7 +82,7 @@ export function jsonLine(text: string): unknown {
   return JSON.parse(lines[0] ?? "");
 }
 
-function field(value: unknown, key: string): unknown {
+export function field(value: unknown, key: string): unknown {
   return typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined;
 }
 
@@ -153,19 +153,18 @@ export function pathOf(tools: readonly string[]): string {
 }
 
 export function stepScript(workflow: string, name: string): string {
-  const lines = workflow.split("\n");
-  const named = lines.findIndex((line) => line.trim() === `- name: ${name}`);
-  const runLine = lines.findIndex((line, at) => at > named && /^ *run: \|$/.test(line));
-  const between = lines.slice(named + 1, runLine);
-  if (named < 0 || runLine < 0 || between.some((line) => /^ *- /.test(line)))
+  const jobs = field(Bun.YAML.parse(workflow), "jobs");
+  const steps =
+    typeof jobs === "object" && jobs !== null
+      ? Object.values(jobs).flatMap((job) => field(job, "steps"))
+      : [];
+  const script = field(
+    steps.find((step) => field(step, "name") === name),
+    "run",
+  );
+  if (typeof script !== "string")
     throw new Error(`the workflow has no step named ${name} that runs a script`);
-  const indent = (lines[runLine] ?? "").indexOf("run:");
-  const body: string[] = [];
-  for (const line of lines.slice(runLine + 1)) {
-    if (line.trim() !== "" && line.length - line.trimStart().length <= indent) break;
-    body.push(line.slice(indent + 2));
-  }
-  return `${body.join("\n").trimEnd()}\n`;
+  return script;
 }
 
 export function githubStep(dir: string, script: string, env: Env): Ran {
