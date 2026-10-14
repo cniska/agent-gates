@@ -52,6 +52,7 @@ const KEPT: readonly Lookalike[] = [
   at("python", "# -*- coding: latin-1 -*-"),
   at("python", "# coding=cp1252"),
   at("python", "# vim: set fileencoding=shift_jis :"),
+  at("python", "# coding: utf8-sig"),
   { language: "python", path: "a.py", text: "#!/usr/bin/env python3\n# -*- coding: latin-1 -*-\nx = 1\n" },
   at("python", '# /// script\n# requires-python = ">=3.12"\n# dependencies = ["httpx # pinned"]\n# ///'),
 ];

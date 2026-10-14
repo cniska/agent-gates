@@ -274,6 +274,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 12, sha256: "04b78f897cd42960a884cad5ab2b3a28a52babc698734e9dfab57fd66aa13c59" },
     { version: 13, sha256: "5a2935b1955f99eb30ca8b435c4656290db4b2a448de547ab6b676c7706e52f9" },
     { version: 14, sha256: "5e98994ff75d8606df7b0559c88eae8ef7e655abe9fb4b5e0a04bfb077bf1387" },
+    { version: 15, sha256: "f705ea66671db73f6093f3e5842253b10c41e5bab5a83d9b2aac2e82bc2e104a" },
   ]),
 };
 

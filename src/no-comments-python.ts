@@ -64,14 +64,12 @@ const NAME_USES = new Set([":", ".", "="]);
 
 const BLANK_LINE = /^[ \t\f]*(?:[#\r\n]|$)/;
 
-const COOKIE = /^[ \t\f]*#.*?coding[:=][ \t]*[-\w.]+/;
+const COOKIE = /^[ \t\f]*#.*?coding[:=][ \t]*(?<encoding>[-\w.]+)/;
 
 const CODING =
   /[ \t\f]*(?:-\*-[ \t]*coding[:=][ \t]*[-\w.]+[ \t]*-\*-|coding[:=][ \t]*[-\w.]+|vim:[ \t]*set[ \t]+fileencoding=[-\w.]+[ \t]*:)/;
 
-const ENCODING_NAME = /(?:coding[:=]|fileencoding=)[ \t]*([-\w.]+)/;
-
-const UTF_8 = /^utf[-_]?8(?:[-_]|$)/i;
+const UTF_8 = /^(?:utf[-_]8(?:[-_]|$)|utf8$)/i;
 
 const SCRIPT_OPEN = "# /// script";
 
@@ -419,7 +417,7 @@ function isScriptMetadata(body: string): boolean {
 }
 
 function namesUtf8(cookie: string): boolean {
-  const name = ENCODING_NAME.exec(cookie)?.[1];
+  const name = COOKIE.exec(cookie)?.groups?.encoding;
   return name !== undefined && UTF_8.test(name);
 }
 
@@ -429,7 +427,7 @@ const KEPT: readonly KeptForm<Read>[] = [
     "the PEP 263 coding declaration of a non-UTF-8 encoding on line 1, or on line 2 under a blank or comment line",
     {
       pattern: CODING,
-      where: ({ span, body }) => span.cookieLine && !namesUtf8(body),
+      where: ({ span, text }) => span.cookieLine && !namesUtf8(text),
     },
   ),
   {
