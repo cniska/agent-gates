@@ -375,7 +375,10 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
       target: `${HOOKS_DIR}/pre-commit.d/format`,
       executable: true,
       fills: "command",
-      versions: [{ version: 1, sha256: "b8f15bc902e2269640aae3022e919b8822fc85340fbd42c1f28c2bb028a2451d" }],
+      versions: [
+        { version: 1, sha256: "b8f15bc902e2269640aae3022e919b8822fc85340fbd42c1f28c2bb028a2451d" },
+        { version: 2, sha256: "761da3bc5de74f1b9204a36f9581fed6196e720cd57b3c9ae207d9f32681adbe" },
+      ],
     },
     {
       part: "format",

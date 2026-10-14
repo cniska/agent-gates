@@ -135,7 +135,7 @@ test("AC-27 reads comments where each language's tokenizer does", () => {
   );
 });
 
-const SHELL_UTILITIES = ["sh", "sed", "tr", "head", "tail", "grep", "wc", "dirname"];
+const SHELL_UTILITIES = ["sh", "sed", "tr", "head", "tail", "grep", "wc", "dirname", "od", "awk"];
 
 test("AC-28 runs the hooks with git, a shell and node alone", () => {
   const dir = gated(["commit-subject", "format", ...ALL_LANGUAGES, "--command", "true"], {

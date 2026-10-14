@@ -31,6 +31,8 @@ const UPPERCASE = 'for f in *.txt; do tr a-z A-Z < "$f" > "$f.tmp" && mv "$f.tmp
 
 const HOOK = ".githooks/pre-commit.d/format";
 
+const QUOTED = 'say "hi"\\\tnow.txt';
+
 const WORKFLOW = ".github/workflows/format.yml";
 
 const SETUP = ".githooks/ci-setup";
@@ -164,6 +166,19 @@ test("AC-32 formats the commit, refusing a partly staged file the command change
   });
   expect([git(dir, ["show", "HEAD:c.txt"]), readText(dir, "c.txt")]).toEqual(["C", "CC\n"]);
   git(dir, ["checkout", "--", "c.txt"]);
+
+  writeFiles(dir, { [QUOTED]: "q\n" });
+  git(dir, ["add", QUOTED]);
+  writeFiles(dir, { [QUOTED]: "q\nr\n" });
+  expect(commitStaged(dir)).toEqual({
+    status: 1,
+    stderr: `format: \`sh fmt.sh\` changes these partly staged files, so the commit would not be formatted; stage each whole or not at all, then commit again:\n  ${QUOTED}\n`,
+    made: false,
+  });
+  expect(git(dir, ["show", `:${QUOTED}`])).toBe("q");
+  writeFiles(dir, { [QUOTED]: "q\n" });
+  expect(commitStaged(dir)).toEqual({ status: 0, stderr: "", made: true });
+  expect(git(dir, ["show", `HEAD:${QUOTED}`])).toBe("Q");
 
   writeFiles(dir, { "fmt.sh": "echo broken >&2\nexit 3\n", "d.txt": "D\n" });
   git(dir, ["add", "d.txt"]);
