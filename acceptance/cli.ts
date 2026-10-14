@@ -1,5 +1,14 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -22,6 +31,8 @@ export type Check = {
 export type Outcome = { readonly status: number | null; readonly stderr: string; readonly made: boolean };
 
 type Judged = { readonly status: number | null; readonly checks: readonly Check[] };
+
+export const NO_COMMIT = "0".repeat(40);
 
 const scratchDirs: string[] = [];
 
@@ -121,8 +132,40 @@ export function commitAs(dir: string, subject: string): string {
   return git(dir, ["rev-parse", "HEAD"]);
 }
 
-export function shell(dir: string, script: string): Ran {
-  return run("sh", ["-c", script], dir);
+export function cloneOf(dir: string): string {
+  const clone = join(scratchDir(), "clone");
+  git(dir, ["clone", "-q", dir, clone]);
+  return clone;
+}
+
+export function shell(dir: string, script: string, env: Env = {}): Ran {
+  return run("sh", ["-c", script], dir, env);
+}
+
+export function pathOf(tools: readonly string[]): string {
+  const bin = scratchDir();
+  for (const tool of tools) {
+    const found = shell(bin, `command -v ${tool}`).stdout.trim();
+    if (!found.startsWith("/")) throw new Error(`${tool} is not on PATH`);
+    symlinkSync(found, join(bin, tool));
+  }
+  return bin;
+}
+
+export function stepScript(workflow: string, name: string): string {
+  const lines = workflow.split("\n");
+  const named = lines.findIndex((line) => line.trim() === `- name: ${name}`);
+  const run = lines.findIndex((line, at) => at > named && /^ *run: \|$/.test(line));
+  const between = lines.slice(named + 1, run);
+  if (named < 0 || run < 0 || between.some((line) => /^ *- /.test(line)))
+    throw new Error(`the workflow has no step named ${name} that runs a script`);
+  const indent = (lines[run] ?? "").indexOf("run:");
+  const body: string[] = [];
+  for (const line of lines.slice(run + 1)) {
+    if (line.trim() !== "" && line.length - line.trimStart().length <= indent) break;
+    body.push(line.slice(indent + 2));
+  }
+  return `${body.join("\n").trimEnd()}\n`;
 }
 
 export function githubStep(dir: string, script: string, env: Env): Ran {

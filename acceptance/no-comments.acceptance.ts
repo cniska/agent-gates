@@ -1,7 +1,24 @@
 import { afterEach, expect, test } from "bun:test";
 import { rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
-import { checkout, commitAs, committing, git, install, type Outcome, removeScratch, writeFiles } from "./cli";
+import {
+  checkout,
+  cloneOf,
+  commitAs,
+  committing,
+  git,
+  githubStep,
+  install,
+  NO_COMMIT,
+  type Outcome,
+  pathOf,
+  readText,
+  removeScratch,
+  scratchDir,
+  shell,
+  stepScript,
+  writeFiles,
+} from "./cli";
 
 afterEach(removeScratch);
 
@@ -249,5 +266,116 @@ test("AC-23 cuts a long comment and a long reply", () => {
   );
 });
 
-test.todo("AC-24 judges the pushed range in CI, annotating findings for GitHub", () => {});
-test.todo("AC-25 sweeps the tracked files, and exits 2 or 3 when it cannot judge", () => {});
+type Push = { readonly base: string; readonly head: string; readonly ref: string };
+
+function judgePush(dir: string, push: Push) {
+  const workflow = readText(dir, ".github/workflows/no-comments.yml");
+  return githubStep(dir, stepScript(workflow, "Judge each file the push changes"), {
+    BASE_SHA: push.base,
+    HEAD_SHA: push.head,
+    PUSHED_REF: push.ref,
+    DEFAULT_BRANCH: "main",
+    RUNNER_TEMP: scratchDir(),
+  });
+}
+
+test("AC-24 judges the pushed range in CI, annotating findings for GitHub", () => {
+  const origin = gated(["no-comments-javascript"], { "old.ts": "// old\nexport const old = 0;\n" });
+  const clone = cloneOf(origin);
+  const before = git(clone, ["rev-parse", "HEAD"]);
+  writeFiles(clone, { "clean.ts": "export const clean = 1;\n" });
+  git(clone, ["add", "-A"]);
+  const clean = commitAs(clone, "feat: add a clean file");
+  expect(judgePush(clone, { base: before, head: clean, ref: "refs/heads/main" })).toEqual({
+    status: 0,
+    stdout: "",
+    stderr: "",
+  });
+
+  const many = Array.from({ length: 12 }, (_, at) => `export const a${at} = ${at}; // c${at}\n`);
+  writeFiles(clone, { "many.ts": many.join("") });
+  git(clone, ["add", "-A"]);
+  const head = commitAs(clone, "feat: add many comments");
+  expect(judgePush(clone, { base: before, head, ref: "refs/heads/main" })).toEqual({
+    status: 1,
+    stdout: lines([
+      ...Array.from({ length: 9 }, (_, at) => `::error file=many.ts,line=${at + 1}::// c${at}`),
+      "::error::no-comments: 3 more findings; the step's log lists them all",
+    ]),
+    stderr: commentReply(
+      [KEPT_JAVASCRIPT],
+      [["many.ts", Array.from({ length: 12 }, (_, at) => `${at + 1}  // c${at}`)]],
+    ),
+  });
+
+  git(clone, ["checkout", "-q", "-b", "feature", before]);
+  writeFiles(clone, { "branch.ts": "export const branch = 2; // branch\n" });
+  git(clone, ["add", "-A"]);
+  const branch = commitAs(clone, "feat: add a branch file");
+  expect(judgePush(clone, { base: NO_COMMIT, head: branch, ref: "refs/heads/feature" })).toEqual({
+    status: 1,
+    stdout: lines(["::error file=branch.ts,line=1::// branch"]),
+    stderr: commentReply([KEPT_JAVASCRIPT], [["branch.ts", ["1  // branch"]]]),
+  });
+
+  git(clone, ["checkout", "-q", "--orphan", "lone"]);
+  git(clone, ["rm", "-q", "-r", "--cached", "old.ts", "branch.ts"]);
+  rmSync(join(clone, "old.ts"));
+  rmSync(join(clone, "branch.ts"));
+  writeFiles(clone, { "lone.ts": "export const lone = 3; // lone\n" });
+  git(clone, ["add", "-A"]);
+  const lone = commitAs(clone, "feat: start over");
+  expect(judgePush(clone, { base: NO_COMMIT, head: lone, ref: "refs/heads/lone" })).toEqual({
+    status: 1,
+    stdout: lines(["::error file=lone.ts,line=1::// lone"]),
+    stderr: commentReply([KEPT_JAVASCRIPT], [["lone.ts", ["1  // lone"]]]),
+  });
+});
+
+const USAGE =
+  "scan.cjs takes no arguments, --all, a base and a head, or --file and a path, each optionally after --format github";
+
+const USAGE_FIX = "node scan.cjs [--format github] [--all | <base> <head> | --file <path>]";
+
+test("AC-25 sweeps the tracked files, and exits 2 or 3 when it cannot judge", () => {
+  const dir = gated(["no-comments-javascript"], { "a.ts": "export const a = 1; // a\n" });
+  writeFiles(dir, { "b.ts": "export const b = 2; // b\n" });
+  git(dir, ["add", "b.ts"]);
+  writeFiles(dir, { "b.ts": "export const b = 2;\n", "c.ts": "export const c = 3; // c\n" });
+  expect(shell(dir, "node .githooks/no-comments/scan.cjs --all")).toEqual({
+    status: 1,
+    stdout: "",
+    stderr: commentReply(
+      [KEPT_JAVASCRIPT],
+      [
+        ["a.ts", ["1  // a"]],
+        ["b.ts", ["1  // b"]],
+      ],
+    ).replace("this change adds", "the tracked files hold"),
+  });
+
+  for (const [args, count] of [
+    ["HEAD", "1: HEAD"],
+    ["--all HEAD", "2: --all HEAD"],
+    ["--nope", "1: --nope"],
+  ] as const)
+    expect(shell(dir, `node .githooks/no-comments/scan.cjs ${args}`)).toEqual({
+      status: 2,
+      stdout: "",
+      stderr: `no-comments: ${USAGE}, and got ${count}; ${USAGE_FIX}\n`,
+    });
+
+  const node = pathOf(["git", "sh"]);
+  expect(shell(dir, ".githooks/pre-commit.d/no-comments", { PATH: node })).toEqual({
+    status: 3,
+    stdout: "",
+    stderr: "no-comments: node is not on PATH, so the commit's comments cannot be judged; install Node.js\n",
+  });
+
+  writeFiles(dir, { ".githooks/no-comments/javascript.cjs": "module.exports = {};\n" });
+  expect(shell(dir, "node .githooks/no-comments/scan.cjs --all")).toEqual({
+    status: 3,
+    stdout: "",
+    stderr: `no-comments: invariant failed: ${join(dir, ".githooks/no-comments/javascript.cjs")} exports comments(); stop and hand this error to the owner as a bug in agent-gates; no command you run resolves it\n`,
+  });
+});

@@ -4,17 +4,20 @@ import { join } from "node:path";
 import {
   bypassing,
   checkout,
+  cloneOf,
   commitAs,
   committing,
   git,
   githubStep,
   gitRan,
   install,
+  NO_COMMIT,
   type Outcome,
   readText,
   removeScratch,
   scratchDir,
   shell,
+  stepScript,
   writeFiles,
 } from "./cli";
 
@@ -23,8 +26,6 @@ afterEach(removeScratch);
 const TYPES = ["feat", "fix", "refactor", "docs", "test", "chore", "style", "perf", "build", "ci"];
 
 const NOT_CONVENTIONAL = "subject is not a Conventional Commit (type(scope): what changed).";
-
-const ZERO = "0".repeat(40);
 
 const SCISSORS = "# ------------------------ >8 ------------------------";
 
@@ -147,22 +148,6 @@ test("AC-17 lets a merge commit through", () => {
   expect(git(dir, ["log", "-1", "--format=%P %s"])).toMatch(/^\w{40} \w{40} Merge branch 'side'$/);
 });
 
-function stepScripts(workflow: string): readonly string[] {
-  const scripts: string[] = [];
-  const lines = workflow.split("\n");
-  lines.forEach((line, at) => {
-    const indent = /^( *)run: \|$/.exec(line)?.[1]?.length;
-    if (indent === undefined) return;
-    const body: string[] = [];
-    for (const next of lines.slice(at + 1)) {
-      if (next.trim() !== "" && next.length - next.trimStart().length <= indent) break;
-      body.push(next.slice(indent + 2));
-    }
-    scripts.push(`${body.join("\n").trimEnd()}\n`);
-  });
-  return scripts;
-}
-
 type Push = {
   readonly base: string;
   readonly head: string;
@@ -172,7 +157,12 @@ type Push = {
 type Judged = { readonly range: string; readonly status: number | null; readonly stderr: string };
 
 function runWorkflow(dir: string, push: Push): Judged {
-  const [resolve = "", judge = ""] = stepScripts(readText(dir, ".github/workflows/commits.yml"));
+  const workflow = readText(dir, ".github/workflows/commits.yml");
+  const resolve = stepScript(
+    workflow,
+    "Resolve the pushed range, from the default branch when the push opens a branch",
+  );
+  const judge = stepScript(workflow, "Judge each subject");
   const runner = scratchDir();
   const output = join(runner, "output");
   writeFileSync(output, "");
@@ -209,12 +199,6 @@ function mergeSide(dir: string): void {
   git(dir, ["branch", "-q", "-D", "side"]);
 }
 
-function cloneOf(dir: string): string {
-  const clone = join(scratchDir(), "clone");
-  git(dir, ["clone", "-q", dir, clone]);
-  return clone;
-}
-
 function autosquashRefusal(sha: string): string {
   return `${sha} is an autosquash commit left in the range; squash it into the commit it names.\n`;
 }
@@ -247,7 +231,7 @@ test("AC-18 judges every commit the pushed range holds in CI", () => {
   commitAs(branch, "feat: add a branch thing");
   mergeSide(branch);
   const branchHead = git(branch, ["rev-parse", "HEAD"]);
-  const opening = { base: ZERO, head: branchHead, ref: "refs/heads/feature" };
+  const opening = { base: NO_COMMIT, head: branchHead, ref: "refs/heads/feature" };
   expect(runWorkflow(branch, opening)).toEqual({
     range: `origin/main..${branchHead}`,
     status: 0,
@@ -274,7 +258,7 @@ test("AC-18 judges every commit the pushed range holds in CI", () => {
     stderr: "",
   });
 
-  const firstPush = { base: ZERO, head: git(origin, ["rev-parse", "HEAD"]), ref: "refs/heads/main" };
+  const firstPush = { base: NO_COMMIT, head: git(origin, ["rev-parse", "HEAD"]), ref: "refs/heads/main" };
   expect(runWorkflow(origin, firstPush)).toEqual({
     range: firstPush.head,
     status: 1,
@@ -284,7 +268,7 @@ test("AC-18 judges every commit the pushed range holds in CI", () => {
   const lone = upstream();
   git(lone, ["checkout", "-q", "-b", "feature"]);
   const loneHead = commitAs(lone, "feat: add a branch thing");
-  expect(runWorkflow(lone, { base: ZERO, head: loneHead, ref: "refs/heads/feature" })).toEqual({
+  expect(runWorkflow(lone, { base: NO_COMMIT, head: loneHead, ref: "refs/heads/feature" })).toEqual({
     range: loneHead,
     status: 1,
     stderr: `commit-msg: ${NOT_CONVENTIONAL}\n  got: Add an old thing\n`,
