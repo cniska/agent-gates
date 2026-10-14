@@ -14,6 +14,7 @@ import {
   git,
   githubStep,
   gitRan,
+  install,
   installed,
   installs,
   jsonLine,
@@ -53,7 +54,7 @@ function usageCode(dir: string, args: readonly string[]): readonly unknown[] {
 
 function formatted(files: Readonly<Record<string, string>> = {}): string {
   const dir = checkout({ "fmt.sh": UPPERCASE, ...files });
-  installed(dir, ["format", "--command", "sh fmt.sh"]);
+  install(dir, ["format", "--command", "sh fmt.sh"]);
   git(dir, ["add", "-A"]);
   commitAs(dir, "chore: start");
   return dir;
@@ -103,7 +104,7 @@ test("AC-30 refuses format without --command, which then installs a working gate
 
 test("AC-31 keeps the commands a reinstall is not given, and rewrites one it is", () => {
   const dir = checkout();
-  installed(dir, ["format", "--command", "sh fmt.sh", "--setup", "pnpm install"]);
+  install(dir, ["format", "--command", "sh fmt.sh", "--setup", "pnpm install"]);
   expect(installed(dir, [])).toMatchObject({
     files: each("installed", FILES),
     fills: { command: "sh fmt.sh", setup: "pnpm install" },
@@ -194,7 +195,7 @@ test("AC-33 runs the CI setup, then refuses unformatted files", () => {
   expect(setup).toBe(`sh ${SETUP}`);
   expect(githubStep(dir, setup, {})).toEqual({ status: 0, stdout: "", stderr: "" });
   expect(existsSync(join(dir, "out.log"))).toBe(false);
-  installed(dir, ["format", "--setup", "echo set up > out.log"]);
+  install(dir, ["format", "--setup", "echo set up > out.log"]);
   expect(githubStep(dir, setup, {})).toEqual({ status: 0, stdout: "", stderr: "" });
   expect(readText(dir, "out.log")).toBe("set up\n");
   git(dir, ["add", "-A"]);
@@ -214,7 +215,7 @@ test("AC-33 runs the CI setup, then refuses unformatted files", () => {
 
 test("AC-34 checks the commands' programs are on PATH, and fails a hook with no command", () => {
   const dir = checkout();
-  installed(dir, ["format", "--command", "no-such-formatter --write"]);
+  install(dir, ["format", "--command", "no-such-formatter --write"]);
   expect(doctor(dir).status).toBe(1);
   expect(check(dir, "format command")).toEqual({
     name: "format command",
@@ -229,7 +230,7 @@ test("AC-34 checks the commands' programs are on PATH, and fails a hook with no 
     detail: "no setup command is installed, so the format workflow runs on a bare checkout",
     fix: NAME_THE_SETUP,
   });
-  installed(dir, ["format", "--command", "sh fmt.sh", "--setup", "no-such-tool install"]);
+  install(dir, ["format", "--command", "sh fmt.sh", "--setup", "no-such-tool install"]);
   expect(check(dir, "format command")?.state).toBe("ok");
   expect(check(dir, "CI setup")).toEqual({
     name: "CI setup",

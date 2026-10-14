@@ -99,9 +99,9 @@ export function check(dir: string, name: string): Check | undefined {
   return doctor(dir).checks.find((found) => found.name === name);
 }
 
-export function install(dir: string, gates: readonly string[]): void {
-  const ran = agentGates(dir, ["install", ...gates]);
-  if (ran.status !== 0) throw new Error(`install ${gates.join(" ")} exited ${ran.status}: ${ran.stderr}`);
+export function install(dir: string, args: readonly string[]): void {
+  const ran = agentGates(dir, ["install", ...args]);
+  if (ran.status !== 0) throw new Error(`install ${args.join(" ")} exited ${ran.status}: ${ran.stderr}`);
 }
 
 export type FileResult = { readonly target: string; readonly state: string; readonly backup: string | null };
