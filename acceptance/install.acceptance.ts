@@ -17,7 +17,7 @@ import {
   shell,
   writeFiles,
 } from "./cli";
-import { LANGUAGES } from "./no-comments";
+import { ALL_LANGUAGES, LANGUAGES } from "./no-comments";
 
 afterEach(removeScratch);
 
@@ -119,7 +119,7 @@ test("AC-4 installs each no-comments language, and reads the gates back from the
   }
 
   const dir = checkout();
-  const gates = ["commit-subject", ...LANGUAGES.map((language) => `no-comments-${language}`)];
+  const gates = ["commit-subject", ...ALL_LANGUAGES];
   for (const gate of gates) install(dir, [gate]);
   installs(dir, [], {
     gates,
