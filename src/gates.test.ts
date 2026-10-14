@@ -89,6 +89,9 @@ describe("this repo", () => {
       ".githooks/commit-msg",
       ".github/workflows/commits.yml",
       ".githooks/.gitattributes",
+      ".githooks/pre-commit.d/format",
+      ".github/workflows/format.yml",
+      ".githooks/ci-setup",
       ".githooks/pre-commit",
       ".githooks/pre-commit.d/no-comments",
       ".githooks/no-comments/scan.cjs",
@@ -97,6 +100,8 @@ describe("this repo", () => {
       ".githooks/no-comments/shell.cjs",
       "hooksPath",
       "prepare",
+      "format command",
+      "CI setup",
       "no-comments languages",
       "no-comments backlog",
     ]);
