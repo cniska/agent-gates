@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { rmSync } from "node:fs";
+import { readdirSync, realpathSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import {
   agentGates,
@@ -7,6 +7,7 @@ import {
   check,
   checkout,
   git,
+  gitRan,
   install,
   jsonLine,
   removeScratch,
@@ -121,4 +122,53 @@ test("AC-13 counts the comments tracked files hold, through the installed adapte
   });
 });
 
-test.todo("AC-29 installs the gate of each tracked language, and refuses when none is tracked", () => {});
+test("AC-29 installs the gate of each tracked language, and refuses when none is tracked", () => {
+  const dir = checkout({ "a.ts": "export const a = 1;\n", "b.py": "x = 1\n" });
+  git(dir, ["add", "-A"]);
+  doctorReports(dir, [
+    { name: "gates", state: "warn", detail: "no gate is installed", fix: INSTALL_USAGE },
+    {
+      name: "no-comments languages",
+      state: "warn",
+      detail:
+        "javascript reads 1 tracked file, but no-comments-javascript is not installed; python reads 1 tracked file, but no-comments-python is not installed",
+      fix: "agent-gates install no-comments",
+    },
+  ]);
+
+  const installed = agentGates(dir, ["install", "no-comments"]);
+  expect([installed.status, installed.stderr]).toEqual([0, ""]);
+  expect(jsonLine(installed.stdout)).toEqual({
+    command: "install",
+    ok: true,
+    result: {
+      gates: ["no-comments-javascript", "no-comments-python"],
+      files: [
+        ...NO_COMMENTS_FILES,
+        ".githooks/no-comments/javascript.cjs",
+        ".githooks/no-comments/python.cjs",
+      ].map((target) => ({ target, state: "missing", backup: null })),
+      prepare: "absent",
+      fills: { command: null, setup: null },
+    },
+  });
+
+  const untyped = checkout({ "notes.txt": "a note\n" });
+  git(untyped, ["add", "-A"]);
+  const root = realpathSync(untyped);
+  const refused = agentGates(untyped, ["install", "no-comments"]);
+  expect([refused.status, refused.stdout]).toEqual([1, ""]);
+  expect(jsonLine(refused.stderr)).toEqual({
+    command: "install",
+    ok: false,
+    error: {
+      kind: "refusal",
+      code: "no_language_tracked",
+      message: `${root} tracks no file a no-comments gate reads, so there is no language to install`,
+      meta: { root },
+      resolve: `stop and ask the owner which gates the project runs, then ${INSTALL_USAGE}`,
+    },
+  });
+  expect(readdirSync(untyped).sort()).toEqual([".git", "notes.txt"]);
+  expect(gitRan(untyped, ["config", "--get", "core.hooksPath"]).status).toBe(1);
+});
