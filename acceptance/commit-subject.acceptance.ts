@@ -2,7 +2,9 @@ import { afterEach, expect, test } from "bun:test";
 import { chmodSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  bypassing,
   checkout,
+  commitAs,
   git,
   githubStep,
   gitRan,
@@ -25,15 +27,6 @@ const ZERO = "0".repeat(40);
 const SCISSORS = "# ------------------------ >8 ------------------------";
 
 type Outcome = { readonly status: number | null; readonly stderr: string; readonly made: boolean };
-
-function bypassing(dir: string, args: readonly string[]): string {
-  return git(dir, ["-c", "core.hooksPath=/dev/null", ...args]);
-}
-
-function commitAs(dir: string, subject: string): string {
-  bypassing(dir, ["commit", "-q", "--allow-empty", "-m", subject]);
-  return git(dir, ["rev-parse", "HEAD"]);
-}
 
 function gated(): string {
   const dir = checkout();
@@ -77,7 +70,8 @@ function refused(dir: string, message: string, reason: string, subject: string, 
 test("AC-14 runs each executable pre-commit step in name order, stopping at the first failure", () => {
   const dir = checkout();
   install(dir, ["no-comments-javascript"]);
-  const log = join(scratchDir(), "log");
+  const logs = scratchDir();
+  const log = join(logs, "log");
   const steps: Record<string, string> = {};
   for (const [name, status] of [
     ["30-second", 0],
@@ -92,7 +86,7 @@ test("AC-14 runs each executable pre-commit step in name order, stopping at the 
     if (!path.endsWith("not-executable")) chmodSync(join(dir, path), 0o755);
 
   expect(shell(dir, ".githooks/pre-commit")).toEqual({ status: 7, stdout: "", stderr: "" });
-  expect(readText(log, "")).toBe("10-first\n30-second\n40-fails\n");
+  expect(readText(logs, "log")).toBe("10-first\n30-second\n40-fails\n");
 });
 
 test("AC-15 refuses a subject that breaks a rule, naming the reason", () => {
@@ -198,20 +192,20 @@ function runWorkflow(dir: string, push: Push): Judged {
     DEFAULT_BRANCH: "main",
   });
   if (resolved.status !== 0) throw new Error(`the range step failed: ${resolved.stderr}`);
-  const range = readText(output, "")
+  const range = readText(runner, "output")
     .replace(/^range=/, "")
     .trimEnd();
   const judged = githubStep(dir, judge, { ...github, RANGE: range });
   return { range, status: judged.status, stderr: judged.stderr };
 }
 
-function upstream(): { readonly dir: string; readonly bad: string } {
+function upstream(): string {
   const dir = checkout();
   install(dir, ["commit-subject"]);
   git(dir, ["add", "-A"]);
   commitAs(dir, "chore: start");
-  const bad = commitAs(dir, "Add an old thing");
-  return { dir, bad };
+  commitAs(dir, "Add an old thing");
+  return dir;
 }
 
 function mergeSide(dir: string): void {
@@ -234,7 +228,7 @@ function autosquashRefusal(sha: string): string {
 
 test("AC-18 judges every commit the pushed range holds in CI", () => {
   const origin = upstream();
-  const clone = cloneOf(origin.dir);
+  const clone = cloneOf(origin);
   const before = git(clone, ["rev-parse", "HEAD"]);
   commitAs(clone, "feat: add a new thing");
   mergeSide(clone);
@@ -255,7 +249,7 @@ test("AC-18 judges every commit the pushed range holds in CI", () => {
     stderr: `commit-msg: ${NOT_CONVENTIONAL}\n  got: Add a new thing\n`,
   });
 
-  const branch = cloneOf(origin.dir);
+  const branch = cloneOf(origin);
   git(branch, ["checkout", "-q", "-b", "feature"]);
   commitAs(branch, "feat: add a branch thing");
   mergeSide(branch);
@@ -287,17 +281,17 @@ test("AC-18 judges every commit the pushed range holds in CI", () => {
     stderr: "",
   });
 
-  const firstPush = { base: ZERO, head: git(origin.dir, ["rev-parse", "HEAD"]), ref: "refs/heads/main" };
-  expect(runWorkflow(origin.dir, firstPush)).toEqual({
+  const firstPush = { base: ZERO, head: git(origin, ["rev-parse", "HEAD"]), ref: "refs/heads/main" };
+  expect(runWorkflow(origin, firstPush)).toEqual({
     range: firstPush.head,
     status: 1,
     stderr: `commit-msg: ${NOT_CONVENTIONAL}\n  got: Add an old thing\n`,
   });
 
   const lone = upstream();
-  git(lone.dir, ["checkout", "-q", "-b", "feature"]);
-  const loneHead = commitAs(lone.dir, "feat: add a branch thing");
-  expect(runWorkflow(lone.dir, { base: ZERO, head: loneHead, ref: "refs/heads/feature" })).toEqual({
+  git(lone, ["checkout", "-q", "-b", "feature"]);
+  const loneHead = commitAs(lone, "feat: add a branch thing");
+  expect(runWorkflow(lone, { base: ZERO, head: loneHead, ref: "refs/heads/feature" })).toEqual({
     range: loneHead,
     status: 1,
     stderr: `commit-msg: ${NOT_CONVENTIONAL}\n  got: Add an old thing\n`,

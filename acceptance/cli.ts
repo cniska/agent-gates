@@ -100,6 +100,15 @@ export function git(dir: string, args: readonly string[]): string {
   return ran.stdout.trim();
 }
 
+export function bypassing(dir: string, args: readonly string[]): string {
+  return git(dir, ["-c", "core.hooksPath=/dev/null", ...args]);
+}
+
+export function commitAs(dir: string, subject: string): string {
+  bypassing(dir, ["commit", "-q", "--allow-empty", "-m", subject]);
+  return git(dir, ["rev-parse", "HEAD"]);
+}
+
 export function shell(dir: string, script: string): Ran {
   return run("sh", ["-c", script], dir);
 }

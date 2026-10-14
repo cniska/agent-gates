@@ -5,6 +5,7 @@ import {
   agentGates,
   check,
   checkout,
+  commitAs,
   doctor,
   git,
   install,
@@ -464,7 +465,7 @@ test("AC-9 wires the prepare script, keeping the manifest's shape, and refuses a
   });
 
   git(fresh, ["add", "-A"]);
-  git(fresh, ["-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "chore: start"]);
+  commitAs(fresh, "chore: start");
   const clone = join(scratchDir(), "clone");
   git(fresh, ["clone", "-q", fresh, clone]);
   expect(hooksPath(clone)).toBe("");
