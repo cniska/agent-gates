@@ -155,13 +155,13 @@ export function pathOf(tools: readonly string[]): string {
 export function stepScript(workflow: string, name: string): string {
   const lines = workflow.split("\n");
   const named = lines.findIndex((line) => line.trim() === `- name: ${name}`);
-  const run = lines.findIndex((line, at) => at > named && /^ *run: \|$/.test(line));
-  const between = lines.slice(named + 1, run);
-  if (named < 0 || run < 0 || between.some((line) => /^ *- /.test(line)))
+  const runLine = lines.findIndex((line, at) => at > named && /^ *run: \|$/.test(line));
+  const between = lines.slice(named + 1, runLine);
+  if (named < 0 || runLine < 0 || between.some((line) => /^ *- /.test(line)))
     throw new Error(`the workflow has no step named ${name} that runs a script`);
-  const indent = (lines[run] ?? "").indexOf("run:");
+  const indent = (lines[runLine] ?? "").indexOf("run:");
   const body: string[] = [];
-  for (const line of lines.slice(run + 1)) {
+  for (const line of lines.slice(runLine + 1)) {
     if (line.trim() !== "" && line.length - line.trimStart().length <= indent) break;
     body.push(line.slice(indent + 2));
   }

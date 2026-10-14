@@ -68,10 +68,10 @@ function lines(texts: readonly string[]): string {
   return texts.map((text) => `${text}\n`).join("");
 }
 
-function commentReply(kept: readonly string[], findings: Findings): string {
+function commentReply(kept: readonly string[], findings: Findings, lead = "this change adds"): string {
   const count = findings.reduce((total, [, found]) => total + found.length, 0);
   return lines([
-    `no-comments: this change adds ${count} ${count === 1 ? "comment" : "comments"}. ${REMOVE}`,
+    `no-comments: ${lead} ${count} ${count === 1 ? "comment" : "comments"}. ${REMOVE}`,
     ...kept,
     ...findings.flatMap(([path, found]) => [path, ...found.map((line) => `  ${line}`)]),
   ]);
@@ -351,7 +351,8 @@ test("AC-25 sweeps the tracked files, and exits 2 or 3 when it cannot judge", ()
         ["a.ts", ["1  // a"]],
         ["b.ts", ["1  // b"]],
       ],
-    ).replace("this change adds", "the tracked files hold"),
+      "the tracked files hold",
+    ),
   });
 
   for (const [args, count] of [
@@ -365,8 +366,8 @@ test("AC-25 sweeps the tracked files, and exits 2 or 3 when it cannot judge", ()
       stderr: `no-comments: ${USAGE}, and got ${count}; ${USAGE_FIX}\n`,
     });
 
-  const node = pathOf(["git", "sh"]);
-  expect(shell(dir, ".githooks/pre-commit.d/no-comments", { PATH: node })).toEqual({
+  const withoutNode = pathOf(["git", "sh"]);
+  expect(shell(dir, ".githooks/pre-commit.d/no-comments", { PATH: withoutNode })).toEqual({
     status: 3,
     stdout: "",
     stderr: "no-comments: node is not on PATH, so the commit's comments cannot be judged; install Node.js\n",
