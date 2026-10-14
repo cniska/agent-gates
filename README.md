@@ -73,7 +73,7 @@ A comment stays only when a tool reads it, and deleting it changes what that too
 
 | Language | Kept comments |
 | --- | --- |
-| JavaScript and TypeScript | the first-line shebang, with no `#` word or `\c` after `#!`; `#__PURE__` or `@__PURE__` alone; a leading `/// <reference …/>` holding only its attributes |
+| JavaScript and TypeScript | the first-line shebang, with no `#` word or `\c` after `#!`; a leading `/// <reference …/>` holding only its attributes |
 | Dart | the first-line shebang, with no `#` word or `\c` after `#!` |
 | SQL | drizzle's `--> statement-breakpoint` |
 | shell | the first-line shebang, with no `#` word or `\c` after `#!` |

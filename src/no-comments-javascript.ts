@@ -110,7 +110,6 @@ function leadingLine({ span }: Read): boolean {
 
 const KEPT: readonly KeptForm<Read>[] = [
   SHEBANG,
-  directive("`#__PURE__` or `@__PURE__` alone", { pattern: /[\s*]*[#@]__PURE__/ }),
   directive("a leading `/// <reference …/>` holding only its attributes", {
     pattern: TRIPLE_SLASH_REFERENCE,
     where: leadingLine,

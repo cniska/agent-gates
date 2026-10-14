@@ -138,6 +138,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 16, sha256: "97122de937f2bddbf93bab52bf2a73f35cf7a2682456bd8b615ac3bb0dfbeb34" },
     { version: 17, sha256: "104e652efe9d20fdb4039a55bc5e0e5ceadd38dbb1a433d3414e8a73796637b0" },
     { version: 18, sha256: "a816957029a531e031f48d084cdffb94eac0f5d793ac886e06b21a6f0a302898" },
+    { version: 19, sha256: "f6e877cc5eb4c4e4b543043b25901688a63c6f48fab5492915395c2c7c4710ad" },
   ]),
   dart: adapterFile("dart", [
     { version: 1, sha256: "25cc760fcd6ef317da0c52457e79e84926f4b87f81e67630b40dfd666f0feb2a" },

@@ -44,7 +44,7 @@ function unparsed(line: number, reason: string): Reading {
 }
 
 const KEPT_IN_JAVASCRIPT =
-  "kept in JavaScript and TypeScript: the first-line shebang, with no `#` word or `\\c` after `#!`; `#__PURE__` or `@__PURE__` alone; a leading `/// <reference …/>` holding only its attributes; a gate marker on a line of its own";
+  "kept in JavaScript and TypeScript: the first-line shebang, with no `#` word or `\\c` after `#!`; a leading `/// <reference …/>` holding only its attributes; a gate marker on a line of its own";
 
 const KEPT_IN_RUST =
   "kept in Rust: the first-line shebang, with no `#` word or `\\c` after `#!`; a gate marker on a line of its own";
@@ -172,14 +172,11 @@ describe("the javascript adapter", () => {
     expect(comments("a.ts", 'const s = "\u2028";\rconst = ;\n')).toMatchObject({ kind: "unparsed", line: 1 });
   });
 
-  test("keeps `#__PURE__` alone and an exact leading `/// <reference`", () => {
+  test("keeps an exact leading `/// <reference`", () => {
     const text = [
       '/// <reference types="bun" />',
       "/// <reference lib='dom' />",
       '/// <reference types="node" resolution-mode="import" />',
-      "let a = /* #__PURE__ */ f();",
-      "let b = /* @__PURE__ */ f();",
-      "// #__PURE__",
       "g();",
     ].join("\n");
     expect(comments("a.ts", `${text}\n`)).toEqual(read([]));
@@ -205,6 +202,9 @@ describe("the javascript adapter", () => {
       "// biome-ignore format: x",
       "// biome-ignore-all lint/suspicious/noConsole: x",
       "// prettier-ignore",
+      "/* #__PURE__ */",
+      "/* @__PURE__ */",
+      "// #__PURE__",
       "/* #__PURE__ call */",
       "/** @vitest-environment jsdom */",
       "/**\n * #__PURE__\n */",

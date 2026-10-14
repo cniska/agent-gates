@@ -30,8 +30,6 @@ function at(language: Language, comment: string): Lookalike {
 }
 
 const KEPT: readonly Lookalike[] = [
-  { language: "javascript", path: "a.ts", text: "let a = /* #__PURE__ */ f();\n" },
-  { language: "javascript", path: "a.ts", text: "// #__PURE__   \nf();\n" },
   at("javascript", '/// <reference types="bun" />'),
   at("javascript", '/// <reference types="bun" />   '),
   at("sql", "--> statement-breakpoint  "),
@@ -64,7 +62,7 @@ const REFUSED: readonly Lookalike[] = [
   at("javascript", "// eslint-disable-next-line no-console"),
   at("javascript", "// biome-ignore lint/a/b: reason"),
   at("javascript", "// prettier-ignore"),
-  { language: "javascript", path: "a.ts", text: "let a = /* #__PURE__ x */ f();\n" },
+  { language: "javascript", path: "a.ts", text: "let a = /* #__PURE__ */ f();\n" },
   { language: "javascript", path: "a.ts", text: 'let a = 1;\n/// <reference types="bun" />\n' },
   at("javascript", '/// <reference types="bun" /> why'),
   at("dart", "// ignore: unused_import"),
