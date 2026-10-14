@@ -51,6 +51,8 @@ const MISSING = "missing";
 
 const NEWLINE = 0x0a;
 
+const DIFFERS = 1;
+
 function git(repo: string, args: readonly string[], input: string | null = null): GitRun {
   const run = spawnSync("git", ["-C", repo, ...args], {
     input: input ?? undefined,
@@ -127,8 +129,18 @@ export function nulFields(output: Buffer): string[] {
   return fields;
 }
 
+export function diffOutput(repo: string, args: readonly string[]): Buffer {
+  const run = git(repo, args);
+  if (run.status !== 0 && run.status !== DIFFERS) throw failed(repo, args, run);
+  return run.out;
+}
+
+export function isCommit(repo: string, revision: string): boolean {
+  return git(repo, ["cat-file", "-e", `${revision}^{commit}`]).status === 0;
+}
+
 export function mergeBase(repo: string, base: string, head: string): string | null {
-  if (git(repo, ["cat-file", "-e", `${base}^{commit}`]).status !== 0) return null;
+  if (!isCommit(repo, base)) return null;
   const args = ["merge-base", base, head];
   const run = git(repo, args);
   if (run.status === 1) return null;

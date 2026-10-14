@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { gatesDoctor } from "./doctor";
 import { bundled } from "./gate-bundles";
@@ -1267,6 +1275,74 @@ describe("the pre-commit hook", () => {
   });
 });
 
+describe("the one-file scan", () => {
+  function fileScan(dir: string, path: string, cwd: string = dir) {
+    const run = spawnSync("node", [join(dir, ".githooks/no-comments/scan.cjs"), "--file", path], {
+      cwd,
+      encoding: "utf8",
+    });
+    expect(run.stdout).toBe("");
+    return { status: run.status, stderr: run.stderr };
+  }
+
+  test("refuses the comments the working-tree file adds against HEAD, whatever the index holds", () => {
+    const dir = gated({ "src/a.ts": "// old\nexport const a = 1;\n" });
+    commitPastHooks(dir, "feat: start");
+    expect(fileScan(dir, "src/a.ts")).toEqual({ status: 0, stderr: "" });
+    writeFiles(dir, { "src/a.ts": "// old\nexport const a = 2; // new\n", "src/b.ts": "// other\n" });
+    const refused = { status: 1, stderr: refusalText(["src/a.ts", "  2  // new"]) };
+    expect(fileScan(dir, join(dir, "src/a.ts"))).toEqual(refused);
+    expect(fileScan(dir, "a.ts", join(dir, "src"))).toEqual(refused);
+    git(dir, ["add", "src/a.ts"]);
+    writeFiles(dir, { "src/a.ts": "// old\nexport const a = 2;\n" });
+    expect(fileScan(dir, "src/a.ts")).toEqual({ status: 0, stderr: "" });
+  });
+
+  test("judges a file HEAD lacks whole, in a checkout with no commit too", () => {
+    const dir = gated({ "new.ts": "// why\nexport {};\n" });
+    expect(fileScan(dir, "new.ts")).toEqual({ status: 1, stderr: refusalText(["new.ts", "  1  // why"]) });
+    commitPastHooks(dir, "feat: start");
+    writeFiles(dir, { "next.ts": "export {}; // why\n" });
+    expect(fileScan(dir, "next.ts")).toEqual({ status: 1, stderr: refusalText(["next.ts", "  1  // why"]) });
+  });
+
+  test("skips what a commit would not judge: ignored, generated, binary, deleted and non-regular files", () => {
+    const dir = gated({
+      ".gitignore": "out/\n",
+      ".gitattributes": "src/gen.ts linguist-generated\n",
+      "src/gone.ts": "export {};\n",
+    });
+    commitPastHooks(dir, "feat: start");
+    writeFiles(dir, {
+      "out/built.js": "// built\n",
+      "src/gen.ts": "// made by a tool\n",
+      "src/data.js": "\0// binary\n",
+      "README.md": "# prose\n",
+    });
+    rmSync(join(dir, "src/gone.ts"));
+    symlinkSync("// a link target", join(dir, "src/link.ts"));
+    for (const path of [
+      "out/built.js",
+      "src/gen.ts",
+      "src/data.js",
+      "README.md",
+      "src/gone.ts",
+      "src/link.ts",
+    ])
+      expect(fileScan(dir, path)).toEqual({ status: 0, stderr: "" });
+  });
+
+  test("exits 2 for a file outside the checkout, judging nothing", () => {
+    const dir = gated();
+    const outside = join(scratchDir(), "a.ts");
+    writeFileSync(outside, "// why\n");
+    expect(fileScan(dir, outside)).toEqual({
+      status: 2,
+      stderr: `no-comments: ${outside} is not inside the checkout at ${realpathSync(dir)}; run the scan from inside the checkout that holds ${outside}\n`,
+    });
+  });
+});
+
 describe("the pre-commit dispatcher", () => {
   test("runs each executable step in order and stops at the first that fails", () => {
     const dir = gated();
@@ -1381,7 +1457,12 @@ describe("the no-comments workflow", () => {
   test("exits 2 on a call that names a base without a head, or --all with one, or a flag it does not know", () => {
     const dir = gated();
     const usage = (got: string) =>
-      `no-comments: scan.cjs takes no arguments, --all, or a base and a head, each optionally after --format github, and got ${got}; node scan.cjs [--format github] [--all | <base> <head>]\n`;
+      `no-comments: scan.cjs takes no arguments, --all, a base and a head, or --file and a path, each optionally after --format github, and got ${got}; node scan.cjs [--format github] [--all | <base> <head> | --file <path>]\n`;
+    expect(scan(dir, ["--file"])).toEqual({ status: 2, stderr: usage("1: --file") });
+    expect(scan(dir, ["--file", "a.ts", "b.ts"])).toEqual({
+      status: 2,
+      stderr: usage("3: --file a.ts b.ts"),
+    });
     expect(scan(dir, ["HEAD"])).toEqual({ status: 2, stderr: usage("1: HEAD") });
     expect(scan(dir, ["--all", "HEAD"])).toEqual({ status: 2, stderr: usage("2: --all HEAD") });
     expect(scan(dir, ["--format", "json"])).toEqual({ status: 2, stderr: usage("2: --format json") });

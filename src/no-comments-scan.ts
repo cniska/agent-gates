@@ -22,7 +22,7 @@ type FileText = { readonly path: string; readonly text: string };
 
 type JudgedHead = { readonly file: FileText; readonly base: Base | null };
 
-type JudgedChange = { readonly heads: readonly JudgedHead[]; readonly bases: readonly FileText[] };
+export type JudgedChange = { readonly heads: readonly JudgedHead[]; readonly bases: readonly FileText[] };
 
 type Pool = ReadonlyMap<string, number>;
 
@@ -44,6 +44,10 @@ export type AdapterOf = (language: Language) => Adapter | null;
 type LanguageReading = { readonly language: Language; readonly reading: Reading };
 
 const REGULAR_FILE_MODES = new Set(["100644", "100755"]);
+
+export function isRegularFileMode(mode: string): boolean {
+  return REGULAR_FILE_MODES.has(mode);
+}
 
 const CHANGES = ["-M", "-C", "--diff-filter=AMTRC", "-z"];
 
@@ -93,15 +97,15 @@ function changesIn(fields: readonly string[]): Change[] {
         path !== undefined,
       "git diff --raw prints two modes, two blobs, a status and its paths",
     );
-    if (!REGULAR_FILE_MODES.has(mode)) continue;
+    if (!isRegularFileMode(mode)) continue;
     const origin: Origin = kind === COPIED ? "copy" : "own";
-    const base = REGULAR_FILE_MODES.has(baseMode) ? { origin, path: basePath, blob: baseBlob } : null;
+    const base = isRegularFileMode(baseMode) ? { origin, path: basePath, blob: baseBlob } : null;
     changes.push({ head: { path, blob }, base });
   }
   return changes;
 }
 
-function binaryPaths(fields: readonly string[]): Set<string> {
+export function binaryPaths(fields: readonly string[]): Set<string> {
   const binary = new Set<string>();
   let at = 0;
   while (at < fields.length) {
