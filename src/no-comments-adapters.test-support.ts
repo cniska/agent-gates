@@ -1,6 +1,5 @@
 import type { Adapter } from "./no-comments-adapter";
 import * as dart from "./no-comments-dart";
-import * as go from "./no-comments-go";
 import * as javascript from "./no-comments-javascript";
 import type { Language } from "./no-comments-languages";
 import * as python from "./no-comments-python";
@@ -14,6 +13,5 @@ export const ADAPTERS: Readonly<Record<Language, Adapter>> = {
   sql,
   shell,
   rust,
-  go,
   python,
 };

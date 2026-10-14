@@ -284,13 +284,13 @@ function spansOf(text: string, tokens: readonly Token[]): Span[] {
   return spans;
 }
 
-function commentSpans(text: string): Lexed<Span, null> {
+function commentSpans(text: string): Lexed<Span> {
   const tokenized = tokensOf(text);
   if (tokenized.kind === "stopped") return tokenized;
   const end = shebangEnd(text);
   const shebang: Span[] =
     end === 0 ? [] : [{ start: 0, end, bodyStart: SHEBANG_PREFIX.length, bodyEnd: end, style: "line" }];
-  return { kind: "lexed", spans: [...shebang, ...spansOf(text, tokenized.tokens)], facts: null };
+  return { kind: "lexed", spans: [...shebang, ...spansOf(text, tokenized.tokens)] };
 }
 
 export const { comments, kept } = adapter({

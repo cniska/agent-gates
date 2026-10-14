@@ -291,7 +291,7 @@ function loneStrings(code: readonly Code[]): Range[] {
   return found;
 }
 
-function commentSpans(text: string): Lexed<Span, null> {
+function commentSpans(text: string): Lexed<Span> {
   const tokenized = tokensOf(text);
   if (tokenized.kind === "stopped") return tokenized;
   const comments = tokenized.comments.map((comment) => ({ ...comment, style: "line" as const }));
@@ -307,7 +307,7 @@ function commentSpans(text: string): Lexed<Span, null> {
         style,
       }),
     );
-  return { kind: "lexed", spans, facts: null };
+  return { kind: "lexed", spans };
 }
 
 export const { comments, kept } = adapter({ lex: commentSpans, kept: [SHEBANG] });

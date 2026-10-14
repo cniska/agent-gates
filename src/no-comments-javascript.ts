@@ -14,7 +14,7 @@ import type { Stopped } from "./no-comments-spans";
 
 type Dialect = { readonly syntax: ParserPlugin[] };
 
-type Read = CommentRead<LeadingSpan, null>;
+type Read = CommentRead<LeadingSpan>;
 
 const REFERENCE_VALUE = `\\s*=\\s*(?:'[^']*'|"[^"]*")`;
 
@@ -58,7 +58,7 @@ function shebangSpan(start: number | null | undefined, end: number | null | unde
   return { start, end, bodyStart: start + SHEBANG_PREFIX.length, bodyEnd: end, style: "line", leading: true };
 }
 
-function parsedWith(text: string, plugins: ParserPlugin[]): Lexed<LeadingSpan, null> {
+function parsedWith(text: string, plugins: ParserPlugin[]): Lexed<LeadingSpan> {
   try {
     const file = parse(text, {
       sourceType: "unambiguous",
@@ -89,14 +89,14 @@ function parsedWith(text: string, plugins: ParserPlugin[]): Lexed<LeadingSpan, n
       interpreter === null || interpreter === undefined
         ? []
         : [shebangSpan(interpreter.start, interpreter.end)];
-    return { kind: "lexed", spans: [...shebang, ...spans], facts: null };
+    return { kind: "lexed", spans: [...shebang, ...spans] };
   } catch (error) {
     if (error instanceof SyntaxError) return rejected(error);
     throw error;
   }
 }
 
-function lexed(text: string, dialect: Dialect): Lexed<LeadingSpan, null> {
+function lexed(text: string, dialect: Dialect): Lexed<LeadingSpan> {
   const stageThree = parsedWith(text, [...dialect.syntax, ...STAGE_THREE_DECORATORS]);
   if (stageThree.kind === "lexed") return stageThree;
   const legacy = parsedWith(text, [...dialect.syntax, ...LEGACY_DECORATORS]);

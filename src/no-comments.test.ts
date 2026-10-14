@@ -31,8 +31,6 @@ const shellComments = ADAPTERS.shell.comments;
 
 const rustComments = ADAPTERS.rust.comments;
 
-const goComments = ADAPTERS.go.comments;
-
 const pythonComments = ADAPTERS.python.comments;
 
 function read(comments: readonly Comment[]): Reading {
@@ -48,9 +46,6 @@ const KEPT_IN_JAVASCRIPT =
 
 const KEPT_IN_RUST =
   "kept in Rust: the first-line shebang, with no `#` word or `\\c` after `#!`; a gate marker on a line of its own";
-
-const KEPT_IN_GO =
-  'kept in Go: `//go:build` and `//go:debug` with their argument, before `package`; `//go:embed` with its patterns, above a `var`; `//go:generate`, `//go:linkname`, `//go:wasmimport`, `//go:wasmexport` and `//go:fix` with their arguments, and `//go:noinline`, `//go:nosplit`, `//go:noescape`, `//go:norace`, `//go:nocheckptr`, `//go:uintptrescapes` and `//go:uintptrkeepalive` alone, at column 1; `//line file:N` at column 1, and `/*line file:N*/`; `//export Name` above the top-level func `Name`, in a file that imports `"C"`; the cgo preamble above `import "C"`, holding no C comment, `#if 0`, `#error`, `#warning` or `#pragma message`; a gate marker on a line of its own';
 
 const KEPT_IN_PYTHON =
   "kept in Python: the first-line shebang, with no `#` word or `\\c` after `#!`; a gate marker on a line of its own";
@@ -853,292 +848,6 @@ describe("the rust adapter", () => {
   });
 });
 
-describe("the go adapter", () => {
-  test("refuses each comment, and reads no comment inside a string, raw string or rune", () => {
-    const lines = [
-      "\uFEFFpackage main",
-      "",
-      'var a = "// not a comment" // trailing',
-      "var b = `raw /* not a comment",
-      "// still raw` /* block */",
-      "var c = '/' + '\\'' // after runes",
-      "/* a",
-      "   block */",
-      "/* blocks /* do not nest */ var d = 1",
-    ];
-    expect(goComments("main.go", lines.join("\n"))).toEqual(
-      read([
-        { line: 3, text: "// trailing" },
-        { line: 5, text: "/* block */" },
-        { line: 6, text: "// after runes" },
-        { line: 7, text: "/* a\n   block */" },
-        { line: 9, text: "/* blocks /* do not nest */" },
-      ]),
-    );
-  });
-
-  test("names the line where a literal or comment that never closes opens", () => {
-    for (const [open, reason] of [
-      ['var a = "open\nb\n', "Unterminated string"],
-      ['var a = "open\\\nb\n', "Unterminated string"],
-      ["var a = `open\nb\n", "Unterminated raw string"],
-      ["var a = '\nb\n", "Unterminated rune"],
-      ["/* open\nb\n", "Unterminated comment"],
-    ] as const)
-      expect([open, goComments("a.go", `package a\n${open}`)]).toEqual([open, unparsed(2, reason)]);
-  });
-
-  test("refuses every doc and trailing comment, on exported names too", () => {
-    const lines = [
-      "// Package a is kept.",
-      "package a",
-      "",
-      "// T is kept.",
-      "type T struct {",
-      "\t// A is kept.",
-      "\tA int // kept",
-      "\tE int; // kept after an explicit semicolon",
-      "\t// b is refused.",
-      "\tb int // refused",
-      "\t// Reader is kept.",
-      "\tio.Reader",
-      "\t*inner // refused",
-      "\tN struct {",
-      "\t\tX int // kept",
-      "\t\ty int // refused",
-      "\t}",
-      "\tM map[struct {",
-      "\t\tK int // kept",
-      "\t\tk int // refused",
-      "\t}]struct {",
-      "\t\tV int // kept",
-      "\t\tv int // refused",
-      "\t}",
-      "\tC chan struct {",
-      "\t\tE int // kept",
-      "\t\te int // refused",
-      "\t}",
-      "}",
-      "",
-      "// t is refused.",
-      "type t struct{ X int }",
-      "",
-      "type I interface {",
-      "\t// M is kept.",
-      "\tM() // kept",
-      "\tm() // refused",
-      "\terror // kept",
-      "\tinner // refused",
-      "\t~int | ~string // kept",
-      "}",
-      "",
-      "// F is kept.",
-      "func F() {} // refused",
-      "",
-      "// M is kept.",
-      "func (r *T) M() {}",
-      "",
-      "// N is refused.",
-      "func (t) N() {}",
-      "",
-      "// Group is kept.",
-      "const (",
-      "\t// B is kept.",
-      "\tB = iota // kept",
-      "\tc // refused",
-      ")",
-      "",
-      "var v, W = 1, 2 // kept",
-      "",
-      "// f is refused.",
-      "func f() {",
-      "\t// refused",
-      "}",
-      "",
-      "// D is kept,",
-      "//nolint:all",
-      "//lint:ignore SA1019",
-      "// nolint",
-      "// but not the directives above it.",
-      "func D() {}",
-    ];
-    const refused = lines.flatMap((line, index) => {
-      const at = line.indexOf("//");
-      return at < 0 ? [] : [{ line: index + 1, text: line.slice(at) }];
-    });
-    expect(goComments("a.go", lines.join("\n"))).toEqual(read(refused));
-  });
-
-  test("refuses a package doc after a byte order mark, and block comments that span lines", () => {
-    const text =
-      "\uFEFF// Package a.\npackage a\n\ntype T struct {\n\tA int /* kept\n\t   across lines */\n\t// b is refused.\n\tb int\n\tC int /* kept\n\t*/ d int // refused\n}\n";
-    expect(goComments("a.go", text)).toEqual(
-      read([
-        { line: 1, text: "// Package a." },
-        { line: 5, text: "/* kept\n\t   across lines */" },
-        { line: 7, text: "// b is refused." },
-        { line: 9, text: "/* kept\n\t*/" },
-        { line: 10, text: "// refused" },
-      ]),
-    );
-  });
-
-  test("refuses a whole cgo preamble that holds a C comment, disables C with `#if 0` or holds a C diagnostic message", () => {
-    for (const directive of ["#if 0", "#elif 0", "# error why", "#warning why", '#pragma message("why")']) {
-      const lines = [
-        "package main",
-        "",
-        "// #include <stdio.h>",
-        `// ${directive}`,
-        "// #endif",
-        'import "C"',
-        "",
-      ];
-      expect([directive, goComments("main.go", lines.join("\n"))]).toEqual([
-        directive,
-        read([
-          { line: 3, text: "// #include <stdio.h>" },
-          { line: 4, text: `// ${directive}` },
-          { line: 5, text: "// #endif" },
-        ]),
-      ]);
-    }
-    const split = [
-      "package main",
-      "",
-      "// #include <stdio.h>",
-      "// /*",
-      "// prose",
-      "// */",
-      'import "C"',
-      "",
-    ];
-    expect(goComments("main.go", split.join("\n"))).toEqual(
-      read([
-        { line: 3, text: "// #include <stdio.h>" },
-        { line: 4, text: "// /*" },
-        { line: 5, text: "// prose" },
-        { line: 6, text: "// */" },
-      ]),
-    );
-    const block = ["package main", "", "/*", "#if 0", "disabled prose", "#endif", "*/", 'import "C"', ""];
-    expect(goComments("main.go", block.join("\n"))).toEqual(
-      read([{ line: 3, text: "/*\n#if 0\ndisabled prose\n#endif\n*/" }]),
-    );
-    expect(
-      goComments(
-        "main.go",
-        ["package main", "", "// #if 01", "// #pragma once", "// #endif", 'import "C"', ""].join("\n"),
-      ),
-    ).toEqual(read([]));
-  });
-
-  test("keeps a cgo preamble holding no C comment, and exports on top-level funcs, only in a file that imports C", () => {
-    const lines = [
-      "package main",
-      "",
-      "// #include <stdio.h>",
-      '// #define URL "http://x"',
-      "// // a C comment is refused",
-      "// int x; // so is a trailing one",
-      "// #include <x.h> /* and a block */",
-      'import "C"',
-      "",
-      "//export F",
-      "func F() {}",
-      "",
-      "//export G",
-      "func H() {}",
-      "",
-      "//export M",
-      "func (T) M() {}",
-      "",
-      "/*",
-      "#include <stdlib.h>",
-      "// refused with its whole block",
-      "*/",
-      'import "C"',
-    ];
-    expect(goComments("main.go", lines.join("\n"))).toEqual(
-      read([
-        { line: 3, text: "// #include <stdio.h>" },
-        { line: 4, text: '// #define URL "http://x"' },
-        { line: 5, text: "// // a C comment is refused" },
-        { line: 6, text: "// int x; // so is a trailing one" },
-        { line: 7, text: "// #include <x.h> /* and a block */" },
-        { line: 13, text: "//export G" },
-        { line: 16, text: "//export M" },
-        { line: 19, text: "/*\n#include <stdlib.h>\n// refused with its whole block\n*/" },
-      ]),
-    );
-    expect(
-      goComments(
-        "main.go",
-        'package main\n\n// #include <stdio.h>\nimport "fmt"\n\n//export F\nfunc F() {}\n',
-      ),
-    ).toEqual(
-      read([
-        { line: 3, text: "// #include <stdio.h>" },
-        { line: 6, text: "//export F" },
-      ]),
-    );
-  });
-
-  test("keeps go:embed above a var, in a var block too", () => {
-    const text =
-      "package a\n\n//go:embed a.txt\nvar a string\n\nvar (\n\t//go:embed b.txt\n\tb string\n)\n\n//go:embed c.txt\nconst c = 1\n";
-    expect(goComments("a.go", text)).toEqual(read([{ line: 11, text: "//go:embed c.txt" }]));
-  });
-
-  test("keeps each go: directive only with the arguments the toolchain reads", () => {
-    const kept = [
-      "//go:build linux && (amd64 || arm64)",
-      "//go:debug panicnil=1",
-      "",
-      "package a",
-      "",
-      "//go:generate stringer -type=T",
-      "//go:linkname now runtime.nanotime",
-      "//go:linkname now",
-      "//go:wasmimport env log",
-      "//go:wasmexport run",
-      "//go:fix inline",
-      "//go:noinline",
-      "//line :10",
-      "//line a.go:10:2",
-      "var x = /*line a.go:3*/ 1",
-    ];
-    expect(goComments("a.go", kept.join("\n"))).toEqual(read([]));
-    const refused = [
-      "package a",
-      "//go:build linux",
-      "//go:debug panicnil=1",
-      "//go:noinline because it is hot",
-      "//go:linkname a b c",
-      "//go:wasmimport env",
-      "//go:fix",
-      "//go:custom",
-      "//line a b.go:10",
-      "// +build linux",
-      "// Code generated by x. DO NOT EDIT.",
-      "//nolint:errcheck",
-      "//lint:ignore SA1019 the replacement is not released",
-      "func ExampleF() {",
-      "\t// Output: 1",
-      "}",
-      'var x = 1 // want "x"',
-    ];
-    expect(goComments("testdata/a_test.go", refused.join("\n"))).toEqual(
-      read(
-        refused.flatMap((line, index) => {
-          const at = line.indexOf("//");
-          return at < 0 ? [] : [{ line: index + 1, text: line.slice(at) }];
-        }),
-      ),
-    );
-  });
-});
-
 describe("the python adapter", () => {
   test("refuses each comment, and reads none inside a string of any prefix or quote", () => {
     const lines = [
@@ -1418,7 +1127,6 @@ describe("the pre-commit hook", () => {
       "no-comments-sql",
       "no-comments-shell",
       "no-comments-rust",
-      "no-comments-go",
       "no-comments-python",
     ]);
     writeFiles(dir, {
@@ -1434,8 +1142,6 @@ describe("the pre-commit hook", () => {
       status: 1,
       stderr: refusalText(
         [
-          "a.go",
-          "  1  // Package a.",
           "a.py",
           '  1  """Docstring."""',
           "bin/tool",
@@ -1452,7 +1158,6 @@ describe("the pre-commit hook", () => {
           "kept in SQL: drizzle's `--> statement-breakpoint`; a gate marker on a line of its own",
           "kept in shell: the first-line shebang, with no `#` word or `\\c` after `#!`; a gate marker on a line of its own",
           KEPT_IN_RUST,
-          KEPT_IN_GO,
           KEPT_IN_PYTHON,
         ],
       ),

@@ -7,7 +7,7 @@ const OPENER = 2;
 
 const IDENTIFIER_CHAR = /[A-Za-z0-9_$]/;
 
-function commentSpans(text: string): Lexed<Span, null> {
+function commentSpans(text: string): Lexed<Span> {
   const spans: Span[] = [];
   let at = text.startsWith(SHEBANG_PREFIX) ? lineEnd(text, 0) : 0;
   if (at > 0) spans.push({ start: 0, end: at, bodyStart: SHEBANG_PREFIX.length, bodyEnd: at, style: "line" });
@@ -75,7 +75,7 @@ function commentSpans(text: string): Lexed<Span, null> {
 
   const stopped = code(false);
   if (stopped !== null) return stopped;
-  return { kind: "lexed", spans, facts: null };
+  return { kind: "lexed", spans };
 }
 
 export const { comments, kept } = adapter({

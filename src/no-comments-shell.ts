@@ -45,7 +45,7 @@ type Heredoc = {
 
 type CaseState = "subject" | "in" | "pattern" | "body";
 
-function commentSpans(text: string): Lexed<Span, null> {
+function commentSpans(text: string): Lexed<Span> {
   const spans: Span[] = [];
   const pending: Heredoc[] = [];
   let at = 0;
@@ -400,7 +400,7 @@ function commentSpans(text: string): Lexed<Span, null> {
     return null;
   }
 
-  return code(false) ?? { kind: "lexed", spans, facts: null };
+  return code(false) ?? { kind: "lexed", spans };
 }
 
 export const { comments, kept } = adapter({

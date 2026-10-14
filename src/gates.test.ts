@@ -324,7 +324,7 @@ describe("doctor", () => {
           name: "gates",
           state: "warn",
           detail: "no gate is installed",
-          fix: "agent-gates install <gate>..., choosing from commit-subject, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-go, no-comments-python",
+          fix: "agent-gates install <gate>..., choosing from commit-subject, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python",
         },
       ],
       failing: 0,

@@ -25,7 +25,7 @@ const LINE_OPENER = "--";
 
 const DRIZZLE_STATEMENT_BREAKPOINT = /> statement-breakpoint/;
 
-function commentSpans(text: string): Lexed<Span, null> {
+function commentSpans(text: string): Lexed<Span> {
   const spans: Span[] = [];
   const followsIdentifier = (index: number) => IDENTIFIER_CHAR.test(text[index - 1] ?? "");
 
@@ -91,10 +91,10 @@ function commentSpans(text: string): Lexed<Span, null> {
     return brackets.unclosed();
   }
 
-  return code(0, text.length) ?? { kind: "lexed", spans, facts: null };
+  return code(0, text.length) ?? { kind: "lexed", spans };
 }
 
-const KEPT: readonly KeptForm<CommentRead<Span, null>>[] = [
+const KEPT: readonly KeptForm<CommentRead<Span>>[] = [
   directive("drizzle's `--> statement-breakpoint`", {
     pattern: DRIZZLE_STATEMENT_BREAKPOINT,
     where: ({ opener }) => opener === LINE_OPENER,

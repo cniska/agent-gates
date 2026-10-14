@@ -26,7 +26,7 @@ agent-gates doctor
 | `commit-subject` | `.githooks/commit-msg` | `commits.yml` | A subject that is not a Conventional Commit, is over 50 characters or is not ASCII, and any message body |
 | `no-comments-<language>` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment the change adds, other than a [kept form](#kept-comments) |
 
-The languages are `javascript` (JavaScript and TypeScript), `dart`, `sql` (PostgreSQL), `shell`, `rust`, `go` and `python`.
+The languages are `javascript` (JavaScript and TypeScript), `dart`, `sql` (PostgreSQL), `shell`, `rust` and `python`.
 
 Installed files:
 
@@ -78,12 +78,11 @@ A comment stays only when a tool reads it, and deleting it changes what that too
 | SQL | drizzle's `--> statement-breakpoint` |
 | shell | the first-line shebang, with no `#` word or `\c` after `#!` |
 | Rust | the first-line shebang, with no `#` word or `\c` after `#!` |
-| Go | `//go:build` and `//go:debug` with their argument, before `package`; `//go:embed` with its patterns, above a `var`; `//go:generate`, `//go:linkname`, `//go:wasmimport`, `//go:wasmexport` and `//go:fix` with their arguments, and `//go:noinline`, `//go:nosplit`, `//go:noescape`, `//go:norace`, `//go:nocheckptr`, `//go:uintptrescapes` and `//go:uintptrkeepalive` alone, at column 1; `//line file:N` at column 1, and `/*line file:N*/`; `//export Name` above the top-level func `Name`, in a file that imports `"C"`; the cgo preamble above `import "C"`, holding no C comment, `#if 0`, `#error`, `#warning` or `#pragma message` |
 | Python | the first-line shebang, with no `#` word or `\c` after `#!` |
 | Every language | a gate marker on a line of its own |
 
 - Every kept form stands alone in its comment: no reason, no trailing text. A directive in a block comment that spans lines is refused.
-- Every TypeScript, ESLint and Biome suppression is refused, `@ts-expect-error` included, and so are `prettier-ignore`, `@ts-check` and `@vitest-environment`; their settings belong in `tsconfig.json`, the linter's config, `.prettierignore` and the Vitest config. Every `shellcheck` directive is refused; its settings belong in `.shellcheckrc`. Every Dart `ignore:` and `ignore_for_file:` is refused; the analyzer's settings belong in `analysis_options.yaml`. Tool configuration in a comment is refused too: `eslint-env`, `/* eslint … */`, `/* global */`, Dart's `coverage:`. Go's `//nolint`, `//lint:ignore`, `// +build`, `// Code generated … DO NOT EDIT.`, Example `// Output:` and analysis `// want` comments are refused too; mark generated files `linguist-generated` instead.
+- Every TypeScript, ESLint and Biome suppression is refused, `@ts-expect-error` included, and so are `prettier-ignore`, `@ts-check` and `@vitest-environment`; their settings belong in `tsconfig.json`, the linter's config, `.prettierignore` and the Vitest config. Every `shellcheck` directive is refused; its settings belong in `.shellcheckrc`. Every Dart `ignore:` and `ignore_for_file:` is refused; the analyzer's settings belong in `analysis_options.yaml`. Tool configuration in a comment is refused too: `eslint-env`, `/* eslint … */`, `/* global */`, Dart's `coverage:`.
 - A gate marker is `agent-gate:<part>:<version>`, where `<part>` is one of agent-gates' parts, or another tool's `<tool>-gate:[<part>:]<version>`, where `<tool>` and `<part>` are each one lowercase word.
 - A refusal lists the kept forms of each language it refused a comment in.
 
@@ -91,10 +90,9 @@ How each language is read:
 
 - **JavaScript and TypeScript** with Babel's parser.
 - **SQL** as PostgreSQL, with dollar quotes and `E''` strings. A dollar-quoted body that parses as SQL is judged as code; one that does not is text.
-- **Dart, shell, Rust, Go and Python** by lexers that find the comments the language's own tokenizer finds. Shell treats `#` as a comment only where a word starts.
+- **Dart, shell, Rust and Python** by lexers that find the comments the language's own tokenizer finds. Shell treats `#` as a comment only where a word starts.
 - **Rust** reads an attribute carrying `doc = …` anywhere, such as `#[cfg_attr(docsrs, doc = …)]`, as a doc comment; `#[doc(hidden)]` is code.
 - **Python** judges a string that stands alone as a statement, a docstring included, as a comment. Indentation is not checked.
-- **Go** groups comments as `go/parser` does, so `//go:embed` and `//export` count only in the group on the line above their declaration, and the cgo preamble is the group above `import "C"`.
 
 ## Commands
 
