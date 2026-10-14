@@ -69,7 +69,7 @@ The gates stop the comment count from growing; they do not drive it to zero. `no
 
 #### Kept comments
 
-A comment stays only when a tool reads it, and deleting it changes what that tool does. Even then, every doc comment, suppression, formatter hint and tool setting is refused: fix the code, or put the setting in the tool's config file, where a reason can live.
+A comment stays only when a tool reads it, and deleting it changes what that tool does. Even then, only the forms below are kept: every doc comment, suppression, formatter hint, tool setting and test expectation is refused. Fix the code, or put the setting in the tool's config file, where a reason can live.
 
 | Language | Kept comments |
 | --- | --- |
