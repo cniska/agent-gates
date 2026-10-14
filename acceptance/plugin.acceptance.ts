@@ -208,6 +208,10 @@ test("AC-42 judges each git command against the repo it targets, past heredoc bo
     `cd ${ungated} && git commit --no-verify -m x`,
     `git -C ${ungated} commit --no-verify -m x`,
     "cat > notes.md <<'EOF'\ngit commit --no-verify -m x\nEOF",
+    "cat > notes.md <<-EOF\n\tgit commit --no-verify -m x\n\tEOF",
+    "mkdir -p docs && tee docs/notes.md <<'EOF'\ngit commit --no-verify -m x\nEOF",
+    "{ cat > notes.md <<'EOF'\ngit commit --no-verify -m x\nEOF\n}",
+    "git commit -m \"$(cat <<'EOF'\nfix: the owner's notes\nEOF\n)\"",
   ])
     expect(ranCommand(dir, command, tools)).toEqual(QUIET);
 
@@ -217,6 +221,8 @@ test("AC-42 judges each git command against the repo it targets, past heredoc bo
     `cd "${spaced}" && git commit --no-verify -m x`,
     `git -C ${dir} commit --no-verify -m x`,
     `cd ~ && git -C ${dir} commit --no-verify -m x`,
+    `(cd ${dir} && git commit --no-verify -m x)`,
+    `{ cd ${dir}; git commit --no-verify -m x; }`,
   ])
     expect(ranCommand(ungated, command, tools)).toEqual(skipped);
   for (const command of [
@@ -224,9 +230,22 @@ test("AC-42 judges each git command against the repo it targets, past heredoc bo
     `cd ${ungated} & git commit --no-verify -m x`,
     `cd ${ungated} | cat; git commit --no-verify -m x`,
     `cd ${ungated} && cd - && git commit --no-verify -m x`,
+    `(cd ${ungated}); git commit --no-verify -m x`,
+    `$(cd ${ungated} && true); git commit --no-verify -m x`,
+    `\`cd ${ungated} && true\`; git commit --no-verify -m x`,
   ])
     expect(ranCommand(dir, command, tools)).toEqual(skipped);
-  expect(
-    ranCommand(dir, "cat > notes.md <<'EOF'\nthe owner's notes\nEOF\ngit commit --no-verify -m 'x'", tools),
-  ).toEqual(skipped);
+  for (const command of [
+    "cat > notes.md <<'EOF'\nthe owner's notes\nEOF\ngit commit --no-verify -m 'x'",
+    'git commit -m "fix: read << markers"\ngit commit --no-verify -m x',
+    "echo $((1<<2))\ngit commit --no-verify -m x",
+    "bash <<EOF\ngit commit --no-verify -m x\nEOF",
+    "cat > notes.md <<'A'; bash <<'B'\nnotes\nA\ngit commit --no-verify -m x\nB",
+    "source /dev/stdin <<'EOF'\ngit commit --no-verify -m x\nEOF",
+    "eval \"$(cat)\" <<'EOF'\ngit commit --no-verify -m x\nEOF",
+    "cat <<'EOF' | sh\ngit commit --no-verify -m x\nEOF",
+    "cat > notes.md <<EOF\n$(git commit --no-verify -m x)\nEOF",
+    'cat > notes.md <<"E F"\nnotes\nE F\ngit commit --no-verify -m x',
+  ])
+    expect(ranCommand(dir, command, tools)).toEqual(skipped);
 });

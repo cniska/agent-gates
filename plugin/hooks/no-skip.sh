@@ -4,26 +4,55 @@ set -uo pipefail
 readonly HOOKS=".githooks"
 readonly QUOTED_SPACE=$'\x1f'
 readonly DETACHED=$'\x1e'
-readonly HEREDOC="(^|[^<])<<-?[[:space:]]*[\"']?([A-Za-z0-9_.-]+)[\"']?(.*)$"
+readonly HEREDOC='(^|[^<])<<-?[[:space:]]*(["'"'"'\]?)([A-Za-z0-9_.-]+)["'"'"']?(.*)$'
+readonly DATA_SINK='^(cat|tee|git)$'
 
 note() {
   printf 'cniska-gates: %s\n' "$1" >&2
 }
 
+feeds_data() {
+  [[ "$1$2" != *"|"* ]] || return 1
+  words_of "$1"
+  [[ "${WORDS[0]:-}" =~ $DATA_SINK ]]
+}
+
 heredoc_ends() {
   local rest="$1"
   while [[ "$rest" =~ $HEREDOC ]]; do
-    printf '%s\n' "${BASH_REMATCH[2]}"
-    rest="${BASH_REMATCH[3]}"
+    local whole="${BASH_REMATCH[0]}" lead="${BASH_REMATCH[1]}" quote="${BASH_REMATCH[2]}"
+    local end="${BASH_REMATCH[3]}" tail="${BASH_REMATCH[4]}" kind=run
+    local before="${1%"$whole"}$lead"
+    if feeds_data "${before##*[;&]}" "${tail%%[;&]*}"; then
+      kind=plain
+      if [ -n "$quote" ]; then
+        kind=quoted
+      fi
+    fi
+    printf '%s %s\n' "$kind" "$end"
+    rest="$tail"
   done
 }
 
+body_runs() {
+  case "$1" in
+    run) return 0 ;;
+    quoted) return 1 ;;
+  esac
+  [[ "$2" == *'$('* || "$2" == *'`'* ]]
+}
+
 without_heredoc_bodies() {
-  local line end
+  local line end body=""
   local -a ends=()
   while IFS= read -r line || [ -n "$line" ]; do
     if [ "${#ends[@]}" -gt 0 ]; then
-      if [ "${line#"${line%%[!$'\t']*}"}" = "${ends[0]}" ]; then
+      body+="$line"$'\n'
+      if [ "${line#"${line%%[!$'\t']*}"}" = "${ends[0]#* }" ]; then
+        if body_runs "${ends[0]%% *}" "$body"; then
+          printf '%s' "$body"
+        fi
+        body=""
         ends=("${ends[@]:1}")
       fi
       continue
@@ -33,6 +62,7 @@ without_heredoc_bodies() {
       ends+=("$end")
     done < <(heredoc_ends "$line")
   done <<<"$1"
+  printf '%s' "$body"
 }
 
 commands_of() {
@@ -44,10 +74,27 @@ commands_of() {
 }
 
 words_of() {
-  read -ra WORDS <<<"$1"
-  local at
-  for at in ${WORDS[@]+"${!WORDS[@]}"}; do
-    WORDS[at]="${WORDS[at]//$QUOTED_SPACE/ }"
+  local -a raw
+  read -ra raw <<<"$1"
+  WORDS=()
+  OPENERS=""
+  local word bare
+  for word in ${raw[@]+"${raw[@]}"}; do
+    word="${word//$QUOTED_SPACE/ }"
+    bare="$word"
+    while true; do
+      case "$bare" in
+        '$('*) bare="${bare#??}" ;;
+        '('* | '{'* | '`'*) bare="${bare#?}" ;;
+        *) break ;;
+      esac
+    done
+    if [ "${#WORDS[@]}" -eq 0 ]; then
+      OPENERS+="${word%"$bare"}"
+    fi
+    if [ -n "$bare" ]; then
+      WORDS+=("$bare")
+    fi
   done
 }
 
@@ -314,6 +361,7 @@ main() {
     *) return 0 ;;
   esac
   local dir="$cwd" previous="$cwd" made="" line target reason
+  local -a outer=()
   while IFS= read -r line; do
     local detached=false
     if [[ "$line" == *" $DETACHED" ]]; then
@@ -322,6 +370,14 @@ main() {
     fi
     words_of "$line"
     local -a words=(${WORDS[@]+"${WORDS[@]}"})
+    if [[ "$OPENERS" == *'`'* ]]; then
+      detached=true
+    fi
+    local subshells="${OPENERS//[^(]/}" opens="${line//[^(]/}" closes="${line//[^)]/}"
+    local exits=$((${#subshells} - ${#opens} + ${#closes})) entered
+    for ((entered = 0; entered < ${#subshells}; entered++)); do
+      outer+=("$dir")
+    done
     case "${words[0]:-}" in
       cd)
         if [ "$detached" = false ] &&
@@ -330,18 +386,23 @@ main() {
           previous="$dir"
           dir="$target"
         fi
-        continue
         ;;
       mkdir)
         made+="$(made_dirs "$dir" "${words[@]:1}")"$'\n'
-        continue
+        ;;
+      *)
+        if reason="$(denial_of "$dir" "$line")"; then
+          jq -cn --arg reason "cniska-gates: $reason" \
+            '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $reason}}'
+          return 0
+        fi
         ;;
     esac
-    if reason="$(denial_of "$dir" "$line")"; then
-      jq -cn --arg reason "cniska-gates: $reason" \
-        '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $reason}}'
-      return 0
-    fi
+    while [ "$exits" -gt 0 ] && [ "${#outer[@]}" -gt 0 ]; do
+      dir="${outer[${#outer[@]} - 1]}"
+      unset 'outer[${#outer[@]}-1]'
+      exits=$((exits - 1))
+    done
   done < <(commands_of "$(without_heredoc_bodies "$command")")
 }
 
