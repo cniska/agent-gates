@@ -1,7 +1,7 @@
 import { parse } from "@babel/parser";
 import { isNode, type Node } from "@babel/types";
 
-export function* nodesOf(text: string): Iterable<Node> {
+function* nodesOf(text: string): Iterable<Node> {
   yield* walk(parse(text, { sourceType: "module", plugins: ["typescript"] }).program);
 }
 

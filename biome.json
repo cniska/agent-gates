@@ -13,24 +13,29 @@
     "enabled": true,
     "rules": {
       "preset": "recommended",
+      "style": {
+        "noNonNullAssertion": "error",
+        "noEnum": "error",
+        "noNamespace": "error",
+        "noParameterProperties": "error",
+        "noExportedImports": "error",
+        "useImportType": "error"
+      },
       "suspicious": {
+        "noExplicitAny": "error",
         "noConsole": { "level": "error", "options": { "allow": ["log"] } }
       },
       "performance": {
         "noBarrelFile": "error",
         "noReExportAll": "error"
       },
-      "style": {
-        "noExportedImports": "error"
+      "nursery": {
+        "noFloatingPromises": "error",
+        "useExhaustiveSwitchCases": "error",
+        "noUnsafeTypeAssertion": "error"
       }
     }
   },
-  "overrides": [
-    {
-      "includes": ["src/**/*.ts"],
-      "linter": { "rules": { "nursery": { "noUnsafeTypeAssertion": "error" } } }
-    }
-  ],
   "assist": {
     "actions": {
       "source": {

@@ -41,7 +41,7 @@ function nameOf(file: string): string {
   return file.replace(/(\.test|\.test-support)?\.ts$/, "");
 }
 
-export function boundaryBreaches(file: string, text: string): readonly string[] {
+function boundaryBreaches(file: string, text: string): readonly string[] {
   const importer = moduleOf(nameOf(file));
   const isTest = file.endsWith(".test.ts");
   return importsOf(text).flatMap((path) => {
