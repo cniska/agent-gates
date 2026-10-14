@@ -225,4 +225,6 @@ Each requirement still needs the owner's confirmation before it is contract.
 
 - **Not yet specified.** `scan.cjs --file <path>` and the `cniska-gates` Claude Code plugin landed while this spec was written, and are left to the work that added them.
 
+- **The format hook misses paths git quotes.** It reads git's path lists one per line, and git quotes a path holding a control character, a double quote or a backslash even with `core.quotePath` off. So a partly staged file with such a name that the command changes is committed unformatted instead of refused (FR-91).
+
 - **Not every criterion is proven yet.** A criterion with a passing test in the acceptance suite is proven; the rest are todos there. `src/spec.test.ts` ties the suite to this spec.
