@@ -5,7 +5,7 @@ export const HOOKS_DIR = ".githooks";
 
 export const PRE_COMMIT_STEPS = `${HOOKS_DIR}/pre-commit.d`;
 
-export const PRE_PUSH_STEPS = `${HOOKS_DIR}/pre-push.d`;
+const PRE_PUSH_STEPS = `${HOOKS_DIR}/pre-push.d`;
 
 export const STEP_DIRS: readonly string[] = [PRE_COMMIT_STEPS, PRE_PUSH_STEPS];
 
