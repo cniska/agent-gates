@@ -1,6 +1,10 @@
 # agent-gates
 
-Commit gates a project owns: git hooks that refuse a bad commit locally, and GitHub workflows that check the same thing in CI.
+Gate your agents' work and save them round trips: git hooks refuse a bad commit locally and GitHub workflows refuse it again in CI, for every contributor, and an optional Claude Code plugin shows the agent the comments it added, right after each edit. It holds no workflow, records nothing and isolates no checkout; cniska-skills, agent-record and agent-worktree do.
+
+- `agent-gates install` writes the gates into the project, which commits them, and `agent-gates doctor` judges their health.
+- The gates refuse a commit subject that is not a Conventional Commit and an added comment, and run the project's formatter on every commit.
+- The `cniska-gates` [plugin](#claude-code-plugin) is optional; the gates hold without it.
 
 ## Install
 

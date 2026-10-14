@@ -1,6 +1,6 @@
 # agent-gates Specification
 
-> Commit gates a project owns: git hooks that refuse a bad commit locally, and GitHub workflows that check the same thing in CI, installed and judged by one CLI.
+> Gate your agents' work and save them round trips: git hooks refuse a bad commit locally and GitHub workflows refuse it again in CI, for every contributor, and an optional Claude Code plugin shows the agent the comments it added, right after each edit.
 
 This document states what must hold, not how. [`README.md`](README.md) lists the gates and commands, and [`src/README.md`](src/README.md) maps the modules that meet these requirements.
 
@@ -166,13 +166,17 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ## 4. Out of scope
 
-- Configuring a gate: a gate has no options beyond the format and CI setup commands (FR-85, FR-86), and the installed files are the only state.
-- Finding a project's format command: install is given it (FR-85).
-- Driving a project's comment count to zero; the gates stop it growing (FR-34).
+- Configuring a gate: a gate has no options beyond the format and CI setup commands (FR-85, FR-86), and the installed files are the only state; configurable rules belong to the project's own linter.
+- Finding a project's format command, and what its formatting is: the project's formatter owns that, and install is given its command (FR-85).
+- Driving a project's comment count to zero; the project sweeps with `scan.cjs --all`, and the gates stop the count growing (FR-34).
+- Blocking or changing an edit: the plugin reports the comments an edit added (FR-103, FR-104), and the gates refuse at commit.
+- The workflow an agent follows; cniska-skills holds it.
+- Recording or measuring agent work; agent-record does that.
+- Isolating the checkouts of agents working in parallel; agent-worktree does that.
 - Judging code embedded in another language: shell in a workflow's `run:`, SQL in a string, `.vue` files.
 - Another SQL dialect than PostgreSQL.
-- Checking Python's indentation.
-- Uninstalling a gate, other than deleting its files (FR-13).
+- Checking Python's indentation; Python's own parser refuses it.
+- Uninstalling a gate: the project deletes its files (FR-13).
 
 ## 5. Acceptance criteria
 
