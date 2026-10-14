@@ -54,7 +54,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **FR-30** — A file passes when `installed`, warns when `behind`, `changed` or `ahead`, and fails when `missing` or `not-executable`; an `occupied` hook fails with install's refusal as its detail and fix.
 - **FR-31** — An unset `core.hooksPath` fails, and one naming another directory fails with install's refusal.
 - **FR-32** — The `prepare` check passes with no `package.json` or a wired script, warns when the script is missing or an earlier wiring, and fails with install's refusal when it is occupied or the manifest does not parse.
-- **FR-33** — `doctor` warns in one check about each language the project tracks files of whose `no-comments` gate is not installed, and each installed language the project tracks no file of, with one fix that installs the first and deletes the second's adapters.
+- **FR-33** — `doctor`, with or without a gate installed, warns in one check about each language the project tracks files of whose `no-comments` gate is not installed, and each installed language the project tracks no file of, with one fix that runs `agent-gates install no-comments` and deletes the second's adapters.
 - **FR-34** — With a `no-comments` gate installed, `doctor` counts the comments the tracked files hold and the tracked files that do not parse, through the installed adapters, and warns while either is above zero, naming `node .githooks/no-comments/scan.cjs --all` as the fix.
 - **FR-35** — `doctor` does not count while the installed scanner or an installed adapter differs from this agent-gates' release, and warns naming install as the fix.
 
@@ -123,6 +123,10 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **FR-81** — In Dart, SQL, shell, Rust and Python, a string, comment, quote, character, expansion or heredoc that never closes refuses the file at the line where it opens.
 - **FR-82** — Dart and SQL refuse an unbalanced bracket, Python a bracket that never closes and a line continuation at the end of the file, and SQL a `$` that starts neither a dollar quote nor a parameter.
 
+### 2.10 Installing by language
+
+- **FR-83** — `install no-comments` installs the `no-comments-<language>` gate of each language the tracked files hold, beside any gate named with it. With no tracked file a language's gate reads, it is refused as `no_language_tracked`, writing nothing.
+
 ## 3. Non-functional requirements
 
 - **NF-1** — The installed gates run with git, a POSIX shell and `node` alone: nothing installed in the project, and neither agent-gates nor Bun on `PATH`.
@@ -166,6 +170,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **AC-26** — Commit, in each language, each form it keeps, then each with trailing text, as a block spanning lines and placed off the start of its line, and a doc comment, a suppression and a tool setting: the kept forms pass, and the rest are refused, the reply naming each refused language's kept forms. (FR-68, FR-69, FR-70, FR-71, FR-72, FR-73, FR-74)
 - **AC-27** — Commit files whose comment markers sit inside strings, heredocs and expansions; a shell `#` inside a word; a SQL dollar quote holding SQL with a comment and one holding text; a Rust `#[doc(hidden)]` and a `#[cfg_attr(…, doc = …)]`; a Python docstring; and TypeScript in each decorator dialect: only the SQL comment, the doc attribute and the docstring are refused. (FR-75, FR-76, FR-77, FR-78, FR-79, FR-80)
 - **AC-28** — Install every gate, then commit with only git, the shell's utilities and `node` on `PATH`: the hooks judge the commit. (NF-1)
+- **AC-29** — In a checkout tracking TypeScript and Python files with no gate, `doctor` warns that both languages' gates are missing, with `agent-gates install no-comments` as the fix; `install no-comments` then installs `no-comments-javascript` and `no-comments-python`. In a checkout tracking neither, `install no-comments` is refused as `no_language_tracked`, writing nothing. (FR-33, FR-83)
 
 ## 6. Deliverables
 
@@ -197,6 +202,6 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 Each requirement still needs the owner's confirmation before it is contract.
 
-- **Not yet specified.** `install no-comments`, which installs the gate of each language the tracked files hold, `scan.cjs --file <path>`, and the `cniska-gates` Claude Code plugin landed while this spec was written, and are left to the work that added them.
+- **Not yet specified.** `scan.cjs --file <path>` and the `cniska-gates` Claude Code plugin landed while this spec was written, and are left to the work that added them.
 
 - **Not every criterion is proven yet.** A criterion with a passing test in the acceptance suite is proven; the rest are todos there. `src/spec.test.ts` ties the suite to this spec.
