@@ -12,7 +12,7 @@ type Ran = { readonly status: number | null; readonly stdout: string; readonly s
 
 type Env = Readonly<Record<string, string>>;
 
-export type Check = {
+type Check = {
   readonly name: string;
   readonly state: string;
   readonly detail: string;

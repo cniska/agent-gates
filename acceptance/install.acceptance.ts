@@ -75,7 +75,7 @@ function cliLineBeforeBunManifestError(stderr: string, manifest: string): string
   return `${line}\n`;
 }
 
-function check(dir: string, name: string): unknown {
+function check(dir: string, name: string) {
   return doctor(dir).checks.find((found) => found.name === name);
 }
 
