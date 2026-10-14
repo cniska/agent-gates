@@ -24,7 +24,7 @@ main() {
   fi
   [ -n "$file" ] || return 0
   local dir
-  dir="$(dirname -- "$file")"
+  dir="${file%/*}"
   [ -d "$dir" ] || return 0
   local root
   root="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)" || return 0

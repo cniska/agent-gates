@@ -83,12 +83,12 @@ describe("the plugin's no-comments hook", () => {
     const dir = gated();
     writeFiles(dir, { "src/a.ts": "export const a = 2; // why\n" });
     const file = join(dir, "src/a.ts");
-    expect(edited(dir, file, { PATH: binWith(["git", "jq", "dirname"]) })).toEqual({
+    expect(edited(dir, file, { PATH: binWith(["git", "jq"]) })).toEqual({
       status: 0,
       stdout: "",
       stderr: "cniska-gates: node is not on PATH, so the edit's comments were not judged\n",
     });
-    expect(edited(dir, file, { PATH: binWith(["git", "node", "dirname"]) })).toEqual({
+    expect(edited(dir, file, { PATH: binWith(["git", "node"]) })).toEqual({
       status: 0,
       stdout: "",
       stderr: "cniska-gates: jq is not on PATH, so the edit's comments were not judged\n",
