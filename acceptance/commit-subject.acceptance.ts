@@ -13,7 +13,9 @@ import {
   install,
   NO_COMMIT,
   type Outcome,
+  PASSED,
   readText,
+  refusedWith,
   removeScratch,
   scratchDir,
   shell,
@@ -50,15 +52,13 @@ function commitMessage(dir: string, message: string, cleanup = "strip"): Outcome
 }
 
 function passes(dir: string, message: string, cleanup?: string): void {
-  expect(commitMessage(dir, message, cleanup)).toEqual({ status: 0, stderr: "", made: true });
+  expect(commitMessage(dir, message, cleanup)).toEqual(PASSED);
 }
 
 function refused(dir: string, message: string, reason: string, subject: string, cleanup?: string): void {
-  expect(commitMessage(dir, message, cleanup)).toEqual({
-    status: 1,
-    stderr: `commit-msg: ${reason}\n  got: ${subject}\n`,
-    made: false,
-  });
+  expect(commitMessage(dir, message, cleanup)).toEqual(
+    refusedWith(`commit-msg: ${reason}\n  got: ${subject}\n`),
+  );
 }
 
 test("AC-14 runs format first, then each other executable pre-commit step in name order, stopping at the first failure", () => {

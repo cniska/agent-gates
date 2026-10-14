@@ -19,7 +19,7 @@ const IDENTITY =
 
 type Ran = { readonly status: number | null; readonly stdout: string; readonly stderr: string };
 
-type Env = Readonly<Record<string, string>>;
+export type Env = Readonly<Record<string, string>>;
 
 export type Check = {
   readonly name: string;
@@ -103,18 +103,24 @@ export function install(dir: string, gates: readonly string[]): void {
   if (ran.status !== 0) throw new Error(`install ${gates.join(" ")} exited ${ran.status}: ${ran.stderr}`);
 }
 
-export function gitRan(dir: string, args: readonly string[]): Ran {
-  return run("git", ["-C", dir, ...args], dir);
+export function gitRan(dir: string, args: readonly string[], env: Env = {}): Ran {
+  return run("git", ["-C", dir, ...args], dir, env);
 }
 
 function commitCount(dir: string): string {
   return git(dir, ["rev-list", "--count", "HEAD"]);
 }
 
-export function committing(dir: string, args: readonly string[]): Outcome {
+export function committing(dir: string, args: readonly string[], env: Env = {}): Outcome {
   const before = commitCount(dir);
-  const ran = gitRan(dir, ["commit", ...args]);
+  const ran = gitRan(dir, ["commit", ...args], env);
   return { status: ran.status, stderr: ran.stderr, made: commitCount(dir) !== before };
+}
+
+export const PASSED: Outcome = { status: 0, stderr: "", made: true };
+
+export function refusedWith(stderr: string): Outcome {
+  return { status: 1, stderr, made: false };
 }
 
 export function git(dir: string, args: readonly string[]): string {

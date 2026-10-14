@@ -17,6 +17,7 @@ import {
   shell,
   writeFiles,
 } from "./cli";
+import { LANGUAGES } from "./no-comments";
 
 afterEach(removeScratch);
 
@@ -27,8 +28,6 @@ const EARLIER_PREPARE = "git config core.hooksPath .githooks";
 const GITATTRIBUTES_V1 = "# agent-gate:githooks:1\n* linguist-generated\n";
 
 const OWN_HOOK = "#!/bin/sh\nexit 0\n";
-
-const LANGUAGES = ["javascript", "dart", "sql", "shell", "rust", "python"];
 
 const COMMIT_SUBJECT_FILES = [
   ".githooks/commit-msg",

@@ -2,88 +2,38 @@ import { afterEach, expect, test } from "bun:test";
 import { rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import {
-  checkout,
   cloneOf,
   commitAs,
-  committing,
   git,
   githubStep,
-  install,
   NO_COMMIT,
   type Outcome,
+  PASSED,
   pathOf,
   readText,
+  refusedWith,
   removeScratch,
   scratchDir,
   shell,
   stepScript,
   writeFiles,
 } from "./cli";
+import {
+  ALL_LANGUAGES,
+  commentReply,
+  commitFiles,
+  commitStaged,
+  FIX_SYNTAX,
+  gated,
+  javascriptRefusal,
+  KEPT_JAVASCRIPT,
+  KEPT_PYTHON,
+  lines,
+  REMOVE,
+  restart,
+} from "./no-comments";
 
 afterEach(removeScratch);
-
-const ALL_LANGUAGES = ["javascript", "dart", "sql", "shell", "rust", "python"].map(
-  (language) => `no-comments-${language}`,
-);
-
-const REMOVE = "Remove each comment; a why belongs in a name, a test or the docs.";
-
-const FIX_SYNTAX = "Fix the syntax where each file stops parsing.";
-
-const SHEBANG = "the first-line shebang, with no `#` word or `\\c` after `#!`";
-
-const KEPT_JAVASCRIPT = `kept in JavaScript and TypeScript: ${SHEBANG}; a leading \`/// <reference …/>\` holding only its attributes; a gate marker on a line of its own`;
-
-const KEPT_PYTHON = `kept in Python: ${SHEBANG}; a gate marker on a line of its own`;
-
-type Findings = readonly (readonly [path: string, lines: readonly string[]])[];
-
-function gated(gates: readonly string[], files: Readonly<Record<string, string>> = {}): string {
-  const dir = checkout(files);
-  install(dir, gates);
-  git(dir, ["add", "-A"]);
-  commitAs(dir, "chore: start");
-  return dir;
-}
-
-function commitStaged(dir: string, paths: readonly string[] = []): Outcome {
-  return committing(dir, ["-q", "-m", "feat: change things", ...paths]);
-}
-
-function restart(dir: string, to = "HEAD"): string {
-  git(dir, ["reset", "-q", "--hard", to]);
-  git(dir, ["clean", "-q", "-f", "-d"]);
-  return dir;
-}
-
-function commitFiles(dir: string, files: Readonly<Record<string, string>>): Outcome {
-  writeFiles(dir, files);
-  git(dir, ["add", "-A"]);
-  return commitStaged(dir);
-}
-
-const PASSED: Outcome = { status: 0, stderr: "", made: true };
-
-function lines(texts: readonly string[]): string {
-  return texts.map((text) => `${text}\n`).join("");
-}
-
-function commentReply(kept: readonly string[], findings: Findings, lead = "this change adds"): string {
-  const count = findings.reduce((total, [, found]) => total + found.length, 0);
-  return lines([
-    `no-comments: ${lead} ${count} ${count === 1 ? "comment" : "comments"}. ${REMOVE}`,
-    ...kept,
-    ...findings.flatMap(([path, found]) => [path, ...found.map((line) => `  ${line}`)]),
-  ]);
-}
-
-function refusedWith(text: string): Outcome {
-  return { status: 1, stderr: text, made: false };
-}
-
-function javascriptRefusal(findings: Findings): Outcome {
-  return refusedWith(commentReply([KEPT_JAVASCRIPT], findings));
-}
 
 function unparsedRefusal(path: string, line: number, reason: string): Outcome {
   return refusedWith(
