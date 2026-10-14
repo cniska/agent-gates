@@ -1240,7 +1240,7 @@ describe("the python adapter", () => {
     );
   });
 
-  test("refuses a PEP 723 script block that is not TOML, or holds a key other than the metadata and tool tables", () => {
+  test("refuses a PEP 723 script block that is not TOML, or holds a key other than `requires-python`, `dependencies` and `tool`", () => {
     for (const block of [
       "# /// script\n# this is prose explaining why\n# ///",
       '# /// script\n# requires-python = ">=3.12"\n# note = "pinned because upstream broke"\n# ///',
