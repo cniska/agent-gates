@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Glob } from "bun";
-import { importsOf } from "./syntax.test-support";
+import { importsOf, readsEnv } from "./syntax.test-support";
 
 const SRC = import.meta.dir;
 
@@ -27,6 +27,8 @@ const PUBLIC_FILES: Readonly<Record<string, readonly string[]>> = {
 };
 
 const TEST_SUPPORT = ".test-support";
+
+const ENTRIES: readonly string[] = ["cli.ts", "no-comments-main.ts"];
 
 const LOCAL_FILE = /^\.\/([a-z.-]+?)(?:\.ts)?$/;
 
@@ -56,6 +58,10 @@ function boundaryBreaches(file: string, text: string): readonly string[] {
   });
 }
 
+function isSource(file: string): boolean {
+  return !file.endsWith(".test.ts") && !file.endsWith(`${TEST_SUPPORT}.ts`);
+}
+
 function filesOf(pattern: string): readonly { readonly file: string; readonly text: string }[] {
   return [...new Glob(pattern).scanSync(SRC)].sort().map((file) => ({
     file,
@@ -72,7 +78,7 @@ describe("the modules", () => {
   test("every source file belongs to a listed module, and every public file exists", () => {
     const sources = filesOf("*.ts")
       .map(({ file }) => file)
-      .filter((file) => !file.endsWith(".test.ts") && !file.endsWith(`${TEST_SUPPORT}.ts`));
+      .filter(isSource);
     expect(sources.filter((file) => moduleOf(nameOf(file)) === null)).toEqual([]);
     const names = new Set(sources.map(nameOf));
     expect(
@@ -80,6 +86,43 @@ describe("the modules", () => {
         .flat()
         .filter((name) => !names.has(name)),
     ).toEqual([]);
+  });
+
+  test("only an entry reads the environment", () => {
+    const below = filesOf("*.ts").filter(({ file }) => isSource(file) && !ENTRIES.includes(file));
+    expect(below.filter(({ text }) => readsEnv(text)).map(({ file }) => file)).toEqual([]);
+  });
+});
+
+describe("the environment check", () => {
+  test("catches a read however it is written", () => {
+    for (const text of [
+      "const home = process.env.HOME;",
+      'const home = process.env["HOME"];',
+      'const home = process["env"].HOME;',
+      "const home = process?.env.HOME;",
+      "const { env } = process;",
+      "const { env: vars } = process;",
+      'import { env } from "node:process";',
+      'import { env as vars } from "process";',
+      'import process from "node:process";\nconst home = process.env.HOME;',
+      "const home = Bun.env.HOME;",
+      "const home = import.meta.env.HOME;",
+    ]) {
+      expect(readsEnv(text)).toBe(true);
+    }
+  });
+
+  test("passes the rest of process and an env passed in", () => {
+    for (const text of [
+      "const root = process.cwd();",
+      "process.exitCode = 1;",
+      "function run(env: Env) { return env.HOME; }",
+      'import { argv } from "node:process";',
+      "const { argv } = process;",
+    ]) {
+      expect(readsEnv(text)).toBe(false);
+    }
   });
 });
 

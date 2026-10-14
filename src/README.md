@@ -13,6 +13,8 @@ A module's files are named for their layer:
 
 Another module, or a test of one, reaches a module only through its public files; any other file of it, such as `no-comments-spans.ts`, is its own ([`modules.test.ts`](modules.test.ts), which lists each module's public files).
 
+Only an entry, such as `cli.ts`, reads the environment; it passes what a module needs down as arguments ([`modules.test.ts`](modules.test.ts), which lists the entries).
+
 ## Modules
 
 | Prefix | Responsibility |
