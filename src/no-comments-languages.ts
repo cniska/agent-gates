@@ -1,4 +1,4 @@
-import { interpreterOf, routeOf } from "./no-comments-route";
+import { interpreterOf, routeOf, UV_SCRIPT } from "./no-comments-route";
 
 export const LANGUAGE_NAMES = ["javascript", "dart", "sql", "shell", "rust", "go", "python"] as const;
 
@@ -21,7 +21,11 @@ export const LANGUAGES: Readonly<Record<Language, LanguageEntry>> = {
   shell: { shown: "shell", extensions: [".sh", ".bash"], interpreters: ["sh", "bash", "dash", "zsh"] },
   rust: { shown: "Rust", extensions: [".rs"], interpreters: [] },
   go: { shown: "Go", extensions: [".go"], interpreters: [] },
-  python: { shown: "Python", extensions: [".py", ".pyi", ".pyw"], interpreters: ["python", "python3"] },
+  python: {
+    shown: "Python",
+    extensions: [".py", ".pyi", ".pyw"],
+    interpreters: ["python", "pypy", UV_SCRIPT],
+  },
 };
 
 export function languageOf(path: string, firstLine: string): Language | null {

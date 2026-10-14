@@ -2,7 +2,15 @@ type Route = { readonly kind: "extension"; readonly extension: string } | { read
 
 export const SHEBANG_PREFIX = "#!";
 
-const SHEBANG = /^#!\s*(?:\/usr\/bin\/env\s+(?:-\S+\s+)*)?(?:\S*\/)?([^\s/]+)/;
+const SHEBANG = /^#!\s*(?:\/usr\/bin\/env\s+(?:-\S+\s+)*)?(?:\S*\/)?([^\s/]+)(.*)/;
+
+const VERSION_SUFFIX = /\d+(?:\.\d+)*$/;
+
+const UV = "uv";
+
+const UV_SCRIPT_ARGUMENTS = /^\s+run\s+(?:\S+\s+)*--script(?:\s|$)/;
+
+export const UV_SCRIPT = "uv run --script";
 
 export function routeOf(path: string): Route {
   const name = path.slice(path.lastIndexOf("/") + 1);
@@ -12,5 +20,10 @@ export function routeOf(path: string): Route {
 }
 
 export function interpreterOf(head: string): string | null {
-  return SHEBANG.exec(head)?.[1] ?? null;
+  const found = SHEBANG.exec(head);
+  const program = found?.[1];
+  const argumentsText = found?.[2];
+  if (program === undefined || argumentsText === undefined) return null;
+  if (program === UV && UV_SCRIPT_ARGUMENTS.test(argumentsText)) return UV_SCRIPT;
+  return program.replace(VERSION_SUFFIX, "");
 }

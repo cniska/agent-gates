@@ -117,7 +117,24 @@ describe("the language table", () => {
     expect(languageOf("bin/tool", "#!/usr/bin/env node")).toBe("javascript");
     expect(languageOf("bin/tool", "#!/usr/bin/env -S bun --silent")).toBe("javascript");
     expect(languageOf("bin/tool", "#!/usr/local/bin/deno run")).toBe("javascript");
-    expect(languageOf("bin/tool", "#!/usr/bin/env python3")).toBe("python");
+    for (const shebang of [
+      "#!/usr/bin/env python3",
+      "#!/usr/bin/env python",
+      "#!/usr/bin/python2",
+      "#!/usr/bin/env python3.12",
+      "#!/usr/bin/python3.11 -u",
+      "#!/usr/bin/env pypy3",
+      "#!/usr/bin/env pypy",
+      "#!/usr/bin/env -S uv run --script",
+      "#!/usr/bin/env -S uv run --quiet --script",
+    ])
+      expect([shebang, languageOf("bin/tool", shebang)]).toEqual([shebang, "python"]);
+    for (const shebang of [
+      "#!/usr/bin/env uvx ruff",
+      "#!/usr/bin/env -S uv tool run --script",
+      "#!/usr/bin/env pythonista",
+    ])
+      expect([shebang, languageOf("bin/tool", shebang)]).toEqual([shebang, null]);
     expect(languageOf("bin/tool", "#!/usr/bin/env ruby")).toBeNull();
     expect(languageOf("pkg/a.pyi", "")).toBe("python");
     expect(languageOf(".eslintrc", "")).toBeNull();
