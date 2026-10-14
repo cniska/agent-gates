@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 const CLI = join(import.meta.dir, "..", "src", "cli.ts");
 
@@ -60,9 +60,34 @@ export function jsonLine(text: string): unknown {
   return JSON.parse(lines[0] ?? "");
 }
 
-export function checkout(): string {
+export function git(dir: string, args: readonly string[]): string {
+  const ran = run("git", ["-C", dir, ...args], dir);
+  if (ran.status !== 0) throw new Error(`git ${args.join(" ")} exited ${ran.status}: ${ran.stderr}`);
+  return ran.stdout.trim();
+}
+
+export function shell(dir: string, script: string): Ran {
+  return run("sh", ["-c", script], dir);
+}
+
+export function writeFiles(dir: string, files: Readonly<Record<string, string>>): void {
+  for (const [path, text] of Object.entries(files)) {
+    mkdirSync(dirname(join(dir, path)), { recursive: true });
+    writeFileSync(join(dir, path), text);
+  }
+}
+
+export function readText(dir: string, path: string): string {
+  return readFileSync(join(dir, path), "utf8");
+}
+
+export function modeOf(dir: string, path: string): number {
+  return statSync(join(dir, path)).mode & 0o777;
+}
+
+export function checkout(files: Readonly<Record<string, string>> = {}): string {
   const dir = scratchDir();
-  const ran = run("git", ["init", "-q", dir], dir);
-  if (ran.status !== 0) throw new Error(`git init exited ${ran.status}: ${ran.stderr}`);
+  git(dir, ["init", "-q"]);
+  writeFiles(dir, files);
   return dir;
 }
