@@ -1,5 +1,13 @@
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { unreachable } from "./assert";
 import { type Refusal, refusals } from "./coded-error";
@@ -25,6 +33,9 @@ import {
   INSTALL_GATES,
   NO_FILLS,
   nameTheFill,
+  PRE_COMMIT_STEPS,
+  STEP_DIRS,
+  WORKFLOWS_DIR,
   type WritableState,
 } from "./gates-contract";
 import { filledIn, fillTemplateOf, withFill } from "./gates-fill";
@@ -61,7 +72,7 @@ const gatesRefusal = refusals<{
   hook_occupied: {
     message: ({ root, target }) => `${root} has its own ${target}, which a gate would replace`,
     resolve: ({ root, target }) =>
-      `stop and hand this error to the owner: ${root}'s ${target} must move out before the gates install; a step that runs before each commit belongs in ${HOOKS_DIR}/pre-commit.d/<name>, and commit-subject owns ${HOOKS_DIR}/commit-msg`,
+      `stop and hand this error to the owner: ${root}'s ${target} must move out before the gates install; a step that runs before each commit belongs in ${PRE_COMMIT_STEPS}/<name>, and commit-subject owns ${HOOKS_DIR}/commit-msg`,
   },
   write_failed: {
     message: ({ path, detail }) => `${path} could not be written: ${detail}`,
@@ -73,8 +84,6 @@ const gatesRefusal = refusals<{
     resolve: ({ fill }) => nameTheFill(fill),
   },
 });
-
-const EXECUTE_BITS = 0o111;
 
 const EXECUTABLE_MODE = 0o755;
 
@@ -103,6 +112,8 @@ export type PlannedFile =
   | (PlannedAt & { readonly state: "occupied"; readonly refusal: Refusal })
   | (PlannedAt & { readonly state: "unresolved"; readonly refusal: Refusal });
 
+export type StepsState = { readonly steps: readonly string[]; readonly unchecked: readonly string[] };
+
 export type HooksPathState =
   | { readonly kind: "wired" }
   | { readonly kind: "unset" }
@@ -120,6 +131,8 @@ type GatesInstalled = {
   readonly prepare: Exclude<PrepareState["kind"], "occupied" | "unparseable">;
   readonly fills: Fills;
 };
+
+const EXECUTE_BITS = 0o111;
 
 function markerOf(text: string): Marker | null {
   const found = ourMarker(text);
@@ -226,6 +239,31 @@ export function hooksPathState(root: string): HooksPathState {
   if (hooksPath === null) return { kind: "unset" };
   if (resolve(root, hooksPath) === join(root, HOOKS_DIR)) return { kind: "wired" };
   return { kind: "occupied", refusal: gatesRefusal("hooks_path_occupied", { root, hooksPath }) };
+}
+
+function filesIn(root: string, dir: string): string[] {
+  if (!existsSync(join(root, dir))) return [];
+  return readdirSync(join(root, dir))
+    .map((name) => `${dir}/${name}`)
+    .filter((path) => statSync(join(root, path)).isFile());
+}
+
+function isOwnStep(found: Found | null): boolean {
+  return found?.executable === true && markerOf(found.text) === null;
+}
+
+function pathNamed(text: string, path: string): boolean {
+  const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![\\w./-])${escaped}(?![\\w./-])`).test(text);
+}
+
+export function stepsState(root: string, planned: readonly PlannedFile[]): StepsState {
+  const steps = STEP_DIRS.flatMap((dir) => filesIn(root, dir)).filter(
+    (path) => !planned.some(({ target }) => target === path) && isOwnStep(foundAt(join(root, path))),
+  );
+  const workflows = filesIn(root, WORKFLOWS_DIR).map((path) => readFileSync(join(root, path), "utf8"));
+  const unchecked = steps.filter((step) => !workflows.some((text) => pathNamed(text, step)));
+  return { steps, unchecked };
 }
 
 function actionFor(state: WritableState): Action {

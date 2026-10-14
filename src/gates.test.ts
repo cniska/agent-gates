@@ -102,6 +102,7 @@ describe("this repo", () => {
       "prepare",
       "format command",
       "CI setup",
+      "hook steps",
       "no-comments languages",
       "no-comments backlog",
     ]);

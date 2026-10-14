@@ -3,6 +3,14 @@ import type { Language } from "./no-comments-languages";
 
 export const HOOKS_DIR = ".githooks";
 
+export const PRE_COMMIT_STEPS = `${HOOKS_DIR}/pre-commit.d`;
+
+export const PRE_PUSH_STEPS = `${HOOKS_DIR}/pre-push.d`;
+
+export const STEP_DIRS: readonly string[] = [PRE_COMMIT_STEPS, PRE_PUSH_STEPS];
+
+export const WORKFLOWS_DIR = ".github/workflows";
+
 export const PREPARE = `! git rev-parse --git-dir >/dev/null 2>&1 || git config core.hooksPath ${HOOKS_DIR}`;
 
 export const PAST_PREPARES: readonly string[] = [`git config core.hooksPath ${HOOKS_DIR}`];
@@ -152,7 +160,7 @@ const NO_COMMENTS_SHARED: readonly GateFile[] = [
   {
     part: "no-comments",
     source: "no-comments/pre-commit",
-    target: `${HOOKS_DIR}/pre-commit.d/no-comments`,
+    target: `${PRE_COMMIT_STEPS}/no-comments`,
     executable: true,
     fills: null,
     versions: [
@@ -164,7 +172,7 @@ const NO_COMMENTS_SHARED: readonly GateFile[] = [
   {
     part: "no-comments",
     source: "no-comments.yml",
-    target: ".github/workflows/no-comments.yml",
+    target: `${WORKFLOWS_DIR}/no-comments.yml`,
     executable: false,
     fills: null,
     versions: [
@@ -357,7 +365,7 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
     {
       part: "commit-subject",
       source: "commits.yml",
-      target: ".github/workflows/commits.yml",
+      target: `${WORKFLOWS_DIR}/commits.yml`,
       executable: false,
       fills: null,
       versions: [
@@ -372,7 +380,7 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
     {
       part: "format",
       source: "format/pre-commit",
-      target: `${HOOKS_DIR}/pre-commit.d/format`,
+      target: `${PRE_COMMIT_STEPS}/format`,
       executable: true,
       fills: "command",
       versions: [
@@ -383,7 +391,7 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
     {
       part: "format",
       source: "format.yml",
-      target: ".github/workflows/format.yml",
+      target: `${WORKFLOWS_DIR}/format.yml`,
       executable: false,
       fills: null,
       versions: [{ version: 1, sha256: "9c36f14b44ac04a79de9aef33319f89cd61c4e6d0f931bf8bb95ecab9cc89a53" }],

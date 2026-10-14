@@ -119,7 +119,7 @@ Each command prints one JSON line. An error goes to stderr and exits 2 for `usag
 | Command | Does |
 | --- | --- |
 | `agent-gates install [<gate>...] [--command <format command>] [--setup <CI setup command>]` | Install the named gates, update the installed ones, and report each file's state before acting and the format and setup commands |
-| `agent-gates doctor` | Check each gate file, `core.hooksPath`, the `prepare` script and the format and CI setup commands; report each tracked language without its no-comments gate, each installed language with no files left to read, and the comment count; exit 1 on a failure |
+| `agent-gates doctor` | Check each gate file, `core.hooksPath`, the `prepare` script and the format and CI setup commands; report each tracked language without its no-comments gate, each installed language with no files left to read, each of the project's own steps in `.githooks/pre-commit.d` or `pre-push.d` that no workflow runs, and the comment count; exit 1 on a failure |
 
 Gate file states:
 

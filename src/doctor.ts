@@ -10,6 +10,8 @@ import {
   installedGates,
   type PlannedFile,
   plannedFiles,
+  type StepsState,
+  stepsState,
 } from "./gates";
 import {
   ADAPTER_FILES,
@@ -23,6 +25,7 @@ import {
   nameTheFill,
   REINSTALL,
   SCANNER_FILE,
+  WORKFLOWS_DIR,
 } from "./gates-contract";
 import { adaptersBeside, SWEEP_ALL } from "./no-comments-installed";
 import { LANGUAGE_NAMES, type Language } from "./no-comments-languages";
@@ -208,6 +211,22 @@ function backlogHealth(
   ];
 }
 
+const STEPS_CHECK = "hook steps";
+
+function stepsHealth({ steps, unchecked }: StepsState): Health[] {
+  if (steps.length === 0) return [];
+  if (unchecked.length === 0)
+    return [{ name: STEPS_CHECK, state: "ok", detail: `a workflow runs ${steps.join(", ")}`, fix: null }];
+  return [
+    {
+      name: STEPS_CHECK,
+      state: "warn",
+      detail: `no workflow in ${WORKFLOWS_DIR} runs ${unchecked.join(", ")}, so CI never checks what it refuses`,
+      fix: `add a workflow step that runs ${unchecked.join(", ")}`,
+    },
+  ];
+}
+
 function hooksPathHealth(hooksPath: HooksPathState): Health {
   const name = "hooksPath";
   switch (hooksPath.kind) {
@@ -277,6 +296,7 @@ function judged(root: string): Health[] {
     hooksPathHealth(hooksPathState(root)),
     prepareHealth(prepareState(root)),
     ...fillsHealth(planned, fills),
+    ...stepsHealth(stepsState(root, planned)),
     ...languagesHealth(root, languages),
     ...backlogHealth(root, languages, planned),
   ];

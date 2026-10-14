@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { readdirSync, rmSync } from "node:fs";
+import { chmodSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import {
   agentGates,
@@ -160,4 +160,36 @@ test("AC-29 installs the gate of each tracked language, and refuses when none is
   });
   expect(readdirSync(untyped).sort()).toEqual([".git", "notes.txt"]);
   expect(hooksPath(untyped)).toBe("");
+});
+
+test("AC-38 warns of the project's own hook steps no workflow runs", () => {
+  const dir = checkout();
+  install(dir, ["commit-subject"]);
+  expect(check(dir, "hook steps")).toBeUndefined();
+  writeFiles(dir, {
+    ".githooks/pre-commit.d/lint": "#!/bin/sh\nnpm run lint\n",
+    ".githooks/pre-push.d/test": "#!/bin/sh\nnpm test\n",
+    ".githooks/pre-commit.d/notes": "#!/bin/sh\nexit 1\n",
+    ".githooks/pre-commit.d/marked": "#!/bin/sh\n# agent-gate:format:1\n",
+  });
+  for (const step of ["pre-commit.d/lint", "pre-push.d/test", "pre-commit.d/marked"])
+    chmodSync(join(dir, ".githooks", step), 0o755);
+  const steps = ".githooks/pre-commit.d/lint, .githooks/pre-push.d/test";
+  writeFiles(dir, { ".github/workflows/lint.yml": "      - run: .githooks/pre-commit.d/lint-fix\n" });
+  expect(check(dir, "hook steps")).toEqual({
+    name: "hook steps",
+    state: "warn",
+    detail: `no workflow in .github/workflows runs ${steps}, so CI never checks what it refuses`,
+    fix: `add a workflow step that runs ${steps}`,
+  });
+  writeFiles(dir, {
+    ".github/workflows/steps.yml":
+      "jobs:\n  steps:\n    steps:\n      - run: .githooks/pre-commit.d/lint && .githooks/pre-push.d/test\n",
+  });
+  expect(check(dir, "hook steps")).toEqual({
+    name: "hook steps",
+    state: "ok",
+    detail: `a workflow runs ${steps}`,
+    fix: null,
+  });
 });

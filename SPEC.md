@@ -159,6 +159,10 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **FR-105** — The hook does nothing for input naming no file, a file outside a checkout, or a checkout without `.githooks/no-comments/scan.cjs`.
 - **FR-106** — Without `jq` or `node` on `PATH`, with input that is not JSON, or with a scanner that exits other than 0 or 1, the hook prints nothing and writes to stderr a note naming why the edit was not judged.
 
+### 2.14 The project's own steps
+
+- **FR-107** — With a gate installed, `doctor` warns about each executable file in `.githooks/pre-commit.d/` or `.githooks/pre-push.d/` that is no gate file and carries no `agent-gate` marker, while no workflow in `.github/workflows/` names its path, so CI never runs it; once a workflow names each, the check passes, and with no such file it is not reported.
+
 ## 3. Non-functional requirements
 
 - **NF-1** — The installed gates run with git, a POSIX shell and `node` alone: nothing installed in the project, and neither agent-gates nor Bun on `PATH`. The `format` gate also runs the project's own format command.
@@ -217,6 +221,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **AC-35** — Run `scan.cjs --file` on a tracked file whose working tree adds a comment to one `HEAD` holds, a comment the index does not hold, from the checkout's root, from the file's directory, and by an absolute path from another directory; on a file whose index adds a comment its working tree removed; on an ignored, a generated and a binary file, a symlink and a missing path; on a new file, a renamed file and a file a comment moved into; and on a file outside the checkout: the first is refused with the reply naming only the new comment, the same each way; the next six pass; the next three are refused; the last exits 2 naming the path and the checkout; the files and git's status are unchanged. (FR-96, FR-97, FR-98, FR-99, FR-100)
 - **AC-36** — Run the hook as `hooks.json` registers it, from the plugin `plugin.json` names `cniska-gates`, with only a shell to run the command, bash, git, `node` and `jq` on `PATH`, after an edit adding a comment, named by an absolute path and by a path relative to a subdirectory: it exits 0, printing the scanner's reply as the PostToolUse context, the file unchanged; after a clean edit, for a file outside a checkout, for a file in a directory that does not exist, in a checkout without the gate, and for input naming no file: it exits 0, printing nothing. (FR-101, FR-102, FR-103, FR-104, FR-105, NF-2)
 - **AC-37** — Run the hook without `jq`, without `node`, with input that is not JSON, and with a scanner that exits 2: each exits 0, prints nothing, and writes a note naming why. (FR-104, FR-106)
+- **AC-38** — Over an install, add an executable step to `pre-commit.d` and one to `pre-push.d`, a step that is not executable and an executable one with a marker: `doctor` reports no step check before them, then, with a workflow naming only a longer path that starts with one of them, warns naming the first two, with a fix naming them; once a workflow runs both, the check passes. (FR-107)
 
 ## 6. Deliverables
 
