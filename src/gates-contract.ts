@@ -161,6 +161,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 19, sha256: "01288f901ae9bb765b9df167fdc7f17c40ba1c27a545f55a0b722e92733f5345" },
     { version: 20, sha256: "cb5592bb927750ba89d90fea28f62192dca53ae4898ac8c8171c76a70dd4e963" },
     { version: 21, sha256: "01d227c3eb564602895af3b9fc2268e4d856988136d687d3a24d91773dc354cd" },
+    { version: 22, sha256: "66c089ae169af8176d1b8fcbccd89ec2a304571649f9b8ef584ab7f0ab0c519c" },
   ]),
   sql: adapterFile("sql", [
     { version: 1, sha256: "261cd8dc159c4222234bd5bc2796723b803ecf0cf448a7d417471faea8c3ef13" },

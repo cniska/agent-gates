@@ -318,31 +318,22 @@ describe("the dart adapter", () => {
     expect(dartComments("a.dart", text)).toEqual(read([]));
   });
 
-  test("keeps a language version before any code", () => {
-    const text = ["#!/usr/bin/env dart", "// @dart=3.0", "/* a */ // @dart = 3.0", "", "void f() {}"].join(
-      "\n",
-    );
-    expect(dartComments("a.dart", text)).toEqual(read([{ line: 3, text: "/* a */" }]));
-  });
-
-  test("refuses every analyzer suppression and setting, and a language version after code or not alone", () => {
+  test("refuses every analyzer suppression, setting and language version", () => {
     const refused = [
       "// ignore_for_file: avoid_print",
       "// ignore: unused_element",
       "// ignore: unused_element, dead_code",
       "// ignore: custom_lint/my_rule",
       "// coverage:ignore-line",
+      "// @dart=3.0",
+      "// @dart = 3.0",
       "/// @dart = 3.0",
       "// @dart = 3.0 for the records",
-      "// @dart = 3",
       "// ignore: type=lint",
       "// ignore:",
     ];
-    expect(dartComments("a.dart", [...refused, "void f() {}", "// @dart = 3.0"].join("\n"))).toEqual(
-      read([
-        ...refused.map((text, index) => ({ line: index + 1, text })),
-        { line: refused.length + 2, text: "// @dart = 3.0" },
-      ]),
+    expect(dartComments("a.dart", ["#!/usr/bin/env dart", ...refused, "void f() {}"].join("\n"))).toEqual(
+      read(refused.map((text, index) => ({ line: index + 2, text }))),
     );
   });
 
@@ -1481,7 +1472,7 @@ describe("the pre-commit hook", () => {
           '  1  #[doc = "why"]',
         ],
         [
-          "kept in Dart: the first-line shebang, with no `#` word or `\\c` after `#!`; `// @dart = x.y` alone, before any code; a gate marker on a line of its own",
+          "kept in Dart: the first-line shebang, with no `#` word or `\\c` after `#!`; a gate marker on a line of its own",
           "kept in SQL: drizzle's `--> statement-breakpoint`; a gate marker on a line of its own",
           "kept in shell: the first-line shebang, with no `#` word or `\\c` after `#!`; a gate marker on a line of its own",
           KEPT_IN_RUST,

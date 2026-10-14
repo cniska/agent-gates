@@ -1,13 +1,4 @@
-import {
-  adapter,
-  type CommentRead,
-  directive,
-  type KeptForm,
-  type LeadingSpan,
-  type Lexed,
-  SHEBANG,
-  type Span,
-} from "./no-comments-adapter";
+import { adapter, type Lexed, SHEBANG, type Span } from "./no-comments-adapter";
 import { bracketsOf } from "./no-comments-brackets";
 import { SHEBANG_PREFIX } from "./no-comments-route";
 import { lineEnd, nestedBlockEnd, type Stopped, unterminated } from "./no-comments-spans";
@@ -16,15 +7,10 @@ const OPENER = 2;
 
 const IDENTIFIER_CHAR = /[A-Za-z0-9_$]/;
 
-const LANGUAGE_VERSION = /\s*@dart\s*=\s*\d+\.\d+/;
-
-const WHITESPACE = /\s/;
-
-function commentSpans(text: string): Lexed<LeadingSpan, null> {
+function commentSpans(text: string): Lexed<Span, null> {
   const spans: Span[] = [];
   let at = text.startsWith(SHEBANG_PREFIX) ? lineEnd(text, 0) : 0;
   if (at > 0) spans.push({ start: 0, end: at, bodyStart: SHEBANG_PREFIX.length, bodyEnd: at, style: "line" });
-  let codeStart = text.length;
 
   function lineComment(): void {
     const start = at;
@@ -69,8 +55,6 @@ function commentSpans(text: string): Lexed<LeadingSpan, null> {
       const char = text[at] ?? "";
       const next = text[at + 1];
       let stopped: Stopped | null = null;
-      const startsComment = char === "/" && (next === "/" || next === "*");
-      if (codeStart === text.length && !startsComment && !WHITESPACE.test(char)) codeStart = at;
       if (char === "/" && next === "/") lineComment();
       else if (char === "/" && next === "*") stopped = blockComment();
       else if (char === "'" || char === '"') stopped = string(false);
@@ -91,24 +75,10 @@ function commentSpans(text: string): Lexed<LeadingSpan, null> {
 
   const stopped = code(false);
   if (stopped !== null) return stopped;
-  return {
-    kind: "lexed",
-    spans: spans.map((span) => ({ ...span, leading: span.end <= codeStart })),
-    facts: null,
-  };
+  return { kind: "lexed", spans, facts: null };
 }
-
-type Read = CommentRead<LeadingSpan, null>;
-
-const KEPT: readonly KeptForm<Read>[] = [
-  SHEBANG,
-  directive("`// @dart = x.y` alone, before any code", {
-    pattern: LANGUAGE_VERSION,
-    where: ({ span }) => span.style === "line" && span.leading,
-  }),
-];
 
 export const { comments, kept } = adapter({
   lex: commentSpans,
-  kept: KEPT,
+  kept: [SHEBANG],
 });
