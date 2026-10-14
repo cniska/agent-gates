@@ -1375,7 +1375,7 @@ describe("the pre-commit hook", () => {
   });
 
   test("keeps another tool's gate marker, with or without a part", () => {
-    const dir = gated({ "a.ts": "// dim-gate:1\n// other-tool-gate:lint:12\nexport {};\n" });
+    const dir = gated({ "a.ts": "// dim-gate:1\n// othertool-gate:lint:12\nexport {};\n" });
     expect(commit(dir)).toEqual({ status: 0, stderr: "" });
     writeFiles(dir, { "a.ts": "// dim-gate:one\nexport {};\n" });
     expect(commit(dir).stderr).toBe(refusalText(["a.ts", "  1  // dim-gate:one"]));

@@ -1,4 +1,4 @@
-const MARKER_BODY = " ([a-z]+(?:-[a-z]+)*)-gate:(?:([a-z-]+):)?(\\d+)";
+const MARKER_BODY = " ([a-z]+)-gate:(?:([a-z-]+):)?(\\d+)";
 
 const MARKER_LINE = new RegExp(`^(?:#|//)${MARKER_BODY}$`);
 

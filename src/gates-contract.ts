@@ -161,6 +161,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 12, sha256: "7a2e760147894b13c592647e434450e01b3dc82c14c610c66a6577a2bd8d6aae" },
     { version: 13, sha256: "478e6e927cfbcd8265f1f38d6fb97dcd1355bed9cd4f94af42d27951274b883b" },
     { version: 14, sha256: "d6387829d80f5eab43f1434a3da51682faa9aa38b5a84f4f7583a2b1dba9563d" },
+    { version: 15, sha256: "3069319c98e761bef077ed4d2cb22eb1d5b58351deb9e3b26e86f435d9bf82b6" },
   ]),
   dart: adapterFile("dart", [
     { version: 1, sha256: "25cc760fcd6ef317da0c52457e79e84926f4b87f81e67630b40dfd666f0feb2a" },
@@ -180,6 +181,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 15, sha256: "6478de2df0bf3ef55c38de082eb2295cea22d3fe3e4dc82501270fec056a60a9" },
     { version: 16, sha256: "afbeb7aace14606f714b293003354eb4367a3aedf4af5bfc4e753d96b95c6435" },
     { version: 17, sha256: "27eb99e3392c515eee46e0bc383fe2a75a65e357f666a731c817fc78e21b5cec" },
+    { version: 18, sha256: "cead83858a0d93d1305c28597434136f0468406cf1db5a60338e3266c636b2ac" },
   ]),
   sql: adapterFile("sql", [
     { version: 1, sha256: "261cd8dc159c4222234bd5bc2796723b803ecf0cf448a7d417471faea8c3ef13" },
@@ -200,6 +202,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 16, sha256: "bf515793327108c0a5166edec4584daca771df024429037a296ff22c0ca116cf" },
     { version: 17, sha256: "8872a17e172fdc64c86cd9f6a2658cd449b8ff5a33aa131b5877a0625dc1cf05" },
     { version: 18, sha256: "21aa97e07e7a70a3fa51ba78b62a0b6f7b72b52b55d726e1e5dfcc629b904cb0" },
+    { version: 19, sha256: "37c20090cf2cc6502849798d25881a446de380549153556f577ce3c87aa094bc" },
   ]),
   shell: adapterFile("shell", [
     { version: 1, sha256: "89a9bdde90915a96d5110890ac7dd715a098676cf44976c0bc2301b4012ab1b2" },
@@ -220,6 +223,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 16, sha256: "1940cecfdd301c8c2c56b40d4bfafc2f6db3c558c608a089494dd755f0993a7a" },
     { version: 17, sha256: "9902fc1e98d26301b83c350942e2433f5b48cd5ac3fcd349f985b0cb73d0e8b5" },
     { version: 18, sha256: "83d82f13d20bda123ce85a115c8285c05679c6ee647d4feb866396a75f5a5ef5" },
+    { version: 19, sha256: "b1342ff62884afa3e1449f67c090bcae378207dfd95e561b4c443d545c7dafa6" },
   ]),
   rust: adapterFile("rust", [
     { version: 1, sha256: "f7d0dd77af2f515cca76525640e20f72984a24e995031360b190b31478634daa" },
@@ -239,6 +243,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 15, sha256: "81b4955dd987ef2f12b410686a410d490f68afe19ebb0ad56ee298e9bf5800fe" },
     { version: 16, sha256: "60f2a638d86c3e904a2a203252d282bd8fb18c27e88a632738296c3b5d0652f8" },
     { version: 17, sha256: "8983326f5a6c148461a33489b54ec345f3c40acabf335265f38a92be3ce5f1cf" },
+    { version: 18, sha256: "d0a2ade99c60f50ae6c0af68002abb98f3bdd9b9a4419d78ae742ebcd66ef889" },
   ]),
   go: adapterFile("go", [
     { version: 1, sha256: "7636aedbafc041c6b38c608ef83f156d51f636b0aaacb7c766721b6f1ccde18e" },
@@ -250,6 +255,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 7, sha256: "2232379950e0f29097c04f01fa42d65360da01a2ebc2e1a522df68fcd21652ee" },
     { version: 8, sha256: "717fa26b172435913ae372756fdacc93a4ce71134ea60f58905ff0a788835818" },
     { version: 9, sha256: "58adcb86bf7ecf2d91d0ee84cadb261c9b54490cf82d12976e7dccedaf5a8c32" },
+    { version: 10, sha256: "83bc0e8e6876d921b895b6fe4ff4011e53272426f555d185c33a355d81b013e4" },
   ]),
   python: adapterFile("python", [
     { version: 1, sha256: "0a9e1622e9cbb6d697e50947de8488666247a3ba7505c986eff90bdb63e08152" },
@@ -262,6 +268,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 8, sha256: "fd46dd82209c5ffa0c56e9a0a293b1e925a076c119a5f7ac382b2381937e87c2" },
     { version: 9, sha256: "2a4afa1830c295fa00556f814f54ad98d800b3301e46262454f89d90466de82a" },
     { version: 10, sha256: "e8d06406d193bdaf0d4a49d59a7394e055b0326f216f6d6d0223baaf9e1007ed" },
+    { version: 11, sha256: "3350771460f2a27b2f22840793ec170e2b53ea2fbd1b01b5394486eabc121d04" },
   ]),
 };
 

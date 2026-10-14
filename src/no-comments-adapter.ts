@@ -1,6 +1,7 @@
 import { isMarkerBody } from "./gate-marker";
 import { SHEBANG_PREFIX } from "./no-comments-route";
 import { lineCounter, lineEnd, type Stopped, textStart } from "./no-comments-spans";
+import { SPDX_3_29_EXCEPTION_IDS } from "./spdx-exceptions";
 
 export type Comment = { readonly line: number; readonly text: string };
 
@@ -52,8 +53,12 @@ const BLANK = /^[ \t]*$/;
 
 const LICENSE_ID = "[\\w.+\\-:()]+";
 
+const REGEX_SPECIAL = /[.+]/g;
+
+const EXCEPTION_ID = `(?:${SPDX_3_29_EXCEPTION_IDS.map((id) => id.replace(REGEX_SPECIAL, "\\$&")).join("|")})\\)*`;
+
 const SPDX_LINE = new RegExp(
-  `^(?://+!?|#+|--+|/\\*+!?)[ \\t]*SPDX-License-Identifier:[ \\t]*${LICENSE_ID}(?:[ \\t]+(?:AND|OR|WITH)[ \\t]+${LICENSE_ID})*[ \\t]*(?:\\*+/)?$`,
+  `^(?://+!?|#+|--+|/\\*+!?)[ \\t]*SPDX-License-Identifier:[ \\t]*${LICENSE_ID}(?:[ \\t]+(?:AND|OR)[ \\t]+${LICENSE_ID}|[ \\t]+WITH[ \\t]+${EXCEPTION_ID})*[ \\t]*(?:\\*+/)?$`,
 );
 
 const MARKER_OPENERS = ["#", "//", "--"];

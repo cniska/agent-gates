@@ -133,6 +133,9 @@ const SHARED_KEPT: readonly Lookalike[] = [
   at("dart", "// SPDX-License-Identifier: MIT"),
   at("shell", "#### SPDX-License-Identifier: MIT OR Apache-2.0"),
   at("sql", "--- SPDX-License-Identifier: MIT"),
+  at("javascript", "// SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0"),
+  at("shell", "# SPDX-License-Identifier: (GPL-2.0-or-later WITH Linux-syscall-note) OR MIT"),
+  at("go", "// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception"),
 ];
 
 const SHARED_REFUSED: readonly Lookalike[] = [
@@ -147,6 +150,9 @@ const SHARED_REFUSED: readonly Lookalike[] = [
   at("sql", "--- agent-gate:no-comments:1"),
   at("sql", "/* agent-gate:no-comments:1 */"),
   at("javascript", "// SPDX-License-Identifier: MIT because"),
+  at("shell", "# this-is-a-hack-because-of-bug-gate:1"),
+  at("javascript", "// SPDX-License-Identifier: MIT WITH this-was-a-workaround"),
+  at("javascript", "// SPDX-License-Identifier: (GPL-2.0-only WITH because-reasons)"),
 ];
 
 function refusedByAdapter({ language, path, text }: Lookalike): number {
