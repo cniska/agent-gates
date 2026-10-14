@@ -49,7 +49,7 @@ const KEPT_IN_JAVASCRIPT =
 const KEPT_IN_RUST = "kept in Rust: one `SPDX-License-Identifier:` line; a gate marker on a line of its own";
 
 const KEPT_IN_GO =
-  'kept in Go: `//go:build` and `//go:debug` with their argument, before `package`; `//go:embed` with its patterns, above a `var`; `//go:generate`, `//go:linkname`, `//go:wasmimport`, `//go:wasmexport` and `//go:fix` with their arguments, and `//go:noinline`, `//go:nosplit`, `//go:noescape`, `//go:norace`, `//go:nocheckptr`, `//go:uintptrescapes` and `//go:uintptrkeepalive` alone, at column 1; `//line file:N` at column 1, and `/*line file:N*/`; `//export Name` above the top-level func `Name`, in a file that imports `"C"`; the cgo preamble above `import "C"`, holding no C comment; one `SPDX-License-Identifier:` line; a gate marker on a line of its own';
+  'kept in Go: `//go:build` and `//go:debug` with their argument, before `package`; `//go:embed` with its patterns, above a `var`; `//go:generate`, `//go:linkname`, `//go:wasmimport`, `//go:wasmexport` and `//go:fix` with their arguments, and `//go:noinline`, `//go:nosplit`, `//go:noescape`, `//go:norace`, `//go:nocheckptr`, `//go:uintptrescapes` and `//go:uintptrkeepalive` alone, at column 1; `//line file:N` at column 1, and `/*line file:N*/`; `//export Name` above the top-level func `Name`, in a file that imports `"C"`; the cgo preamble above `import "C"`, holding no C comment, `#if 0`, `#error`, `#warning` or `#pragma message`; one `SPDX-License-Identifier:` line; a gate marker on a line of its own';
 
 const KEPT_IN_PYTHON =
   "kept in Python: the first-line shebang, with no `#` word or `\\c` after `#!`; the PEP 263 coding declaration on line 1, or on line 2 under a blank or comment line; a PEP 723 `# /// script` block of TOML holding only `requires-python`, `dependencies` and `[tool.*]`, and no comment; one `SPDX-License-Identifier:` line; a gate marker on a line of its own";
@@ -989,6 +989,38 @@ describe("the go adapter", () => {
         { line: 10, text: "// refused" },
       ]),
     );
+  });
+
+  test("refuses a whole cgo preamble that disables C with `#if 0` or holds a C diagnostic message", () => {
+    for (const directive of ["#if 0", "#elif 0", "# error why", "#warning why", '#pragma message("why")']) {
+      const lines = [
+        "package main",
+        "",
+        "// #include <stdio.h>",
+        `// ${directive}`,
+        "// #endif",
+        'import "C"',
+        "",
+      ];
+      expect([directive, goComments("main.go", lines.join("\n"))]).toEqual([
+        directive,
+        read([
+          { line: 3, text: "// #include <stdio.h>" },
+          { line: 4, text: `// ${directive}` },
+          { line: 5, text: "// #endif" },
+        ]),
+      ]);
+    }
+    const block = ["package main", "", "/*", "#if 0", "disabled prose", "#endif", "*/", 'import "C"', ""];
+    expect(goComments("main.go", block.join("\n"))).toEqual(
+      read([{ line: 3, text: "/*\n#if 0\ndisabled prose\n#endif\n*/" }]),
+    );
+    expect(
+      goComments(
+        "main.go",
+        ["package main", "", "// #if 01", "// #pragma once", "// #endif", 'import "C"', ""].join("\n"),
+      ),
+    ).toEqual(read([]));
   });
 
   test("keeps a cgo preamble holding no C comment, and exports on top-level funcs, only in a file that imports C", () => {

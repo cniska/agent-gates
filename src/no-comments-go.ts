@@ -119,6 +119,8 @@ const C_LITERAL = /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g;
 
 const C_COMMENT = /\/\/|\/\*/;
 
+const C_PROSE_DIRECTIVE = /^[ \t]*#[ \t]*(?:(?:el)?if[ \t]+0\b|error\b|warning\b|pragma[ \t]+message\b)/m;
+
 type CodeKind = "word" | "string" | "rune" | "number" | "punct";
 
 type Token =
@@ -154,6 +156,16 @@ type Grouped = { readonly groupOf: ReadonlyMap<number, Group>; readonly code: re
 type SpecFound = { readonly importsC: boolean; readonly doc: Group | null };
 
 const NOT_DOCUMENTING: Documents = { kind: "none" };
+
+type CommentToken = Extract<Token, { readonly kind: "comment" }>;
+
+function bodyEnd(token: CommentToken): number {
+  return token.style === "block" ? token.end - CLOSER : token.end;
+}
+
+function bodyOf(text: string, token: CommentToken): string {
+  return text.slice(token.start + OPENER, bodyEnd(token));
+}
 
 function tokensOf(text: string): Tokenized {
   const tokens: Token[] = [];
@@ -413,19 +425,27 @@ function targetSpans(text: string, tokens: readonly Token[]): Lexed<GoSpan, Fact
     }
   }
 
+  const proseGroups = new Set<Group>();
+  for (const [index, token] of tokens.entries()) {
+    const group = groupOf.get(index);
+    if (token.kind === "comment" && group !== undefined && C_PROSE_DIRECTIVE.test(bodyOf(text, token)))
+      proseGroups.add(group);
+  }
+
   const spans = tokens.flatMap((token, index): GoSpan[] => {
     if (token.kind !== "comment") return [];
     const group = groupOf.get(index);
     invariant(group !== undefined, "commentGroups puts every comment in a group");
+    const documented = documents.get(group) ?? NOT_DOCUMENTING;
     return [
       {
         start: token.start,
         end: token.end,
         bodyStart: token.start + OPENER,
-        bodyEnd: token.style === "block" ? token.end - CLOSER : token.end,
+        bodyEnd: bodyEnd(token),
         style: token.style,
         beforePackage: packageStart !== null && token.start < packageStart,
-        documents: documents.get(group) ?? NOT_DOCUMENTING,
+        documents: documented.kind === "import-c" && proseGroups.has(group) ? NOT_DOCUMENTING : documented,
       },
     ];
   });
@@ -482,7 +502,8 @@ const KEPT: readonly KeptForm<GoRead>[] = [
       text.slice(EXPORT_PREFIX.length).trim() === span.documents.name,
   },
   {
-    shown: 'the cgo preamble above `import "C"`, holding no C comment',
+    shown:
+      'the cgo preamble above `import "C"`, holding no C comment, `#if 0`, `#error`, `#warning` or `#pragma message`',
     keeps: ({ span, body }) => span.documents.kind === "import-c" && holdsNoCComment(body),
   },
 ];
