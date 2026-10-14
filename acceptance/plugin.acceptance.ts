@@ -21,6 +21,8 @@ const QUIET = { status: 0, stdout: "", stderr: "" };
 
 const COMMAND = `"\${CLAUDE_PLUGIN_ROOT}"/hooks/no-comments.sh`;
 
+const SKIP_COMMAND = `"\${CLAUDE_PLUGIN_ROOT}"/hooks/no-skip.sh`;
+
 function hookRan(input: string, env: Env = {}) {
   return shell(scratchDir(), COMMAND, { CLAUDE_PLUGIN_ROOT: PLUGIN, ...env }, input);
 }
@@ -57,6 +59,7 @@ test("AC-36 hands the agent the scanner's reply after an edit adding a comment, 
   expect(JSON.parse(readText(PLUGIN, ".claude-plugin/plugin.json"))).toMatchObject({ name: "cniska-gates" });
   expect(JSON.parse(readText(PLUGIN, "hooks/hooks.json"))).toEqual({
     hooks: {
+      PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: SKIP_COMMAND }] }],
       PostToolUse: [{ matcher: "Edit|Write|MultiEdit", hooks: [{ type: "command", command: COMMAND }] }],
     },
   });
@@ -105,5 +108,85 @@ test("AC-37 leaves only a note when it cannot judge the edit", () => {
     ...QUIET,
     stderr:
       "cniska-gates: the no-comments scanner exited 2, so the edit's comments were not judged: no-comments: too old\n",
+  });
+});
+
+function ranCommand(cwd: string, command: string, env: Env = {}) {
+  const input = JSON.stringify({
+    cwd,
+    hook_event_name: "PreToolUse",
+    tool_name: "Bash",
+    tool_input: { command },
+  });
+  return shell(scratchDir(), SKIP_COMMAND, { CLAUDE_PLUGIN_ROOT: PLUGIN, ...env }, input);
+}
+
+function denied(reason: string) {
+  return {
+    status: 0,
+    stdout: `${JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: `cniska-gates: ${reason} Fix what the refusing gate names instead; CI refuses what the gates refuse anyway.`,
+      },
+    })}\n`,
+    stderr: "",
+  };
+}
+
+test("AC-41 denies a git command that skips the gates, naming them, and lets every other command through", () => {
+  const dir = gated(["commit-subject", "no-comments-javascript"]);
+  const tools = bare(["bash", "git", "jq"]);
+  const gates = "commit-subject, no-comments";
+  const pointed = (how: string) =>
+    denied(
+      `\`git ${how}\` points git away from .githooks, which skips the gates this repo runs on commit (${gates}) and on push (${gates}).`,
+    );
+
+  for (const [command, how] of [
+    ['git commit --no-verify -m "feat: add a thing"', "--no-verify"],
+    ["git add -A && git commit -anm wip", "-anm"],
+  ] as const)
+    expect(ranCommand(dir, command, tools)).toEqual(
+      denied(`\`git commit ${how}\` skips the gates this repo runs on commit: ${gates}.`),
+    );
+  expect(ranCommand(dir, "git push --no-verify origin main", tools)).toEqual(
+    denied(`\`git push --no-verify\` skips the gates this repo runs on push: ${gates}.`),
+  );
+  expect(ranCommand(dir, "cd src; git -c Core.HooksPath=/dev/null push", tools)).toEqual(
+    pointed("-c Core.HooksPath=/dev/null"),
+  );
+  expect(ranCommand(dir, "git config core.hooksPath .husky", tools)).toEqual(
+    pointed("config core.hooksPath .husky"),
+  );
+  expect(ranCommand(dir, `git config core.hooksPath ${dir}`, tools)).toEqual(
+    pointed(`config core.hooksPath ${dir}`),
+  );
+  expect(ranCommand(dir, "git config --unset core.hooksPath", tools)).toEqual(
+    pointed("config --unset core.hooksPath"),
+  );
+
+  for (const command of [
+    'git commit -am "docs: explain --no-verify"',
+    "git commit -m 'feat: x; git push --no-verify'",
+    "git push -n origin main",
+    "git config core.hooksPath .githooks",
+    "git config --get core.hooksPath",
+    "git -c core.hooksPath=./.githooks/ commit -m x",
+    `git config core.hooksPath ${join(dir, ".githooks")}`,
+    "echo hi > .githooks/pre-push.d/commit-subject",
+  ])
+    expect(ranCommand(dir, command, tools)).toEqual(QUIET);
+
+  expect(ranCommand(checkout(), "git commit --no-verify -m x", tools)).toEqual(QUIET);
+  expect(ranCommand(dir, "git commit --no-verify -m x", bare(["bash", "git"]))).toEqual({
+    ...QUIET,
+    stderr: "cniska-gates: jq is not on PATH, so the command was not checked for skipping the gates\n",
+  });
+  expect(shell(scratchDir(), SKIP_COMMAND, { CLAUDE_PLUGIN_ROOT: PLUGIN }, "not json")).toEqual({
+    ...QUIET,
+    stderr:
+      "cniska-gates: the hook input did not parse as JSON, so the command was not checked for skipping the gates\n",
   });
 });

@@ -8,7 +8,7 @@ This document states what must hold, not how. [`README.md`](README.md) lists the
 
 ## 1. Purpose & context
 
-A coding agent excuses a workaround in a comment, writes a commit message nobody can scan, or commits unformatted code that fails the project's check, and a reviewer reading the diff tends to accept all of it. agent-gates installs gates that git hooks enforce on commit and push and GitHub workflows enforce again in CI, for every developer: the commit subject, the format and no added comments, and the hooks run the project's own check steps, which `doctor` holds CI to running. The gates are files committed with the project, so contributors and CI are gated without installing agent-gates; agent-gates installs them, brings them up to date, and judges their health. The optional `cniska-gates` Claude Code plugin optimizes the agent's loop: it shows the agent the comments each edit added, before a gate refuses the commit.
+A coding agent excuses a workaround in a comment, writes a commit message nobody can scan, or commits unformatted code that fails the project's check, and a reviewer reading the diff tends to accept all of it. agent-gates installs gates that git hooks enforce on commit and push and GitHub workflows enforce again in CI, for every developer: the commit subject, the format and no added comments, and the hooks run the project's own check steps, which `doctor` holds CI to running. The gates are files committed with the project, so contributors and CI are gated without installing agent-gates; agent-gates installs them, brings them up to date, and judges their health. The optional `cniska-gates` Claude Code plugin optimizes the agent's loop: it shows the agent the comments each edit added, before a gate refuses the commit, and denies a git command that skips the gates.
 
 **Primary user:** coding agents and their owner, installing gates into a project, reading why a commit was refused, and running the plugin in the agent's sessions. Not the audience: projects that want a configurable linter; a gate here has no options.
 
@@ -170,17 +170,22 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **FR-110** — Before a push, `no-comments` judges each ref the push updates or creates by the no-comments workflow's rules (FR-50), against its merge base with the base FR-109 names.
 - **FR-111** — The commits and no-comments workflows and the pre-push steps judge through one installed script, `.githooks/judge-push`, so a push is judged by the same rules before it leaves and in CI.
 
+### 2.16 The Claude Code plugin: skipping the gates
+
+- **FR-112** — Before each `Bash` command, in a checkout whose `.githooks/commit-msg`, `pre-commit` or `pre-push` carries an `agent-gate` marker, the plugin denies a command that runs `git commit` or `git push` with `--no-verify`, `git commit` with `-n` among its short options, or git with `core.hooksPath`, its key in any case, set by `-c` or `git config` to anything but `.githooks`, or unset. The denial names the gates the command skips, the hooks' steps on commit or push, and tells the agent to fix what the refusing gate names instead.
+- **FR-113** — The check lets through a command whose skip appears only inside a quoted string, a read of `core.hooksPath`, `git push -n`, and every command in a checkout without the marked hooks; without `jq`, or with input that is not JSON, it lets the command through and writes to stderr a note naming why it was not checked.
+
 ## 3. Non-functional requirements
 
 - **NF-1** — The installed gates run with git, a POSIX shell and `node` alone: nothing installed in the project, and neither agent-gates nor Bun on `PATH`. The `format` gate also runs the project's own format command.
-- **NF-2** — The plugin's hook runs with bash, git, `node` and `jq` alone.
+- **NF-2** — The plugin's hooks run with bash, git, `node` and `jq` alone.
 
 ## 4. Out of scope
 
 - Configuring a gate: a gate has no options beyond the format and CI setup commands (FR-85, FR-86), and the installed files are the only state; configurable rules belong to the project's own linter.
 - Finding a project's format command, and what its formatting is: the project's formatter owns that, and install is given its command (FR-85).
 - Driving a project's comment count to zero; the project sweeps with `scan.cjs --all`, and the gates stop the count growing (FR-34).
-- Blocking or changing an edit: the plugin reports the comments an edit added (FR-103, FR-104), and the gates refuse at commit.
+- Blocking or changing an edit, an installed gate file's included: the plugin reports the comments an edit added (FR-103, FR-104), and the gates refuse at commit.
 - The workflow an agent follows; cniska-skills holds it.
 - Recording or measuring agent work; agent-record does that.
 - Isolating the checkouts of agents working in parallel; agent-worktree does that.
@@ -232,6 +237,8 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 - **AC-39** — Steps in `.githooks/pre-push.d/` named to run in an order, one not executable, one failing with status 7: the executable steps before the failing one run in name order, each given the remote, its URL and the pushed refs, the rest do not, and the hook exits 7. (FR-108)
 - **AC-40** — Push from a clone with `commit-subject` and `no-comments-javascript` installed, over a default branch holding a bad subject: a `fixup!` commit the `commit-msg` hook let through, a bad subject and an added comment are each refused before the push leaves, naming it, with the remote unchanged; a clean commit pushes; a new branch is judged from the default branch alone, passing with a good subject and refused with a bad one; a branch's deletion pushes. The installed workflows run the same `.githooks/judge-push`. (FR-47, FR-108, FR-109, FR-110, FR-111)
+
+- **AC-41** — Run the `PreToolUse` hook as `hooks.json` registers it, with only a shell, bash, git and `jq` on `PATH`, in a checkout with `commit-subject` and `no-comments-javascript` installed: `git commit --no-verify`, `git commit -anm` after `&&`, `git push --no-verify`, `git -c Core.HooksPath=/dev/null` after `;`, `git config core.hooksPath .husky` and `git config --unset core.hooksPath` are each denied, naming the gates on commit, on push, or both; a commit message holding `--no-verify` or `; git push --no-verify`, `git push -n`, `git config core.hooksPath .githooks`, a read of it, `-c core.hooksPath=./.githooks/` and a write to a gate file pass, printing nothing; and in a checkout without the gates, without `jq`, and with input that is not JSON, the command passes, the last two with a note. (FR-112, FR-113, NF-2)
 
 ## 6. Deliverables
 

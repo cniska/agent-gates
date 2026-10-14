@@ -1,6 +1,6 @@
 # agent-gates
 
-Gate your agents' work and save them round trips: git hooks refuse a bad commit locally and GitHub workflows refuse it again in CI, for every contributor, and an optional Claude Code plugin shows the agent the comments it added, right after each edit. It leaves the rest to its siblings: [cniska-skills](https://github.com/cniska/agent-skills) holds the workflow, [agent-record](https://github.com/cniska/agent-record) records past sessions, and [agent-worktree](https://github.com/cniska/agent-worktree) isolates checkouts.
+Gate your agents' work and save them round trips: git hooks refuse a bad commit locally and GitHub workflows refuse it again in CI, for every contributor, and an optional Claude Code plugin shows the agent the comments it added, right after each edit, and stops it skipping the gates. It leaves the rest to its siblings: [cniska-skills](https://github.com/cniska/agent-skills) holds the workflow, [agent-record](https://github.com/cniska/agent-record) records past sessions, and [agent-worktree](https://github.com/cniska/agent-worktree) isolates checkouts.
 
 - `agent-gates install` writes the gates into the project, which commits them, and `agent-gates doctor` judges their health.
 - The gates refuse a commit subject that is not a Conventional Commit and an added comment, and run the project's formatter on every commit.
@@ -141,6 +141,8 @@ Gate file states:
 ## Claude Code plugin
 
 The gates stay the check for every contributor. The optional `cniska-gates` plugin in `plugin/` saves a Claude Code agent the round trip through them: after each `Edit`, `Write` or `MultiEdit`, in a repo that commits `.githooks/no-comments/scan.cjs`, it runs `scan.cjs --file` on the edited file and hands the agent the scanner's reply, so it removes the comments before it commits. It never blocks an edit, never changes a file, and does nothing in a repo without the gate. It needs `jq` and `node` on `PATH`; without either, or with a scanner too old for `--file`, it leaves only a note on stderr.
+
+Before each `Bash` command, in a repo whose `.githooks` hooks carry agent-gates' markers, it denies a git command that skips the gates: `git commit` or `git push` with `--no-verify`, `git commit` with `-n`, and `core.hooksPath` set by `-c` or `git config`, or unset, to anything but `.githooks`. The denial names the gates the command skips, so the agent fixes what the refusing gate names instead; CI refuses what they refuse anyway, so the block saves the round trip. Text inside a quoted string, such as a commit message, is not read as a command. Edits to installed gate files are never blocked, since install writes them.
 
 ```bash
 claude plugin marketplace add cniska/agent-skills
