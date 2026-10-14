@@ -12,7 +12,7 @@ type Ran = { readonly status: number | null; readonly stdout: string; readonly s
 
 type Env = Readonly<Record<string, string>>;
 
-type Check = {
+export type Check = {
   readonly name: string;
   readonly state: string;
   readonly detail: string;
@@ -79,6 +79,15 @@ export function doctor(dir: string): Judged {
   const checks = field(field(jsonLine(ran.stdout), "result"), "checks");
   if (!Array.isArray(checks)) throw new Error(`doctor printed no checks: ${ran.stdout}`);
   return { status: ran.status, checks };
+}
+
+export function check(dir: string, name: string): Check | undefined {
+  return doctor(dir).checks.find((found) => found.name === name);
+}
+
+export function install(dir: string, gates: readonly string[]): void {
+  const ran = agentGates(dir, ["install", ...gates]);
+  if (ran.status !== 0) throw new Error(`install ${gates.join(" ")} exited ${ran.status}: ${ran.stderr}`);
 }
 
 export function git(dir: string, args: readonly string[]): string {

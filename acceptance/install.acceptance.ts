@@ -3,9 +3,11 @@ import { chmodSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import {
   agentGates,
+  check,
   checkout,
   doctor,
   git,
+  install,
   jsonLine,
   modeOf,
   readText,
@@ -52,11 +54,6 @@ function each(state: string, targets: readonly string[]): FileResult[] {
   return targets.map((target) => ({ target, state, backup: null }));
 }
 
-function install(dir: string, gates: readonly string[]): void {
-  const ran = agentGates(dir, ["install", ...gates]);
-  if (ran.status !== 0) throw new Error(`install ${gates.join(" ")} exited ${ran.status}: ${ran.stderr}`);
-}
-
 function installs(dir: string, gates: readonly string[], result: InstallResult): void {
   const ran = agentGates(dir, ["install", ...gates]);
   expect([ran.status, ran.stderr]).toEqual([0, ""]);
@@ -73,10 +70,6 @@ function cliLineBeforeBunManifestError(stderr: string, manifest: string): string
   const [line = "", ...bun] = stderr.split("\n");
   expect(bun.join("\n")).toMatch(new RegExp(`\\nerror: .*\\n {4}at ${manifest}:\\d+:\\d+\\n$`));
   return `${line}\n`;
-}
-
-function check(dir: string, name: string) {
-  return doctor(dir).checks.find((found) => found.name === name);
 }
 
 function hooksPath(dir: string): string {
