@@ -22,7 +22,7 @@ type MarkerLine = { readonly tool: string; readonly part: string | null; readonl
 
 type OurMarker = { readonly part: string; readonly version: number };
 
-export function markerLine(line: string): MarkerLine | null {
+function markerLine(line: string): MarkerLine | null {
   const found = MARKER_LINE.exec(line);
   if (found === null) return null;
   const [, tool, part, version] = found;
