@@ -8,9 +8,9 @@ This document states what must hold, not how. [`README.md`](README.md) lists the
 
 ## 1. Purpose & context
 
-A coding agent excuses a workaround in a comment, writes a commit message nobody can scan, and a reviewer reading the diff tends to accept both. agent-gates installs gates that refuse them at commit time and again in CI. The gates are files committed with the project, so contributors and CI are gated without installing agent-gates; agent-gates installs them, brings them up to date, and judges their health.
+A coding agent excuses a workaround in a comment, writes a commit message nobody can scan, or commits unformatted code that fails the project's check, and a reviewer reading the diff tends to accept all of it. agent-gates installs gates that git hooks enforce at commit time and GitHub workflows enforce again in CI, for every developer: the commit subject, the format and no added comments, and the hooks run the project's own check steps, which `doctor` holds CI to running. The gates are files committed with the project, so contributors and CI are gated without installing agent-gates; agent-gates installs them, brings them up to date, and judges their health. The optional `cniska-gates` Claude Code plugin optimizes the agent's loop: it shows the agent the comments each edit added, before a gate refuses the commit.
 
-**Primary user:** coding agents and their owner, installing gates into a project and reading why a commit was refused. Not the audience: projects that want a configurable linter; a gate here has no options.
+**Primary user:** coding agents and their owner, installing gates into a project, reading why a commit was refused, and running the plugin in the agent's sessions. Not the audience: projects that want a configurable linter; a gate here has no options.
 
 ## 2. Functional requirements
 
