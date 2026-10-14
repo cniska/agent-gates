@@ -23,7 +23,7 @@ describe("the cli", () => {
     expect(cli("doctor")).toEqual({
       status: 0,
       stdout:
-        '{"command":"doctor","ok":true,"result":{"checks":[{"name":"gates","state":"warn","detail":"no gate is installed","fix":"agent-gates install <gate>..., choosing from commit-subject, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)"}],"failing":0}}\n',
+        '{"command":"doctor","ok":true,"result":{"checks":[{"name":"gates","state":"warn","detail":"no gate is installed","fix":"agent-gates install <gate>..., choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)"}],"failing":0}}\n',
       stderr: "",
     });
     const installed = cli("install", "commit-subject");
@@ -89,6 +89,29 @@ describe("the cli", () => {
     expect(existsSync(join(bare, ".githooks"))).toBe(false);
   });
 
+  test("exits 2 on --command or --setup without format named, without a command, or repeated, writing nothing", () => {
+    const bare = repo();
+    for (const args of [
+      ["--command", "cargo fmt"],
+      ["format", "--command"],
+      ["format", "--command", "--setup", "x"],
+      ["commit-subject", "--command", "x"],
+      ["commit-subject", "--setup", "x"],
+      ["format", "--command", "x", "--command", "y"],
+    ]) {
+      const run = cliIn(bare, "install", ...args);
+      expect([args, run.status, JSON.parse(run.stderr).error.code]).toEqual([args, 2, "flag_misplaced"]);
+    }
+    const unknown = cliIn(bare, "install", "format", "--command", "x", "--fix");
+    expect([unknown.status, JSON.parse(unknown.stderr).error.meta.names]).toEqual([2, ["--fix"]]);
+    expect(existsSync(join(bare, ".githooks"))).toBe(false);
+    const set = cliIn(bare, "install", "format", "--setup", "pnpm install", "--command", "cargo fmt");
+    expect([set.status, JSON.parse(set.stdout).result.fills]).toEqual([
+      0,
+      { command: "cargo fmt", setup: "pnpm install" },
+    ]);
+  });
+
   test("exits 2 on an unknown gate, printing the usage on stderr and writing nothing", () => {
     const before = cli("doctor").stdout;
     const run = cli("install", "lint-free");
@@ -104,10 +127,10 @@ describe("the cli", () => {
         meta: {
           names: ["lint-free"],
           usage:
-            "agent-gates install [<gate>...], choosing from commit-subject, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)",
+            "agent-gates install [<gate>...] [--command <format command>] [--setup <CI setup command>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)",
         },
         resolve:
-          "agent-gates install [<gate>...], choosing from commit-subject, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)",
+          "agent-gates install [<gate>...] [--command <format command>] [--setup <CI setup command>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)",
       },
     });
     expect(cli("doctor").stdout).toBe(before);

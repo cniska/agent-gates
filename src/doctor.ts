@@ -1,13 +1,26 @@
+import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
-import { unreachable } from "./assert";
+import { invariant, unreachable } from "./assert";
 import type { Refusal } from "./coded-error";
 import { type GateName, noCommentsGate } from "./gate-parts";
-import { type HooksPathState, hooksPathState, installedGates, type PlannedFile, plannedFiles } from "./gates";
+import {
+  fillsOf,
+  type HooksPathState,
+  hooksPathState,
+  installedGates,
+  type PlannedFile,
+  plannedFiles,
+} from "./gates";
 import {
   ADAPTER_FILES,
   EACH_TRACKED_LANGUAGE,
+  FILL_NAMES,
+  FILLS,
+  type Fill,
+  type Fills,
   HOOKS_DIR,
   INSTALL_GATES,
+  nameTheFill,
   REINSTALL,
   SCANNER_FILE,
 } from "./gates-contract";
@@ -56,11 +69,49 @@ function fileHealth(planned: PlannedFile): Health {
         detail: "written by a newer agent-gates than this one",
         fix: `update agent-gates, then ${REINSTALL}`,
       };
+    case "reconfigured":
+      invariant(false, "doctor gives no command, so no file is reconfigured");
+      break;
     case "occupied":
+    case "unresolved":
       return refusedHealth(name, planned.refusal);
     default:
       return unreachable(planned);
   }
+}
+
+function programOf(command: string): string {
+  const [program = ""] = command.trim().split(/\s+/);
+  return program;
+}
+
+function onPath(program: string): boolean {
+  return spawnSync("sh", ["-c", 'command -v "$1" >/dev/null', "sh", program]).status === 0;
+}
+
+function fillHealth(fill: Fill, value: string | null): Health[] {
+  const { check, offPath, unset } = FILLS[fill];
+  if (value === null)
+    return unset.kind === "required"
+      ? []
+      : [{ name: check, state: "warn", detail: unset.detail, fix: nameTheFill(fill) }];
+  const program = programOf(value);
+  if (onPath(program))
+    return [{ name: check, state: "ok", detail: `\`${value}\`; ${program} is on PATH`, fix: null }];
+  return [
+    {
+      name: check,
+      state: offPath.state,
+      detail: `\`${value}\`, but ${program} is not on PATH${offPath.effect}`,
+      fix: `install ${program}, or ${nameTheFill(fill)}`,
+    },
+  ];
+}
+
+function fillsHealth(planned: readonly PlannedFile[], fills: Fills): Health[] {
+  return FILL_NAMES.filter((fill) => planned.some(({ file }) => file.fills === fill)).flatMap((fill) =>
+    fillHealth(fill, fills[fill]),
+  );
 }
 
 const LANGUAGES_CHECK = "no-comments languages";
@@ -219,11 +270,13 @@ function judged(root: string): Health[] {
     ];
   const languages = installedLanguages(gates);
   const planned = plannedFiles(root, gates);
+  const fills = fillsOf(planned);
   return [
     { name: "gates", state: "ok", detail: gates.join(", "), fix: null },
     ...planned.map(fileHealth),
     hooksPathHealth(hooksPathState(root)),
     prepareHealth(prepareState(root)),
+    ...fillsHealth(planned, fills),
     ...languagesHealth(root, languages),
     ...backlogHealth(root, languages, planned),
   ];

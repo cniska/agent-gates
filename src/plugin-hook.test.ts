@@ -3,6 +3,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { accessSync, constants, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { installGates } from "./gates";
+import { NO_FILLS } from "./gates-contract";
 import { commitPastHooks, removeScratchDirs, repo, scratchDir, writeFiles } from "./repo.test-support";
 
 const PLUGIN = join(import.meta.dir, "..", "plugin");
@@ -27,7 +28,7 @@ function edited(cwd: string, filePath: string, env: Record<string, string> = {})
 
 function gated(): string {
   const dir = repo({ "src/a.ts": "export const a = 1;\n" });
-  installGates(dir, ["no-comments-javascript"]);
+  installGates(dir, ["no-comments-javascript"], NO_FILLS);
   commitPastHooks(dir, "feat: start");
   return dir;
 }

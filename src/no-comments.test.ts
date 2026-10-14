@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { gatesDoctor } from "./doctor";
 import { bundled } from "./gate-bundles";
 import { installGates, SOURCE_DIR } from "./gates";
-import { ADAPTER_FILES, SCANNER_FILE } from "./gates-contract";
+import { ADAPTER_FILES, NO_FILLS, SCANNER_FILE } from "./gates-contract";
 import { type Comment, type Reading, SHARED_SHOWN } from "./no-comments-adapter";
 import { ADAPTERS } from "./no-comments-adapters.test-support";
 import { LANGUAGE_NAMES, LANGUAGES, type Language, languageOf } from "./no-comments-languages";
@@ -67,7 +67,7 @@ function refusalText(listing: readonly string[], kept: readonly string[] = [KEPT
 
 function gated(files: Record<string, string> = {}): string {
   const dir = repo(files);
-  installGates(dir, ["no-comments-javascript"]);
+  installGates(dir, ["no-comments-javascript"], NO_FILLS);
   return dir;
 }
 
@@ -1034,7 +1034,7 @@ describe("the pre-commit hook", () => {
   test("refuses only the comments a change adds, an edited one among them", () => {
     const dir = repo({ "a.ts": "// old\nexport const a = 1;\n" });
     expect(commit(dir).status).toBe(0);
-    installGates(dir, ["no-comments-javascript"]);
+    installGates(dir, ["no-comments-javascript"], NO_FILLS);
     expect(commit(dir).status).toBe(0);
     writeFiles(dir, { "a.ts": "// old\nexport const a = 2;\n" });
     expect(commit(dir)).toEqual({ status: 0, stderr: "" });
@@ -1130,13 +1130,11 @@ describe("the pre-commit hook", () => {
 
   test("judges each language with the adapter installed for it", () => {
     const dir = repo();
-    installGates(dir, [
-      "no-comments-dart",
-      "no-comments-sql",
-      "no-comments-shell",
-      "no-comments-rust",
-      "no-comments-python",
-    ]);
+    installGates(
+      dir,
+      ["no-comments-dart", "no-comments-sql", "no-comments-shell", "no-comments-rust", "no-comments-python"],
+      NO_FILLS,
+    );
     writeFiles(dir, {
       "a.py": '"""Docstring."""\n',
       "lib/a.dart": "void f() {} // why\n",
@@ -1541,10 +1539,10 @@ describe("the no-comments workflow", () => {
 describe("install and doctor", () => {
   test("refuses a project's own pre-commit hook, and writes nothing", () => {
     const dir = repo({ ".githooks/pre-commit": "#!/bin/sh\nmake check\n" });
-    expect(refusalOf(() => installGates(dir, ["no-comments-javascript"]))).toBe("hook_occupied");
+    expect(refusalOf(() => installGates(dir, ["no-comments-javascript"], NO_FILLS))).toBe("hook_occupied");
     expect(existsSync(join(dir, ".githooks/no-comments"))).toBe(false);
     expect(readFileSync(join(dir, ".githooks/pre-commit"), "utf8")).toBe("#!/bin/sh\nmake check\n");
-    expect(installGates(dir, ["commit-subject"]).gates).toEqual(["commit-subject"]);
+    expect(installGates(dir, ["commit-subject"], NO_FILLS).gates).toEqual(["commit-subject"]);
   });
 
   test("doctor fails a project's own pre-commit hook with the move as the fix", () => {
@@ -1624,7 +1622,7 @@ describe("install and doctor", () => {
       detail: "javascript reads 1 tracked file, but no-comments-javascript is not installed",
       fix: "agent-gates install no-comments",
     });
-    installGates(dir, ["commit-subject"]);
+    installGates(dir, ["commit-subject"], NO_FILLS);
     expect(doctorCheck(dir, "no-comments languages")?.state).toBe("warn");
   });
 

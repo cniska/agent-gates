@@ -1,0 +1,8 @@
+#!/bin/sh
+# agent-gate:githooks:1
+set -eu
+
+setup=''
+
+[ -n "$setup" ] || exit 0
+sh -c "$setup"

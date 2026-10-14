@@ -14,9 +14,56 @@ export type FileState =
   | "changed"
   | "ahead"
   | "not-executable"
-  | "occupied";
+  | "reconfigured"
+  | "occupied"
+  | "unresolved";
 
-export type WritableState = Exclude<FileState, "occupied">;
+export type WritableState = Exclude<FileState, "occupied" | "unresolved">;
+
+export const FILL_NAMES = ["command", "setup"] as const;
+
+export type Fill = (typeof FILL_NAMES)[number];
+
+export type Fills = { readonly [F in Fill]: string | null };
+
+export function eachFill<T>(of: (fill: Fill) => T): Readonly<Record<Fill, T>> {
+  return { command: of("command"), setup: of("setup") };
+}
+
+export const NO_FILLS: Fills = eachFill(() => null);
+
+type FillSpec = {
+  readonly flag: string;
+  readonly example: string;
+  readonly check: string;
+  readonly offPath: { readonly state: "fail" | "warn"; readonly effect: string };
+  readonly unset: { readonly kind: "required" } | { readonly kind: "optional"; readonly detail: string };
+};
+
+export const FILLS: Readonly<Record<Fill, FillSpec>> = {
+  command: {
+    flag: "--command",
+    example: "npm run lint:fix",
+    check: "format command",
+    offPath: { state: "fail", effect: ", so the format hook refuses every commit" },
+    unset: { kind: "required" },
+  },
+  setup: {
+    flag: "--setup",
+    example: "mise install && pnpm install --frozen-lockfile",
+    check: "CI setup",
+    offPath: { state: "warn", effect: " here, so CI may not find it either" },
+    unset: {
+      kind: "optional",
+      detail: "no setup command is installed, so the format workflow runs on a bare checkout",
+    },
+  },
+};
+
+export function nameTheFill(fill: Fill): string {
+  const { flag, example } = FILLS[fill];
+  return `agent-gates install format ${flag} "<command>", such as ${flag} "${example}"`;
+}
 
 type GateVersion = { readonly version: number; readonly sha256: string };
 
@@ -25,6 +72,7 @@ export type GateFile = {
   readonly source: string;
   readonly target: string;
   readonly executable: boolean;
+  readonly fills: Fill | null;
   readonly versions: readonly [GateVersion, ...GateVersion[]];
 };
 
@@ -33,6 +81,7 @@ const GITATTRIBUTES: GateFile = {
   source: "gitattributes",
   target: `${HOOKS_DIR}/.gitattributes`,
   executable: false,
+  fills: null,
   versions: [
     { version: 1, sha256: "ad36a0eb187fe7a496ae5268c924ae0c1d70451796700a133f1731d49d1d4a0c" },
     { version: 2, sha256: "4765ab668d4acf13110366595f389b0a2b09424903378faa02786f96ac64369b" },
@@ -44,7 +93,20 @@ const PRE_COMMIT: GateFile = {
   source: "pre-commit",
   target: `${HOOKS_DIR}/pre-commit`,
   executable: true,
-  versions: [{ version: 1, sha256: "d5b3794f1b2c884f4ff3a9407059e436a01c5c190e7bc1cf44f581930653920f" }],
+  fills: null,
+  versions: [
+    { version: 1, sha256: "d5b3794f1b2c884f4ff3a9407059e436a01c5c190e7bc1cf44f581930653920f" },
+    { version: 2, sha256: "dc99bf91ca9a05b7d3a50aeb1e4bf74eed8236e1a1c9aeeceb84d51fba2b6c73" },
+  ],
+};
+
+const CI_SETUP: GateFile = {
+  part: "githooks",
+  source: "ci-setup",
+  target: `${HOOKS_DIR}/ci-setup`,
+  executable: false,
+  fills: "setup",
+  versions: [{ version: 1, sha256: "a88657c6a17d02d0892f384b52a65a78ccb8f89f14d89f360098282a94b23547" }],
 };
 
 export const SCANNER_FILE: GateFile = {
@@ -52,6 +114,7 @@ export const SCANNER_FILE: GateFile = {
   source: "no-comments/scan.cjs",
   target: `${HOOKS_DIR}/no-comments/scan.cjs`,
   executable: false,
+  fills: null,
   versions: [
     { version: 1, sha256: "6c7e734fa6c585451a823e4dcf8b85fe990e811e315d05f757ae5a52635eaefc" },
     { version: 2, sha256: "eb649b51cb538051af71579b679cead7cd3b0f6ccb3841164d9c3457eebdbcf8" },
@@ -91,6 +154,7 @@ const NO_COMMENTS_SHARED: readonly GateFile[] = [
     source: "no-comments/pre-commit",
     target: `${HOOKS_DIR}/pre-commit.d/no-comments`,
     executable: true,
+    fills: null,
     versions: [
       { version: 1, sha256: "138a8e75142f58bc1a09418964b8a9cbd7944fc516920d307e58e00dd2a5290c" },
       { version: 2, sha256: "f182a3518696f42433f24c131376f0851cb976982af89cf52e4e11aaacf98d55" },
@@ -102,6 +166,7 @@ const NO_COMMENTS_SHARED: readonly GateFile[] = [
     source: "no-comments.yml",
     target: ".github/workflows/no-comments.yml",
     executable: false,
+    fills: null,
     versions: [
       { version: 1, sha256: "40c64a59e2409c91c2d07df092eeb9384811a991784e2f3300b8aa43e6c78dd9" },
       { version: 2, sha256: "3b83b0cbd4e92e31034e16bbc5d80bd285d41c0612c6ad3fb81239ffc99eb9a1" },
@@ -116,6 +181,7 @@ function adapterFile(language: Language, versions: GateFile["versions"]): GateFi
     source: `no-comments/${language}.cjs`,
     target: `${HOOKS_DIR}/no-comments/${language}.cjs`,
     executable: false,
+    fills: null,
     versions,
   };
 }
@@ -142,6 +208,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 18, sha256: "a816957029a531e031f48d084cdffb94eac0f5d793ac886e06b21a6f0a302898" },
     { version: 19, sha256: "f6e877cc5eb4c4e4b543043b25901688a63c6f48fab5492915395c2c7c4710ad" },
     { version: 20, sha256: "d319a53d948bce7a70b52fec227c47c95e97b85ab2fad691f4c84d5dfcd178be" },
+    { version: 21, sha256: "bb79226d4ab84d42b8652ad730fa9c6ec25ae60274f3991dcc0a13d63e109a07" },
   ]),
   dart: adapterFile("dart", [
     { version: 1, sha256: "25cc760fcd6ef317da0c52457e79e84926f4b87f81e67630b40dfd666f0feb2a" },
@@ -167,6 +234,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 21, sha256: "01d227c3eb564602895af3b9fc2268e4d856988136d687d3a24d91773dc354cd" },
     { version: 22, sha256: "66c089ae169af8176d1b8fcbccd89ec2a304571649f9b8ef584ab7f0ab0c519c" },
     { version: 23, sha256: "48db2e6b5edadc1c1450d069c1054ed0481520ea1b5c6b1e1efd5278e503759d" },
+    { version: 24, sha256: "15ecd8dd8aade2868122ea923d991168c846d8967c5a5ada55822f5628c7f94b" },
   ]),
   sql: adapterFile("sql", [
     { version: 1, sha256: "261cd8dc159c4222234bd5bc2796723b803ecf0cf448a7d417471faea8c3ef13" },
@@ -191,6 +259,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 20, sha256: "82eaf439c32f895bff74715063e08ec75db563751669572577c3dbdab34102a2" },
     { version: 21, sha256: "95e2f7b64741f667c3187ed8ea8efed6756127f18def3cfd53f431f330b19caa" },
     { version: 22, sha256: "65e12512a44fe086d0438398b6eaa3524346afbc3c3615ff940b89186e932a47" },
+    { version: 23, sha256: "4d793b0a2594f01799f817e31f9909e384b475bdd9e5ece85a737a74ff03c3e5" },
   ]),
   shell: adapterFile("shell", [
     { version: 1, sha256: "89a9bdde90915a96d5110890ac7dd715a098676cf44976c0bc2301b4012ab1b2" },
@@ -216,6 +285,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 21, sha256: "357b8cbfd588966ac3b39ed5370ae7a213d512034c2e69ff1df89b45ac899dcb" },
     { version: 22, sha256: "f0bc24260eee88f3676618cb5b7f1c43b8be4b6ec8a0b42fff2e09566644d2e9" },
     { version: 23, sha256: "8c79b16e593b9065634c1cc7e1a2ad1f642d9f4a467178e46a49e61a4c2c54eb" },
+    { version: 24, sha256: "0f9d795b4ad2f71db6e5a3b1486a9b7729538698bf204785c16bc6ba7a22f44a" },
   ]),
   rust: adapterFile("rust", [
     { version: 1, sha256: "f7d0dd77af2f515cca76525640e20f72984a24e995031360b190b31478634daa" },
@@ -240,6 +310,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 20, sha256: "fadf4064f8cac619f489aedecb32384afb8663658e7637e0ccf0c76d425f2a71" },
     { version: 21, sha256: "7abdd85846753ea9fa8ba4dab1c0b77466770c31e384d8e19e7f45ca2dea75a1" },
     { version: 22, sha256: "876fdeb06ffb37ffab1bf1306d31522324517f1ef9da982a7b55d8520349af82" },
+    { version: 23, sha256: "94bb4f4b5ceee5abc706b6359e8532a8becc5344dc6ff7fd29cdb3d1d569b124" },
   ]),
   python: adapterFile("python", [
     { version: 1, sha256: "0a9e1622e9cbb6d697e50947de8488666247a3ba7505c986eff90bdb63e08152" },
@@ -262,6 +333,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 18, sha256: "e4b064d4a77ca349bebd8e544fc3457f9420235d920ff8a25b2a65ad458a5bea" },
     { version: 19, sha256: "6214b0daf7ac833a243a1ebfa80311ad6f8e72f4fefd243a1183463ec2274092" },
     { version: 20, sha256: "954b7f0325fc67ee84a5db52f44a1e532720a1d7a46f1f245e756f2f7644229d" },
+    { version: 21, sha256: "3df112082176292836dc3a3ff861bb492f1d78c5babc013b077850c5e006482d" },
   ]),
 };
 
@@ -276,6 +348,7 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
       source: "commit-msg",
       target: `${HOOKS_DIR}/commit-msg`,
       executable: true,
+      fills: null,
       versions: [
         { version: 1, sha256: "73ec5976bae1e77235a86ee02051f2d60c4abc0fe2d9d6dfd00e9599cfdafa46" },
         { version: 2, sha256: "79602ae373e09db09960aa1aa25cb36df35ed91a8c6780499e4434f082943d41" },
@@ -286,6 +359,7 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
       source: "commits.yml",
       target: ".github/workflows/commits.yml",
       executable: false,
+      fills: null,
       versions: [
         { version: 1, sha256: "cba3046993d4ca84942aa37b60c17cf77af0123f1a6152482db0301a933587ba" },
         { version: 2, sha256: "f5863ec0ebb55f68779bd8f5693406178e5adbfb1dfbe09db12550286487656f" },
@@ -293,6 +367,27 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
       ],
     },
     GITATTRIBUTES,
+  ],
+  format: [
+    {
+      part: "format",
+      source: "format/pre-commit",
+      target: `${HOOKS_DIR}/pre-commit.d/format`,
+      executable: true,
+      fills: "command",
+      versions: [{ version: 1, sha256: "b8f15bc902e2269640aae3022e919b8822fc85340fbd42c1f28c2bb028a2451d" }],
+    },
+    {
+      part: "format",
+      source: "format.yml",
+      target: ".github/workflows/format.yml",
+      executable: false,
+      fills: null,
+      versions: [{ version: 1, sha256: "9c36f14b44ac04a79de9aef33319f89cd61c4e6d0f931bf8bb95ecab9cc89a53" }],
+    },
+    CI_SETUP,
+    GITATTRIBUTES,
+    PRE_COMMIT,
   ],
   "no-comments-javascript": noCommentsFiles("javascript"),
   "no-comments-dart": noCommentsFiles("dart"),
@@ -308,7 +403,7 @@ const GATE_CHOICES = [...GATE_NAMES, `${EACH_TRACKED_LANGUAGE} (each language th
   ", ",
 );
 
-export const INSTALL_USAGE = `agent-gates install [<gate>...], choosing from ${GATE_CHOICES}`;
+export const INSTALL_USAGE = `agent-gates install [<gate>...] [${FILLS.command.flag} <format command>] [${FILLS.setup.flag} <CI setup command>], choosing from ${GATE_CHOICES}`;
 
 export const INSTALL_GATES = `agent-gates install <gate>..., choosing from ${GATE_CHOICES}`;
 

@@ -14,13 +14,20 @@ import {
   type Part,
 } from "./gate-parts";
 import {
+  eachFill,
+  FILLS,
   type FileState,
+  type Fill,
+  type Fills,
   GATES,
   type GateFile,
   HOOKS_DIR,
   INSTALL_GATES,
+  NO_FILLS,
+  nameTheFill,
   type WritableState,
 } from "./gates-contract";
+import { filledIn, fillTemplateOf, withFill } from "./gates-fill";
 import { configValue, setConfig } from "./git";
 import { trackedLanguages, trackedPerLanguage } from "./no-comments-tracked";
 import { type PrepareState, prepareState } from "./package-manifest";
@@ -33,6 +40,7 @@ const gatesRefusal = refusals<{
   readonly hooks_path_occupied: { readonly root: string; readonly hooksPath: string };
   readonly hook_occupied: { readonly root: string; readonly target: string };
   readonly write_failed: { readonly path: string; readonly detail: string };
+  readonly fill_missing: { readonly root: string; readonly fill: Fill };
 }>({
   no_gates_chosen: {
     message: ({ root }) =>
@@ -59,6 +67,11 @@ const gatesRefusal = refusals<{
     message: ({ path, detail }) => `${path} could not be written: ${detail}`,
     resolve: ({ path }) => `stop and hand this error to the owner: ${path} must be writable`,
   },
+  fill_missing: {
+    message: ({ root, fill }) =>
+      `${root}'s format gate runs the project's own ${FILLS[fill].check}, and none was given with ${FILLS[fill].flag}`,
+    resolve: ({ fill }) => nameTheFill(fill),
+  },
 });
 
 const EXECUTE_BITS = 0o111;
@@ -77,14 +90,18 @@ type PlannedAt = {
   readonly target: string;
   readonly file: GateFile;
   readonly path: string;
-  readonly source: string;
 };
 
-type WritableFile = PlannedAt & { readonly state: WritableState };
+type WritableFile = PlannedAt & {
+  readonly state: WritableState;
+  readonly source: string;
+  readonly filled: string | null;
+};
 
 export type PlannedFile =
   | WritableFile
-  | (PlannedAt & { readonly state: "occupied"; readonly refusal: Refusal });
+  | (PlannedAt & { readonly state: "occupied"; readonly refusal: Refusal })
+  | (PlannedAt & { readonly state: "unresolved"; readonly refusal: Refusal });
 
 export type HooksPathState =
   | { readonly kind: "wired" }
@@ -101,6 +118,7 @@ type GatesInstalled = {
   readonly gates: readonly GateName[];
   readonly files: readonly InstalledFile[];
   readonly prepare: Exclude<PrepareState["kind"], "occupied" | "unparseable">;
+  readonly fills: Fills;
 };
 
 function markerOf(text: string): Marker | null {
@@ -118,10 +136,21 @@ function foundAt(path: string): Found | null {
   return { text: readFileSync(path, "utf8"), executable: (statSync(path).mode & EXECUTE_BITS) !== 0 };
 }
 
-function stateOf(file: GateFile, source: string, found: Found | null): FileState {
+function templateOf(file: GateFile, text: string): string {
+  return file.fills === null ? text : fillTemplateOf(text, file.fills);
+}
+
+function stateOf(
+  file: GateFile,
+  template: string,
+  source: string,
+  found: Found | null,
+): Exclude<FileState, "unresolved"> {
   if (found === null) return "missing";
   if (found.text === source) return file.executable && !found.executable ? "not-executable" : "installed";
-  const hash = sha256(found.text);
+  const text = templateOf(file, found.text);
+  if (file.fills !== null && text === template) return "reconfigured";
+  const hash = sha256(text);
   if (file.versions.slice(0, -1).some((earlier) => earlier.sha256 === hash)) return "behind";
   const at = markerOf(found.text);
   if (at === null && file.executable) return "occupied";
@@ -131,17 +160,56 @@ function stateOf(file: GateFile, source: string, found: Found | null): FileState
   return "changed";
 }
 
-export function plannedFiles(root: string, gates: readonly GateName[]): PlannedFile[] {
+type Rendered =
+  | { readonly kind: "rendered"; readonly source: string; readonly filled: string | null }
+  | { readonly kind: "refused"; readonly refusal: Refusal };
+
+function rendered(
+  root: string,
+  file: GateFile,
+  template: string,
+  given: Fills,
+  found: Found | null,
+): Rendered {
+  if (file.fills === null) return { kind: "rendered", source: template, filled: null };
+  const filled = given[file.fills] ?? (found === null ? null : filledIn(found.text, file.fills));
+  if (filled !== null) return { kind: "rendered", source: withFill(template, file.fills, filled), filled };
+  if (FILLS[file.fills].unset.kind === "required")
+    return { kind: "refused", refusal: gatesRefusal("fill_missing", { root, fill: file.fills }) };
+  return { kind: "rendered", source: template, filled: null };
+}
+
+function plannedFile(root: string, file: GateFile, given: Fills): PlannedFile {
+  const path = join(root, file.target);
+  const template = readFileSync(join(SOURCE_DIR, file.source), "utf8");
+  const found = foundAt(path);
+  const render = rendered(root, file, template, given, found);
+  const at = { target: file.target, file, path };
+  if (render.kind === "refused") return { ...at, state: "unresolved", refusal: render.refusal };
+  const state = stateOf(file, template, render.source, found);
+  if (state === "occupied")
+    return { ...at, state, refusal: gatesRefusal("hook_occupied", { root, target: file.target }) };
+  return { ...at, state, source: render.source, filled: render.filled };
+}
+
+function filledFor(planned: readonly PlannedFile[], fill: Fill): string | null {
+  for (const file of planned)
+    if (file.state !== "occupied" && file.state !== "unresolved" && file.file.fills === fill)
+      return file.filled;
+  return null;
+}
+
+export function fillsOf(planned: readonly PlannedFile[]): Fills {
+  return eachFill((fill) => filledFor(planned, fill));
+}
+
+export function plannedFiles(
+  root: string,
+  gates: readonly GateName[],
+  given: Fills = NO_FILLS,
+): PlannedFile[] {
   const files = new Map(gates.flatMap((gate) => GATES[gate]).map((file) => [file.target, file]));
-  return [...files.values()].map((file) => {
-    const path = join(root, file.target);
-    const source = readFileSync(join(SOURCE_DIR, file.source), "utf8");
-    const at = { target: file.target, file, path, source };
-    const state = stateOf(file, source, foundAt(path));
-    if (state === "occupied")
-      return { ...at, state, refusal: gatesRefusal("hook_occupied", { root, target: file.target }) };
-    return { ...at, state };
-  });
+  return [...files.values()].map((file) => plannedFile(root, file, given));
 }
 
 export function installedGates(root: string): GateName[] {
@@ -168,6 +236,7 @@ function actionFor(state: WritableState): Action {
     case "missing":
     case "behind":
     case "not-executable":
+    case "reconfigured":
       return "write";
     case "changed":
       return "set-aside-and-write";
@@ -208,14 +277,14 @@ export function trackedLanguageGates(root: string): NoCommentsGate[] {
   return languages.map(noCommentsGate);
 }
 
-export function installGates(root: string, named: readonly GateName[]): GatesInstalled {
+export function installGates(root: string, named: readonly GateName[], given: Fills): GatesInstalled {
   const installed = installedGates(root);
   const gates = GATE_NAMES.filter((gate) => named.includes(gate) || installed.includes(gate));
   if (gates.length === 0) throw gatesRefusal("no_gates_chosen", { root });
   const hooksPath = hooksPathState(root);
   if (hooksPath.kind === "occupied") throw hooksPath.refusal;
-  const toWrite = plannedFiles(root, gates).map((planned) => {
-    if (planned.state === "occupied") throw planned.refusal;
+  const toWrite = plannedFiles(root, gates, given).map((planned) => {
+    if (planned.state === "occupied" || planned.state === "unresolved") throw planned.refusal;
     return planned;
   });
   const prepare = prepareState(root);
@@ -228,5 +297,5 @@ export function installGates(root: string, named: readonly GateName[]): GatesIns
   if (prepare.kind === "missing" || prepare.kind === "behind")
     writing(prepare.path, () => writeFileSync(prepare.path, prepare.wired));
   if (hooksPath.kind === "unset") setConfig(root, "core.hooksPath", HOOKS_DIR);
-  return { gates, files, prepare: prepare.kind };
+  return { gates, files, prepare: prepare.kind, fills: fillsOf(toWrite) };
 }

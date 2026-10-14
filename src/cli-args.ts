@@ -11,6 +11,7 @@ export const usageError = usageErrors<{
     readonly usage: string;
   };
   readonly unknown_gate: { readonly names: readonly string[]; readonly usage: string };
+  readonly flag_misplaced: { readonly flag: string; readonly usage: string };
 }>({
   unknown_command: {
     message: ({ name }) => `${name} is not an agent-gates command; agent-gates with no command lists them`,
@@ -19,6 +20,11 @@ export const usageError = usageErrors<{
   wrong_arity: {
     message: ({ command, min, max, got }) =>
       `agent-gates ${command} takes ${min === max ? `${min}` : `${min} to ${max}`} argument(s), and got ${got.length}: ${got.join(" ")}`,
+    resolve: ({ usage }) => usage,
+  },
+  flag_misplaced: {
+    message: ({ flag }) =>
+      `agent-gates install takes ${flag} once, followed by a command, and only with a gate named that runs it`,
     resolve: ({ usage }) => usage,
   },
   unknown_gate: {

@@ -24,6 +24,7 @@ agent-gates doctor
 | Gate | Hook | Workflow | Refuses |
 | --- | --- | --- | --- |
 | `commit-subject` | `.githooks/commit-msg` | `commits.yml` | A subject that is not a Conventional Commit, is over 50 characters or is not ASCII, and any message body |
+| `format` | `.githooks/pre-commit.d/format` | `format.yml` | A partly staged file the format command changes, and a failing command; anything else it formats into the commit |
 | `no-comments-<language>` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment the change adds, other than a [kept form](#kept-comments) |
 
 The languages are `javascript` (JavaScript and TypeScript), `dart`, `sql` (PostgreSQL), `shell`, `rust` and `python`. `agent-gates install no-comments` installs the gate for each language the tracked files hold, and refuses when they hold none.
@@ -35,15 +36,27 @@ Installed files:
 
 Install also points `core.hooksPath` at `.githooks` in the current clone, and `.githooks/.gitattributes` marks the hooks `linguist-generated` with LF endings. With a `package.json`, install adds the same wiring to its `prepare` script, so a fresh clone wires itself. Without one, each contributor runs `git config core.hooksPath .githooks` once. CI checks every push either way.
 
-`.githooks/pre-commit` runs each executable in `.githooks/pre-commit.d/` in name order and stops at the first failure. Your own pre-commit step belongs there.
+`.githooks/pre-commit` runs the `format` step first, then each other executable in `.githooks/pre-commit.d/` in name order, and stops at the first failure. Your own pre-commit step belongs there.
 
-Neither gate judges a merge commit locally.
+No gate judges a merge commit locally.
 
 ### Commit subjects
 
 Allowed types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `style`, `perf`, `build` and `ci`, with an optional lowercase scope and `!`.
 
 `commits.yml` checks every non-merge commit a push or pull request brings. Set the repository's squash-merge message to the pull request title alone, because GitHub's default squash body is refused. Revert messages and `fixup!`, `squash!` and `amend!` commits are refused too.
+
+### Format
+
+The hook runs the project's format command on each commit, then stages what it changed in the files the commit stages whole, so the commit goes through formatted. It refuses a partly staged file the command changes, naming it, and stages nothing. A file the commit leaves out that the command changed stays in the worktree, listed. A command that fails refuses the commit with its output.
+
+agent-gates does not look for a formatter: `agent-gates install format --command "<command>"` names it, such as `--command "npm run lint:fix"` or `--command "cargo fmt"`, and install refuses `format` without one. Install writes the command into the hook as `command='<command>'`, so it shows in the diff, and a reinstall without `--command` keeps it.
+
+`format.yml` runs `.githooks/ci-setup`, then the hook with `--check`, which runs the command and refuses each tracked file it changes. `agent-gates install format --setup "<command>"` writes the project's setup into `.githooks/ci-setup`, such as `--setup "mise install && pnpm install --frozen-lockfile"`; every gate workflow that needs the project set up runs that one file, and a reinstall without `--setup` keeps it. Without one, the setup step does nothing.
+
+`doctor` fails when the format command's program is not on `PATH`, and warns when no setup command is installed or its program is not on `PATH`.
+
+The `format` step runs before every other `pre-commit.d/` step, so each of them judges the formatted change.
 
 ### No comments
 
@@ -101,8 +114,8 @@ Each command prints one JSON line. An error goes to stderr and exits 2 for `usag
 
 | Command | Does |
 | --- | --- |
-| `agent-gates install [<gate>...]` | Install the named gates, update the installed ones, and report each file's state before acting |
-| `agent-gates doctor` | Check each gate file, `core.hooksPath`, the `prepare` script, whether a no-comments gate is installed for each language the tracked files hold, even when none is, and whether each installed one still has files to read, and how many comments the tracked files hold; exit 1 on a failure |
+| `agent-gates install [<gate>...] [--command <format command>] [--setup <CI setup command>]` | Install the named gates, update the installed ones, and report each file's state before acting and the format and setup commands |
+| `agent-gates doctor` | Check each gate file, `core.hooksPath`, the `prepare` script, the format and CI setup commands, whether a no-comments gate is installed for each language the tracked files hold, even when none is, and whether each installed one still has files to read, and how many comments the tracked files hold; exit 1 on a failure |
 
 Gate file states:
 
@@ -114,9 +127,10 @@ Gate file states:
 | `changed` | matches no version | sets it aside as `<file>.agent-gates-backup`, then writes it |
 | `ahead` | written by a newer agent-gates | leaves it |
 | `not-executable` | a hook git would skip | writes it |
+| `reconfigured` | the current version, holding another command than `--command` or `--setup` gave | writes it |
 | `occupied` | a hook without an `agent-gate` marker | refuses, writing nothing |
 
-`install` also refuses when `core.hooksPath` or `prepare` already hold something else, when `package.json` does not parse, or when no gate is named and none is installed. `commit-subject` owns `.githooks/commit-msg`.
+`install` also refuses when `core.hooksPath` or `prepare` already hold something else, when `package.json` does not parse, when no gate is named and none is installed, and, for `format`, when no command is given or installed. `commit-subject` owns `.githooks/commit-msg`.
 
 ## Claude Code plugin
 

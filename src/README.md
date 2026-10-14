@@ -21,8 +21,8 @@ Only an entry, such as `cli.ts`, reads the environment; it passes what a module 
 | --- | --- |
 | `cli` | Dispatch a command and print its result or error as JSON |
 | `install` | The `install` command |
-| `doctor` | Report the installed gates' health: their files, the hooks path, `prepare`, and the comments tracked files already hold |
-| `gates` | The registry of gate files, and installing them into a project |
+| `doctor` | Report the installed gates' health: their files, the hooks path, `prepare`, the format and CI setup commands, and the comments tracked files already hold |
+| `gates` | The registry of gate files, the commands install writes into them, and installing them into a project |
 | `gate` | Gate names and parts, the marker an installed file carries, and bundling the `no-comments` scanner into `gates/` |
 | `no-comments` | The scanner a `no-comments` gate runs: route a file to its language, read its comments, judge a change and report findings |
 | `package-manifest` | The `prepare` script in a project's `package.json` |

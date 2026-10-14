@@ -6,9 +6,13 @@ export function noCommentsGate(language: Language): NoCommentsGate {
   return `no-comments-${language}`;
 }
 
-export type GateName = "commit-subject" | NoCommentsGate;
+export type GateName = "commit-subject" | "format" | NoCommentsGate;
 
-export const GATE_NAMES: readonly GateName[] = ["commit-subject", ...LANGUAGE_NAMES.map(noCommentsGate)];
+export const GATE_NAMES: readonly GateName[] = [
+  "commit-subject",
+  "format",
+  ...LANGUAGE_NAMES.map(noCommentsGate),
+];
 
 export function isGateName(name: string): name is GateName {
   return GATE_NAMES.some((gate) => gate === name);

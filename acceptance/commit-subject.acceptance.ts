@@ -61,7 +61,7 @@ function refused(dir: string, message: string, reason: string, subject: string, 
   });
 }
 
-test("AC-14 runs each executable pre-commit step in name order, stopping at the first failure", () => {
+test("AC-14 runs format first, then each other executable pre-commit step in name order, stopping at the first failure", () => {
   const dir = checkout();
   install(dir, ["no-comments-javascript"]);
   const logs = scratchDir();
@@ -73,6 +73,7 @@ test("AC-14 runs each executable pre-commit step in name order, stopping at the 
     ["20-not-executable", 0],
     ["40-fails", 7],
     ["50-after", 0],
+    ["format", 0],
   ] as const)
     steps[`.githooks/pre-commit.d/${name}`] = `#!/bin/sh\necho ${name} >> '${log}'\nexit ${status}\n`;
   writeFiles(dir, steps);
@@ -80,7 +81,7 @@ test("AC-14 runs each executable pre-commit step in name order, stopping at the 
     if (!path.endsWith("not-executable")) chmodSync(join(dir, path), 0o755);
 
   expect(shell(dir, ".githooks/pre-commit")).toEqual({ status: 7, stdout: "", stderr: "" });
-  expect(readText(logs, "log")).toBe("10-first\n30-second\n40-fails\n");
+  expect(readText(logs, "log")).toBe("format\n10-first\n30-second\n40-fails\n");
 });
 
 test("AC-15 refuses a subject that breaks a rule, naming the reason", () => {

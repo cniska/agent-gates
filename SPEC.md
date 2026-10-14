@@ -26,7 +26,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ### 2.2 Install
 
-- **FR-8** — The gates are `commit-subject`, and `no-comments-<language>` for each of `javascript`, `dart`, `sql`, `shell`, `rust` and `python`.
+- **FR-8** — The gates are `commit-subject`, `format`, and `no-comments-<language>` for each of `javascript`, `dart`, `sql`, `shell`, `rust` and `python`.
 - **FR-9** — `install` installs the named gates and every gate already installed. Named none with none installed, it is refused as `no_gates_chosen`.
 - **FR-10** — `commit-subject` installs `.githooks/commit-msg`, `.github/workflows/commits.yml` and `.githooks/.gitattributes`.
 - **FR-11** — `no-comments-<language>` installs `.githooks/pre-commit`, `.githooks/pre-commit.d/no-comments`, `.githooks/no-comments/scan.cjs`, `.githooks/no-comments/<language>.cjs`, `.github/workflows/no-comments.yml` and `.githooks/.gitattributes`.
@@ -38,7 +38,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **FR-17** — A file whose marker names a later version of its part is `ahead`, and install leaves it.
 - **FR-18** — A hook holding the current bytes without its executable bit is `not-executable`, and install restores the bit without a backup.
 - **FR-19** — An executable gate file, a hook or a pre-commit step, with no `agent-gate` marker is `occupied`, and install is refused as `hook_occupied`, writing nothing. A gate file that is not executable and has no marker is `changed`.
-- **FR-20** — Install's result names the gates it installed, each file's path, the file's state before install acted and its backup, and the `prepare` script's state.
+- **FR-20** — Install's result names the gates it installed, each file's path, the file's state before install acted and its backup, the `prepare` script's state, and the format and CI setup commands installed, each `null` when there is none.
 - **FR-21** — Install sets `core.hooksPath` to `.githooks` when it is unset, and accepts any value that resolves to `.githooks`.
 - **FR-22** — When `core.hooksPath` names another directory, install is refused as `hooks_path_occupied`, writing nothing.
 - **FR-23** — With a `package.json`, install sets its `prepare` script to one that wires `core.hooksPath` in a git checkout and does nothing outside one, keeping every other key, the keys' order and the file's indent. An earlier wiring is replaced the same way. Without a `package.json`, install writes none.
@@ -51,7 +51,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **FR-27** — `doctor` reports its checks, each with a name, a state of `ok`, `warn` or `fail`, a detail and a fix (`null` when it passes), and how many fail. It exits 1 when a check fails and 0 otherwise.
 - **FR-28** — With no gate installed, `doctor` warns that no gate is installed, with the install usage as its fix.
 - **FR-29** — With a gate installed, `doctor` reports the installed gates, each of their files, `core.hooksPath` and the `prepare` script, in that order.
-- **FR-30** — A file passes when `installed`, warns when `behind`, `changed` or `ahead`, and fails when `missing` or `not-executable`; an `occupied` hook fails with install's refusal as its detail and fix.
+- **FR-30** — A file passes when `installed`, warns when `behind`, `changed` or `ahead`, and fails when `missing` or `not-executable`; an `occupied` hook, and a format hook that holds no command, fail with install's refusal as their detail and fix.
 - **FR-31** — An unset `core.hooksPath` fails, and one naming another directory fails with install's refusal.
 - **FR-32** — The `prepare` check passes with no `package.json` or a wired script, warns when the script is missing or an earlier wiring, and fails with install's refusal when it is occupied or the manifest does not parse.
 - **FR-33** — `doctor`, with or without a gate installed, warns in one check about each language the project tracks files of whose `no-comments` gate is not installed, and each installed language the project tracks no file of, with one fix that runs `agent-gates install no-comments` and deletes the second's adapters.
@@ -60,7 +60,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ### 2.4 Hook wiring
 
-- **FR-36** — `.githooks/pre-commit` runs each executable file in `.githooks/pre-commit.d/` in name order, and stops at the first that fails, exiting with its status.
+- **FR-36** — `.githooks/pre-commit` runs `.githooks/pre-commit.d/format` first when it is executable, then each other executable file in `.githooks/pre-commit.d/` in name order, and stops at the first that fails, exiting with its status.
 
 ### 2.5 Commit subjects
 
@@ -127,13 +127,29 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 - **FR-83** — `install no-comments` installs the `no-comments-<language>` gate of each language the tracked files hold, beside any gate named with it. With no tracked file a language's gate reads, it is refused as `no_language_tracked`, writing nothing.
 
+### 2.11 Format
+
+- **FR-84** — `format` installs `.githooks/pre-commit`, `.githooks/pre-commit.d/format`, `.githooks/ci-setup`, `.github/workflows/format.yml` and `.githooks/.gitattributes`.
+- **FR-85** — `install format --command <command>` writes the project's format command into the hook; agent-gates looks up no format task of its own. A reinstall without `--command` keeps the installed command. With none given and none installed, install is refused as `fill_missing`, naming `--command` with an example, and writes nothing.
+- **FR-86** — `install --setup <command>` writes the CI setup command into `.githooks/ci-setup`, which the format workflow runs before its check, as will any later gate's workflow that needs the project set up. A reinstall without `--setup` keeps the installed command; with none ever given, the setup runs nothing.
+- **FR-87** — `--command` or `--setup` with no command, given twice, or with no gate named that runs it, is a usage error, `flag_misplaced`; another argument starting with `-` is an `unknown_gate`.
+- **FR-88** — A hook or setup file holding the current release with another command than install was given is `reconfigured`, and install rewrites it without a backup.
+- **FR-89** — On commit, the `format` hook runs the command; when it fails, the commit is refused with its output.
+- **FR-90** — The hook stages what the command changed in each file the commit stages whole, so the commit holds the formatted file.
+- **FR-91** — A partly staged file the command changes refuses the commit, naming the file, and nothing is staged.
+- **FR-92** — A file the commit leaves out that the command changed stays in the worktree unstaged, and the hook lists it.
+- **FR-93** — The `format` hook does not run during a merge.
+- **FR-94** — The format workflow runs `.githooks/ci-setup`, then the hook with `--check`, which runs the command and refuses each tracked file it changes, naming it.
+- **FR-95** — `doctor` fails when the format command's program is not on `PATH`, and warns when no CI setup command is installed or its program is not on `PATH`.
+
 ## 3. Non-functional requirements
 
-- **NF-1** — The installed gates run with git, a POSIX shell and `node` alone: nothing installed in the project, and neither agent-gates nor Bun on `PATH`.
+- **NF-1** — The installed gates run with git, a POSIX shell and `node` alone: nothing installed in the project, and neither agent-gates nor Bun on `PATH`. The `format` gate also runs the project's own format command.
 
 ## 4. Out of scope
 
-- Configuring a gate: a gate has no options, and the installed files are the only state.
+- Configuring a gate: a gate has no options beyond the format and CI setup commands (FR-85, FR-86), and the installed files are the only state.
+- Finding a project's format command: install is given it (FR-85).
 - Driving a project's comment count to zero; the gates stop it growing (FR-34).
 - Judging code embedded in another language: shell in a workflow's `run:`, SQL in a string, `.vue` files.
 - Another SQL dialect than PostgreSQL.
@@ -155,7 +171,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **AC-11** — `doctor` in an empty checkout with no gate, then after a clean install of `commit-subject` and `no-comments-javascript` with a tracked TypeScript file: one warning exiting 0, then every check passing in order, exiting 0. (FR-27, FR-28, FR-29)
 - **AC-12** — Install `no-comments-javascript` and `no-comments-rust` where the project tracks TypeScript and Python files and no Rust: `doctor` warns that Python's gate is missing and Rust's is unused, in one check whose fix installs the one and deletes the other's adapter. (FR-33)
 - **AC-13** — With tracked files holding comments and one that does not parse, `doctor` warns with their counts and the sweep as its fix; without them it passes; with the installed scanner edited, it warns that nothing was counted. (FR-34, FR-35)
-- **AC-14** — Steps in `.githooks/pre-commit.d/` named to run in an order, one not executable, one failing with status 7: the executable steps before the failing one run in name order, the rest do not, and the hook exits 7. (FR-36)
+- **AC-14** — Steps in `.githooks/pre-commit.d/` named to run in an order, one not executable, one failing with status 7: the executable steps before the failing one run in name order, the rest do not, and the hook exits 7. A step named `format` among them runs first. (FR-36)
 - **AC-15** — Commit with the gate installed: each type, a scope and a `!` pass; a subject that is not a Conventional Commit, an uppercase scope, a 51-byte subject, a non-ASCII subject, a body, and an empty or blank subject are each refused, naming the reason and the subject, with no commit made. (FR-37, FR-38, FR-39, FR-40, FR-41, FR-45)
 - **AC-16** — Commit messages with `#` lines after the subject, a scissors line with a body below it, and carriage returns pass; `fixup!` and `squash!` of a good subject pass and of a bad one are refused; an `amend!` message passes or is refused by the message after its first line. (FR-40, FR-42, FR-43)
 - **AC-17** — Merge a branch with a bad subject and a comment added in the conflict resolution: the merge commit is made. (FR-44, FR-58)
@@ -171,6 +187,11 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **AC-27** — Commit files whose comment markers sit inside strings, heredocs and expansions; a shell `#` inside a word; a SQL dollar quote holding SQL with a comment and one holding text; a Rust `#[doc(hidden)]` and a `#[cfg_attr(…, doc = …)]`; a Python docstring; and TypeScript in each decorator dialect: only the SQL comment, the doc attribute and the docstring are refused. (FR-75, FR-76, FR-77, FR-78, FR-79, FR-80)
 - **AC-28** — Install every gate, then commit with only git, the shell's utilities and `node` on `PATH`: the hooks judge the commit. (NF-1)
 - **AC-29** — In a checkout tracking TypeScript and Python files with no gate, `doctor` warns that both languages' gates are missing, with `agent-gates install no-comments` as the fix; `install no-comments` then installs `no-comments-javascript` and `no-comments-python`. In a checkout tracking neither, `install no-comments` is refused as `no_language_tracked`, writing nothing. (FR-33, FR-83)
+- **AC-30** — `install format` without `--command`, where the project declares a `format` script and a `format:` target: refused as `fill_missing`, naming `--command` first with an example, writing nothing. Then, where the task is a `Makefile` `fmt:` target, `install format --command "make fmt"` alone installs the five files, reports the command, changes no project file, and formats the next commit. (FR-8, FR-20, FR-84, FR-85)
+- **AC-31** — Install with a command and a setup, then `install` alone: both kept, every file `installed`; then with another `--command`: the hook is `reconfigured` and rewritten without a backup, and the setup kept. `--command` or `--setup` without `format` named, with no command, or twice: usage errors, writing nothing. (FR-85, FR-86, FR-87, FR-88)
+- **AC-32** — Commit with the gate installed: a file staged whole is committed formatted; a partly staged file the command changes is refused, naming it, with the index unchanged; a partly staged file it leaves alone is committed; another file it changed stays unstaged and is listed; a failing command refuses the commit with its output; a merge commit is made without running it. (FR-89, FR-90, FR-91, FR-92, FR-93)
+- **AC-33** — Run the format workflow's steps before and after `--setup` is given: the setup step does nothing, then runs the command; the `--check` step passes over formatted files and refuses a file the command changes, naming it. (FR-86, FR-94)
+- **AC-34** — `doctor` with a command whose program is not on `PATH`: it fails; with no setup command, or one whose program is not on `PATH`: it warns; with the hook's command emptied: it fails the hook with install's refusal. (FR-30, FR-95)
 
 ## 6. Deliverables
 

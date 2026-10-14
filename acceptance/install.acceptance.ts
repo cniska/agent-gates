@@ -58,7 +58,11 @@ function each(state: string, targets: readonly string[]): FileResult[] {
 function installs(dir: string, gates: readonly string[], result: InstallResult): void {
   const ran = agentGates(dir, ["install", ...gates]);
   expect([ran.status, ran.stderr]).toEqual([0, ""]);
-  expect(jsonLine(ran.stdout)).toEqual({ command: "install", ok: true, result });
+  expect(jsonLine(ran.stdout)).toEqual({
+    command: "install",
+    ok: true,
+    result: { ...result, fills: { command: null, setup: null } },
+  });
 }
 
 function refuses(dir: string, gates: readonly string[], error: object): void {
@@ -145,7 +149,7 @@ test("AC-5 refuses an install that names no gate where none is installed", () =>
     message: `${dir} has no gates installed and none were named, so there is nothing to install`,
     meta: { root: dir },
     resolve:
-      "stop and ask the owner which gates the project runs, then agent-gates install <gate>..., choosing from commit-subject, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)",
+      "stop and ask the owner which gates the project runs, then agent-gates install <gate>..., choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)",
   });
   expect(readdirSync(dir)).toEqual([".git"]);
   expect(hooksPath(dir)).toBe("");
