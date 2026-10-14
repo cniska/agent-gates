@@ -177,7 +177,7 @@ bin/agent-gates doctor
 
 ### Checks
 
-- `bun run check` runs lint, typecheck and tests, and `.githooks/pre-commit.d/check` runs it before each commit.
+- `bun run check` runs lint, typecheck, knip (an export, file or dependency nothing uses) and tests, and `.githooks/pre-commit.d/check` runs it before each commit.
 - `bun run acceptance` proves the criteria in [`SPEC.md`](SPEC.md) through the CLI and the files it installs alone, as the spec's D-4 says; each test in `acceptance/` is named for the criteria it proves, and `src/spec.test.ts`, in the check, fails when the tests and the criteria do not cite each other.
 - `bun run format` formats `src/` and `acceptance/` with Biome, and the format gate runs it with the linter off before each commit and stages what it changes in the staged files, as [Format](#format) says.
 - `bun run gates:bundle` bundles `gates/no-comments/*.cjs` from `src/`.
