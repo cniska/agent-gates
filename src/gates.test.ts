@@ -6,8 +6,9 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { gatesDoctor } from "./doctor";
 import { ourMarker } from "./gate-marker";
+import { isGateName } from "./gate-parts";
 import { installGates, SOURCE_DIR } from "./gates";
-import { GATES, isGateName } from "./gates-contract";
+import { GATES } from "./gates-contract";
 import { commit, refusalOf, removeScratchDirs, repo, scratchDir } from "./repo.test-support";
 
 const GITATTRIBUTES_V1 = "# agent-gate:githooks:1\n* linguist-generated\n";

@@ -131,6 +131,8 @@ const SHARED_KEPT: readonly Lookalike[] = [
   at("javascript", "\uFEFF// agent-gate:no-comments:1"),
   at("sql", "-- agent-gate:no-comments:1"),
   at("sql", "-- x-gate:1"),
+  at("shell", "# x-gate:lint:12"),
+  at("python", "# agent-gate:no-comments-python:3"),
 ];
 
 const SHARED_REFUSED: readonly Lookalike[] = [
@@ -157,6 +159,9 @@ const SHARED_REFUSED: readonly Lookalike[] = [
   at("sql", "/* agent-gate:no-comments:1 */"),
   at("javascript", "// SPDX-License-Identifier: MIT because"),
   at("shell", "# this-is-a-hack-because-of-bug-gate:1"),
+  at("shell", "# hack-gate:this-is-a-hack:1"),
+  at("python", "# agent-gate:because-reasons:1"),
+  at("go", "// agent-gate:1"),
   at("javascript", "// SPDX-License-Identifier: MIT WITH this-was-a-workaround"),
   at("javascript", "// SPDX-License-Identifier: (GPL-2.0-only WITH because-reasons)"),
 ];

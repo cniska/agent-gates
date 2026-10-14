@@ -84,7 +84,7 @@ A comment stays only when a tool reads it, and deleting it changes what that too
 
 - Every kept form stands alone in its comment: no reason, no trailing text. A directive in a block comment that spans lines is refused.
 - Every TypeScript, ESLint and Biome suppression is refused, `@ts-expect-error` included, and so are `prettier-ignore`, `@ts-check` and `@vitest-environment`; their settings belong in `tsconfig.json`, the linter's config, `.prettierignore` and the Vitest config. Every `shellcheck` directive is refused; its settings belong in `.shellcheckrc`. Every Dart `ignore:` and `ignore_for_file:` is refused; the analyzer's settings belong in `analysis_options.yaml`. Tool configuration in a comment is refused too: `eslint-env`, `/* eslint … */`, `/* global */`, Dart's `coverage:`. Go's `//nolint`, `//lint:ignore`, `// +build`, `// Code generated … DO NOT EDIT.`, Example `// Output:` and analysis `// want` comments are refused too; mark generated files `linguist-generated` instead.
-- A gate marker is `agent-gate:<part>:<version>`, or another tool's `<tool>-gate:[<part>:]<version>`, where `<tool>` is one lowercase word.
+- A gate marker is `agent-gate:<part>:<version>`, where `<part>` is one of agent-gates' parts, or another tool's `<tool>-gate:[<part>:]<version>`, where `<tool>` and `<part>` are each one lowercase word.
 - A refusal lists the kept forms of each language it refused a comment in.
 
 How each language is read:

@@ -1,7 +1,7 @@
 import { checkArity, usageError } from "./cli-args";
 import type { Command } from "./cli-contract";
+import { GATE_NAMES, isGateName } from "./gate-parts";
 import { installGates } from "./gates";
-import { GATE_NAMES, isGateName } from "./gates-contract";
 import { checkoutRoot } from "./git";
 
 export const installCommand: Command = {

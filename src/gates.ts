@@ -5,16 +5,13 @@ import { unreachable } from "./assert";
 import { type Refusal, refusals } from "./coded-error";
 import { copyAside } from "./file-backup";
 import { ourMarker } from "./gate-marker";
+import { GATE_NAMES, type GateName, isPart, type Part } from "./gate-parts";
 import {
   type FileState,
-  GATE_NAMES,
   GATES,
   type GateFile,
-  type GateName,
   HOOKS_DIR,
   INSTALL_GATES,
-  isPart,
-  type Part,
   type WritableState,
 } from "./gates-contract";
 import { configValue, setConfig } from "./git";

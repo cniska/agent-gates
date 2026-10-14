@@ -1,16 +1,9 @@
 import { dirname, join } from "node:path";
 import { unreachable } from "./assert";
 import type { Refusal } from "./coded-error";
+import { type GateName, noCommentsGate } from "./gate-parts";
 import { type HooksPathState, hooksPathState, installedGates, type PlannedFile, plannedFiles } from "./gates";
-import {
-  ADAPTER_FILES,
-  type GateName,
-  HOOKS_DIR,
-  INSTALL_GATES,
-  noCommentsGate,
-  REINSTALL,
-  SCANNER_FILE,
-} from "./gates-contract";
+import { ADAPTER_FILES, HOOKS_DIR, INSTALL_GATES, REINSTALL, SCANNER_FILE } from "./gates-contract";
 import { adaptersBeside, SWEEP_ALL } from "./no-comments-installed";
 import { LANGUAGE_NAMES, type Language } from "./no-comments-languages";
 import { countsOf } from "./no-comments-report";
