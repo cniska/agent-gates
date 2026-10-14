@@ -1594,7 +1594,7 @@ describe("install and doctor", () => {
         state: "warn",
         detail:
           "dart reads 1 tracked file, but no-comments-dart is not installed; no-comments-javascript is installed, but the project tracks no file javascript reads",
-        fix: "agent-gates install no-comments-dart; delete .githooks/no-comments/javascript.cjs",
+        fix: "agent-gates install no-comments; delete .githooks/no-comments/javascript.cjs",
       },
     ]);
   });
@@ -1607,8 +1607,25 @@ describe("install and doctor", () => {
       state: "warn",
       detail:
         "dart reads 2 tracked files, but no-comments-dart is not installed; sql reads 1 tracked file, but no-comments-sql is not installed",
-      fix: "agent-gates install no-comments-dart no-comments-sql",
+      fix: "agent-gates install no-comments",
     });
+  });
+
+  test("doctor warns of a tracked language with no gate installed, even when no gate is", () => {
+    const dir = repo({ "a.ts": "export {};\n", "notes.txt": "" });
+    git(dir, ["add", "-A"]);
+    expect(gatesDoctor(dir).checks.map(({ name, state }) => [name, state])).toEqual([
+      ["gates", "warn"],
+      ["no-comments languages", "warn"],
+    ]);
+    expect(doctorCheck(dir, "no-comments languages")).toEqual({
+      name: "no-comments languages",
+      state: "warn",
+      detail: "javascript reads 1 tracked file, but no-comments-javascript is not installed",
+      fix: "agent-gates install no-comments",
+    });
+    installGates(dir, ["commit-subject"]);
+    expect(doctorCheck(dir, "no-comments languages")?.state).toBe("warn");
   });
 
   test("doctor counts the tracked comments a sweep would refuse, through the installed adapters", () => {

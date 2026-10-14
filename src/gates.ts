@@ -5,7 +5,14 @@ import { unreachable } from "./assert";
 import { type Refusal, refusals } from "./coded-error";
 import { copyAside } from "./file-backup";
 import { ourMarker } from "./gate-marker";
-import { GATE_NAMES, type GateName, isPart, type Part } from "./gate-parts";
+import {
+  GATE_NAMES,
+  type GateName,
+  isPart,
+  type NoCommentsGate,
+  noCommentsGate,
+  type Part,
+} from "./gate-parts";
 import {
   type FileState,
   GATES,
@@ -15,12 +22,14 @@ import {
   type WritableState,
 } from "./gates-contract";
 import { configValue, setConfig } from "./git";
+import { trackedLanguages, trackedPerLanguage } from "./no-comments-tracked";
 import { type PrepareState, prepareState } from "./package-manifest";
 
 export const SOURCE_DIR = resolve(import.meta.dir, "..", "gates");
 
 const gatesRefusal = refusals<{
   readonly no_gates_chosen: { readonly root: string };
+  readonly no_language_tracked: { readonly root: string };
   readonly hooks_path_occupied: { readonly root: string; readonly hooksPath: string };
   readonly hook_occupied: { readonly root: string; readonly target: string };
   readonly write_failed: { readonly path: string; readonly detail: string };
@@ -28,6 +37,11 @@ const gatesRefusal = refusals<{
   no_gates_chosen: {
     message: ({ root }) =>
       `${root} has no gates installed and none were named, so there is nothing to install`,
+    resolve: () => `stop and ask the owner which gates the project runs, then ${INSTALL_GATES}`,
+  },
+  no_language_tracked: {
+    message: ({ root }) =>
+      `${root} tracks no file a no-comments gate reads, so there is no language to install`,
     resolve: () => `stop and ask the owner which gates the project runs, then ${INSTALL_GATES}`,
   },
   hooks_path_occupied: {
@@ -186,6 +200,12 @@ function applied(root: string, { file, path, source, state }: WritableFile): str
     chmodSync(path, file.executable ? EXECUTABLE_MODE : FILE_MODE);
   });
   return backup;
+}
+
+export function trackedLanguageGates(root: string): NoCommentsGate[] {
+  const languages = trackedLanguages(trackedPerLanguage(root));
+  if (languages.length === 0) throw gatesRefusal("no_language_tracked", { root });
+  return languages.map(noCommentsGate);
 }
 
 export function installGates(root: string, named: readonly GateName[]): GatesInstalled {

@@ -3,12 +3,19 @@ import { unreachable } from "./assert";
 import type { Refusal } from "./coded-error";
 import { type GateName, noCommentsGate } from "./gate-parts";
 import { type HooksPathState, hooksPathState, installedGates, type PlannedFile, plannedFiles } from "./gates";
-import { ADAPTER_FILES, HOOKS_DIR, INSTALL_GATES, REINSTALL, SCANNER_FILE } from "./gates-contract";
+import {
+  ADAPTER_FILES,
+  EACH_TRACKED_LANGUAGE,
+  HOOKS_DIR,
+  INSTALL_GATES,
+  REINSTALL,
+  SCANNER_FILE,
+} from "./gates-contract";
 import { adaptersBeside, SWEEP_ALL } from "./no-comments-installed";
 import { LANGUAGE_NAMES, type Language } from "./no-comments-languages";
 import { countsOf } from "./no-comments-report";
 import { findings, judgedChange } from "./no-comments-scan";
-import { trackedPerLanguage } from "./no-comments-tracked";
+import { trackedLanguages, trackedPerLanguage } from "./no-comments-tracked";
 import { type PrepareState, prepareState } from "./package-manifest";
 
 type Health = {
@@ -69,8 +76,7 @@ function unusedDetail(language: Language): string {
 }
 
 function languagesFix(missing: readonly Language[], unused: readonly Language[]): string {
-  const install =
-    missing.length === 0 ? [] : [`agent-gates install ${missing.map(noCommentsGate).join(" ")}`];
+  const install = missing.length === 0 ? [] : [`agent-gates install ${EACH_TRACKED_LANGUAGE}`];
   const remove =
     unused.length === 0
       ? []
@@ -83,11 +89,11 @@ function installedLanguages(gates: readonly GateName[]): Language[] {
 }
 
 function languagesHealth(root: string, installed: readonly Language[]): Health[] {
-  if (installed.length === 0) return [];
   const tracked = trackedPerLanguage(root);
-  const tracks = (language: Language) => (tracked.get(language) ?? 0) > 0;
-  const missing = LANGUAGE_NAMES.filter((language) => !installed.includes(language) && tracks(language));
-  const unused = installed.filter((language) => !tracks(language));
+  const needed = trackedLanguages(tracked);
+  const missing = needed.filter((language) => !installed.includes(language));
+  const unused = installed.filter((language) => !needed.includes(language));
+  if (installed.length === 0 && missing.length === 0) return [];
   if (missing.length === 0 && unused.length === 0)
     return [
       {
@@ -209,6 +215,7 @@ function judged(root: string): Health[] {
         detail: "no gate is installed",
         fix: INSTALL_GATES,
       },
+      ...languagesHealth(root, []),
     ];
   const languages = installedLanguages(gates);
   const planned = plannedFiles(root, gates);

@@ -302,6 +302,14 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
   "no-comments-python": noCommentsFiles("python"),
 };
 
-export const INSTALL_GATES = `agent-gates install <gate>..., choosing from ${GATE_NAMES.join(", ")}`;
+export const EACH_TRACKED_LANGUAGE = "no-comments";
+
+const GATE_CHOICES = [...GATE_NAMES, `${EACH_TRACKED_LANGUAGE} (each language the tracked files hold)`].join(
+  ", ",
+);
+
+export const INSTALL_USAGE = `agent-gates install [<gate>...], choosing from ${GATE_CHOICES}`;
+
+export const INSTALL_GATES = `agent-gates install <gate>..., choosing from ${GATE_CHOICES}`;
 
 export const REINSTALL = "agent-gates install";

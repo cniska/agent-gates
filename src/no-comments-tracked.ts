@@ -14,3 +14,7 @@ export function trackedPerLanguage(root: string): ReadonlyMap<Language, number> 
   }
   return counts;
 }
+
+export function trackedLanguages(tracked: ReadonlyMap<Language, number>): Language[] {
+  return LANGUAGE_NAMES.filter((language) => (tracked.get(language) ?? 0) > 0);
+}

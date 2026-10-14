@@ -15,7 +15,7 @@ mise trust && mise install
 `mise install` also links `agent-gates` into `~/.bun/bin`; put that directory on your `PATH`. Then, in the project you want to gate:
 
 ```bash
-agent-gates install commit-subject no-comments-javascript
+agent-gates install commit-subject no-comments
 agent-gates doctor
 ```
 
@@ -26,7 +26,7 @@ agent-gates doctor
 | `commit-subject` | `.githooks/commit-msg` | `commits.yml` | A subject that is not a Conventional Commit, is over 50 characters or is not ASCII, and any message body |
 | `no-comments-<language>` | `.githooks/pre-commit.d/no-comments` | `no-comments.yml` | A comment the change adds, other than a [kept form](#kept-comments) |
 
-The languages are `javascript` (JavaScript and TypeScript), `dart`, `sql` (PostgreSQL), `shell`, `rust` and `python`.
+The languages are `javascript` (JavaScript and TypeScript), `dart`, `sql` (PostgreSQL), `shell`, `rust` and `python`. `agent-gates install no-comments` installs the gate for each language the tracked files hold, and refuses when they hold none.
 
 Installed files:
 
@@ -102,7 +102,7 @@ Each command prints one JSON line. An error goes to stderr and exits 2 for `usag
 | Command | Does |
 | --- | --- |
 | `agent-gates install [<gate>...]` | Install the named gates, update the installed ones, and report each file's state before acting |
-| `agent-gates doctor` | Check each gate file, `core.hooksPath`, the `prepare` script and, for `no-comments`, whether the installed languages match the tracked files and how many comments the tracked files hold; exit 1 on a failure |
+| `agent-gates doctor` | Check each gate file, `core.hooksPath`, the `prepare` script, whether a no-comments gate is installed for each language the tracked files hold, even when none is, and whether each installed one still has files to read, and how many comments the tracked files hold; exit 1 on a failure |
 
 Gate file states:
 
