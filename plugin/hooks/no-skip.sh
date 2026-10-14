@@ -2,16 +2,67 @@
 set -uo pipefail
 
 readonly HOOKS=".githooks"
+readonly HEREDOC="(^|[^<])<<-?[[:space:]]*[\"']?([A-Za-z0-9_.-]+)[\"']?(.*)$"
 
 note() {
   printf 'cniska-gates: %s\n' "$1" >&2
 }
 
+heredoc_ends() {
+  local rest="$1"
+  while [[ "$rest" =~ $HEREDOC ]]; do
+    printf '%s\n' "${BASH_REMATCH[2]}"
+    rest="${BASH_REMATCH[3]}"
+  done
+}
+
+without_heredoc_bodies() {
+  local line end
+  local -a ends=()
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [ "${#ends[@]}" -gt 0 ]; then
+      if [ "${line#"${line%%[!$'\t']*}"}" = "${ends[0]}" ]; then
+        ends=("${ends[@]:1}")
+      fi
+      continue
+    fi
+    printf '%s\n' "$line"
+    while IFS= read -r end; do
+      ends+=("$end")
+    done < <(heredoc_ends "$line")
+  done <<<"$1"
+}
+
 commands_of() {
-  jq -r '(.tool_input.command // "")
+  printf '%s' "$1" | jq -rRs '.
     | gsub("\"(?<q>[^\"]*)\""; .q | gsub("[\\s;&|]"; ""))
     | gsub("'"'"'(?<q>[^'"'"']*)'"'"'"; .q | gsub("[\\s;&|]"; ""))
-    | gsub("&&|\\|\\||[;|&]"; "\n")' 2>/dev/null
+    | gsub("&&|\\|\\||[;|&]"; "\n")'
+}
+
+dir_from() {
+  local base="$1" target="$2"
+  case "$target" in
+    "~" | "\$HOME" | "\${HOME}") target="$HOME" ;;
+    \~/*) target="$HOME/${target#\~/}" ;;
+    "\$HOME/"*) target="$HOME/${target#"\$HOME/"}" ;;
+    "\${HOME}/"*) target="$HOME/${target#"\${HOME}/"}" ;;
+  esac
+  case "$target" in
+    /*) printf '%s' "$target" ;;
+    *) printf '%s/%s' "$base" "$target" ;;
+  esac
+}
+
+gated_root_of() {
+  local dir="$1" root
+  while [ ! -d "$dir" ]; do
+    dir="${dir%/*}"
+    dir="${dir:-/}"
+  done
+  root="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)" || return 1
+  gated "$root" || return 1
+  printf '%s' "$root"
 }
 
 is_gates_path() {
@@ -92,9 +143,9 @@ config_skip() {
   return 1
 }
 
-skip_of() {
-  local root="$1"
-  local -a words
+denial_of() {
+  local dir="$1"
+  local -a words settings=()
   read -ra words <<<"$2"
   local at=0
   while [ "$at" -lt "${#words[@]}" ]; do
@@ -111,13 +162,13 @@ skip_of() {
     case "$word" in
       -c)
         at=$((at + 1))
-        local setting="${words[$at]:-}"
-        if is_hooks_path_key "${setting%%=*}" && ! is_gates_path "$root" "${setting#*=}"; then
-          printf 'hooks-path -c %s\n' "$setting"
-          return 0
-        fi
+        settings+=("${words[$at]:-}")
         ;;
-      -C | --git-dir | --work-tree | --namespace | --exec-path) at=$((at + 1)) ;;
+      -C)
+        at=$((at + 1))
+        dir="$(dir_from "$dir" "${words[$at]:-}")"
+        ;;
+      --git-dir | --work-tree | --namespace | --exec-path) at=$((at + 1)) ;;
       -*) ;;
       *)
         subcommand="$word"
@@ -126,13 +177,24 @@ skip_of() {
     esac
     at=$((at + 1))
   done
+  local root
+  root="$(gated_root_of "$dir")" || return 1
+  local setting
+  for setting in ${settings[@]+"${settings[@]}"}; do
+    if is_hooks_path_key "${setting%%=*}" && ! is_gates_path "$root" "${setting#*=}"; then
+      reason_for "$root" "hooks-path -c $setting"
+      return 0
+    fi
+  done
   local -a args=("${words[@]:$((at + 1))}")
+  local skip
   case "$subcommand" in
-    commit) commit_skip ${args[@]+"${args[@]}"} ;;
-    push) push_skip ${args[@]+"${args[@]}"} ;;
-    config) config_skip "$root" ${args[@]+"${args[@]}"} ;;
+    commit) skip="$(commit_skip ${args[@]+"${args[@]}"})" ;;
+    push) skip="$(push_skip ${args[@]+"${args[@]}"})" ;;
+    config) skip="$(config_skip "$root" ${args[@]+"${args[@]}"})" ;;
     *) return 1 ;;
-  esac
+  esac || return 1
+  reason_for "$root" "$skip"
 }
 
 gates_for() {
@@ -178,24 +240,30 @@ main() {
     note "jq is not on PATH, so the command was not checked for skipping the gates"
     return 0
   fi
-  local input commands cwd
+  local input command cwd
   IFS= read -r -d '' input || true
-  if ! commands="$(commands_of <<<"$input")" || ! cwd="$(jq -r '.cwd // ""' <<<"$input" 2>/dev/null)"; then
+  if ! command="$(jq -r '.tool_input.command // ""' <<<"$input" 2>/dev/null)" || ! cwd="$(jq -r '.cwd // ""' <<<"$input" 2>/dev/null)"; then
     note "the hook input did not parse as JSON, so the command was not checked for skipping the gates"
     return 0
   fi
-  [ -d "$cwd" ] || return 0
-  local root
-  root="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)" || return 0
-  gated "$root" || return 0
-  local line skip
+  case "$cwd" in
+    /*) ;;
+    *) return 0 ;;
+  esac
+  local dir="$cwd" line reason
+  local -a words
   while IFS= read -r line; do
-    if skip="$(skip_of "$root" "$line")"; then
-      jq -cn --arg reason "cniska-gates: $(reason_for "$root" "$skip")" \
+    read -ra words <<<"$line"
+    if [ "${words[0]:-}" = cd ]; then
+      dir="$(dir_from "$dir" "${words[1]:-$HOME}")"
+      continue
+    fi
+    if reason="$(denial_of "$dir" "$line")"; then
+      jq -cn --arg reason "cniska-gates: $reason" \
         '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $reason}}'
       return 0
     fi
-  done <<<"$commands"
+  done < <(commands_of "$(without_heredoc_bodies "$command")")
 }
 
 main

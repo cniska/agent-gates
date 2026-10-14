@@ -190,3 +190,32 @@ test("AC-41 denies a git command that skips the gates, naming them, and lets eve
       "cniska-gates: the hook input did not parse as JSON, so the command was not checked for skipping the gates\n",
   });
 });
+
+test("AC-42 judges each git command against the repo it targets, past heredoc bodies", () => {
+  const dir = gated(["commit-subject", "no-comments-javascript"]);
+  const tools = bare(["bash", "git", "jq"]);
+  const skipped = denied(
+    "`git commit --no-verify` skips the gates this repo runs on commit: commit-subject, no-comments.",
+  );
+  const fresh = join(scratchDir(), "state-n");
+  const ungated = checkout();
+
+  for (const command of [
+    `mkdir -p ${fresh}; cd ${fresh}; git init -q; git commit -qm x --allow-empty --no-verify`,
+    `cd ${ungated} && git commit --no-verify -m x`,
+    `git -C ${ungated} commit --no-verify -m x`,
+    "cat > notes.md <<'EOF'\ngit commit --no-verify -m x\nEOF",
+  ])
+    expect(ranCommand(dir, command, tools)).toEqual(QUIET);
+
+  for (const command of [
+    `cd ${dir} && git commit --no-verify -m x`,
+    `cd ${dir}/missing; git commit --no-verify -m x`,
+    `git -C ${dir} commit --no-verify -m x`,
+    `cd ~ && git -C ${dir} commit --no-verify -m x`,
+  ])
+    expect(ranCommand(ungated, command, tools)).toEqual(skipped);
+  expect(
+    ranCommand(dir, "cat > notes.md <<'EOF'\nthe owner's notes\nEOF\ngit commit --no-verify -m 'x'", tools),
+  ).toEqual(skipped);
+});
