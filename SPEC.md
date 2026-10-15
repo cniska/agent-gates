@@ -187,7 +187,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 - **FR-116** — `scripts/build-compiled.sh <outfile>` compiles the CLI into one executable that carries every gate file and the version, so it runs every command with no checkout of agent-gates and no Bun on the machine.
 - **FR-117** — `install.sh`, run by `curl … | sh`, downloads the latest release's build for this platform, checks it against its published sha256, runs it for its version, and installs it as `~/.local/bin/agent-gates`, writing it beside that path and renaming it into place. A download that fails, does not match its checksum, or reports a version that is not `x.y.z` installs nothing. Run again, it replaces the install.
-- **FR-118** — The npm package `@cniska/agent-gates` installs the build for its platform from `@cniska/agent-gates-darwin-arm64` or `@cniska/agent-gates-linux-x64` and runs it with the arguments it was given, exiting as it exits. On another platform, or with the platform package missing, it refuses with `no_build_for_platform` or `platform_package_missing`.
+- **FR-118** — The npm package `@cniska/agent-gates` installs the build for its platform from `@cniska/agent-gates-darwin-arm64` or `@cniska/agent-gates-linux-x64` and runs it with the arguments it was given, exiting as it exits. On another platform, or with the platform package missing, it refuses with `no_build_for_platform` or `platform_package_missing`; with a platform build that cannot start, with `binary_failed`.
 
 ## 3. Non-functional requirements
 
@@ -258,7 +258,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **AC-44** — Run `agent-gates --version`, then with an argument after it: the version alone on stdout with exit 0 and nothing on stderr, then a `wrong_arity` usage error exiting 2 with nothing on stdout. (FR-115)
 - **AC-45** — Compile the release binary and run it with only its own directory and git on `PATH`, in a fresh checkout of made-up content: `--version` prints the version, `install commit-subject` succeeds, and `doctor` then passes with no failing check. (FR-116)
 - **AC-46** — Run `install.sh` in a fresh home against a stand-in for the release downloads, twice, then once with a wrong checksum in another fresh home, then against builds that report an empty version, `1.2.3.4` and `../x`: the installed `agent-gates --version` prints the release's version and `~/.local/bin` holds only it, and the bad download and each mislabelled build are refused with nothing written. (FR-117)
-- **AC-47** — Build the npm packages from a release build, install the shim into a prefix and run it through Node, first without its platform package, then with it: the first is refused as `platform_package_missing`; then `--version` prints the package version and `install commit-subject` succeeds in a fresh checkout. (FR-118)
+- **AC-47** — Build the npm packages from a release build, install the shim into a prefix and run it through Node, first without its platform package, then with it unexecutable, then whole: the first is refused as `platform_package_missing`, the second as `binary_failed`; then `--version` prints the package version and `install commit-subject` succeeds in a fresh checkout. (FR-118)
 
 ## 6. Deliverables
 

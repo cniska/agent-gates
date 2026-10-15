@@ -114,7 +114,7 @@ test(
 );
 
 test(
-  "AC-47 the npm package runs its platform's binary, and refuses when the platform package is missing",
+  "AC-47 the npm package runs its platform's binary, and refuses when the platform package is missing or cannot start",
   () => {
     const dir = scratchDir();
     const assets = releaseAssets(join(dir, "assets"), compiledBinary(join(dir, "build")), TARGET);
@@ -141,6 +141,17 @@ test(
     });
 
     cpSync(join(tree, TARGET), join(modules, `agent-gates-${TARGET}`), { recursive: true });
+    const platformBinary = join(modules, `agent-gates-${TARGET}`, "agent-gates");
+    chmodSync(platformBinary, 0o644);
+    const unstartable = run("agent-gates", ["--version"], project, { PATH: path });
+    expect([unstartable.status, unstartable.stdout]).toEqual([1, ""]);
+    expect(jsonLine(unstartable.stderr)).toMatchObject({
+      command: "agent-gates",
+      ok: false,
+      error: { kind: "refusal", code: "binary_failed" },
+    });
+    chmodSync(platformBinary, 0o755);
+
     expect(run("agent-gates", ["--version"], project, { PATH: path })).toEqual({
       status: 0,
       stdout: `${packageVersion()}\n`,
