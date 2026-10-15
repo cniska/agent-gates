@@ -40,6 +40,6 @@ The hook runs the project's format command on each commit, then stages what it c
 
 agent-gates does not look for a formatter: `agent-gates install format --command "<command>"` names it, such as `--command "npm run lint:fix"` or `--command "cargo fmt"`, and install refuses `format` without one. Install writes the command into the hook as `command='<command>'`, so it shows in the diff, and a reinstall without `--command` keeps it.
 
-Formatting writes files, so the gate runs only where code is written, on commit. The hook with `--run` runs the command from the checkout's root and exits with its status, staging nothing. The gate installs no workflow: CI can only refuse, and the project's own check already refuses unformatted code.
+Formatting writes files, so the gate runs only where code is written: on commit, and after an agent's edit through the [plugin](plugin.md). The hook with `--run` runs the command from the checkout's root and exits with its status, staging nothing; the plugin runs it that way. The gate installs no workflow: CI can only refuse, and the project's own check already refuses unformatted code.
 
 `doctor` fails when the format command's program is not on `PATH`.

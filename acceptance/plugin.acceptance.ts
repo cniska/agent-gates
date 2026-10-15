@@ -1,10 +1,12 @@
 import { afterEach, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { symlinkSync } from "node:fs";
 import { join } from "node:path";
 import {
   checkout,
   type Env,
   git,
+  install,
   pathOf,
   readText,
   removeScratch,
@@ -20,7 +22,7 @@ const PLUGIN = join(import.meta.dir, "..", "plugin");
 
 const QUIET = { status: 0, stdout: "", stderr: "" };
 
-const COMMAND = `"\${CLAUDE_PLUGIN_ROOT}"/hooks/no-comments.sh`;
+const COMMAND = `"\${CLAUDE_PLUGIN_ROOT}"/hooks/after-edit.sh`;
 
 const SKIP_COMMAND = `"\${CLAUDE_PLUGIN_ROOT}"/hooks/no-skip.sh`;
 
@@ -56,12 +58,18 @@ function note(why: string): string {
   return `cniska-gates: ${why}, so the edit's comments were not judged\n`;
 }
 
+function unjudged(why: string): string {
+  return `cniska-gates: ${why}, so the edit was neither formatted nor judged\n`;
+}
+
 test("AC-36 hands the agent the scanner's reply after an edit adding a comment, and says nothing otherwise", () => {
   expect(JSON.parse(readText(PLUGIN, ".claude-plugin/plugin.json"))).toMatchObject({ name: "cniska-gates" });
   expect(JSON.parse(readText(PLUGIN, "hooks/hooks.json"))).toEqual({
     hooks: {
       PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: SKIP_COMMAND }] }],
-      PostToolUse: [{ matcher: "Edit|Write|MultiEdit", hooks: [{ type: "command", command: COMMAND }] }],
+      PostToolUse: [
+        { matcher: "Edit|Write|MultiEdit", hooks: [{ type: "command", command: COMMAND, timeout: 60 }] },
+      ],
     },
   });
   const dir = gated(["no-comments-javascript"], { "src/a.ts": "export const a = 1;\n" });
@@ -93,13 +101,13 @@ test("AC-37 leaves only a note when it cannot judge the edit", () => {
 
   expect(edited(dir, file, bare(["bash", "git", "node"]))).toEqual({
     ...QUIET,
-    stderr: note("jq is not on PATH"),
+    stderr: unjudged("jq is not on PATH"),
   });
   expect(edited(dir, file, bare(["bash", "git", "jq"]))).toEqual({
     ...QUIET,
     stderr: note("node is not on PATH"),
   });
-  expect(hookRan("not json")).toEqual({ ...QUIET, stderr: note("the hook input did not parse as JSON") });
+  expect(hookRan("not json")).toEqual({ ...QUIET, stderr: unjudged("the hook input did not parse as JSON") });
 
   writeFiles(dir, {
     ".githooks/no-comments/scan.cjs":
@@ -110,6 +118,121 @@ test("AC-37 leaves only a note when it cannot judge the edit", () => {
     stderr:
       "cniska-gates: the no-comments scanner exited 2, so the edit's comments were not judged: no-comments: too old\n",
   });
+});
+
+const STRIP_WHY = [
+  'const fs = require("node:fs");',
+  'for (const file of fs.readdirSync(".").filter((name) => name.endsWith(".ts")))',
+  '  fs.writeFileSync(file, fs.readFileSync(file, "utf8").replaceAll(" // why", ""));',
+  "",
+].join("\n");
+
+const FORMAT_HOOK = ".githooks/pre-commit.d/format";
+
+const FORMAT_HOOK_V2 = readText(join(import.meta.dir, "fixtures"), "format-pre-commit-v2");
+
+const FORMAT_TOOLS = ["bash", "git", "node", "jq", "sleep"];
+
+function formatGated(files: Readonly<Record<string, string>> = {}): string {
+  const dir = gated(["no-comments-javascript"], {
+    "fmt.cjs": STRIP_WHY,
+    "a.ts": "export const a = 1;\n",
+    "b.ts": "export const b = 1;\n",
+    ...files,
+  });
+  install(dir, ["format", "--command", "node fmt.cjs"]);
+  git(dir, ["add", "-A"]);
+  git(dir, ["-c", "core.hooksPath=/dev/null", "commit", "-qm", "chore: format"]);
+  return dir;
+}
+
+function stagedThenEdited(dir: string) {
+  writeFiles(dir, { "b.ts": "export const b = 2; // why\n" });
+  git(dir, ["add", "b.ts"]);
+  writeFiles(dir, { "a.ts": "export const a = 2; // why\n" });
+  return git(dir, ["diff", "--cached"]);
+}
+
+function sleeps(seconds: number): number {
+  const listed = spawnSync("ps", ["-A", "-o", "command="], { encoding: "utf8" }).stdout;
+  return listed.split("\n").filter((line) => line.trim() === `sleep ${seconds}`).length;
+}
+
+function timed<T>(act: () => T): { readonly took: number; readonly result: T } {
+  const started = performance.now();
+  const result = act();
+  return { took: performance.now() - started, result };
+}
+
+test("AC-48 formats the edited file through the gate's own command before the scan reads it", () => {
+  const dir = formatGated();
+  const index = stagedThenEdited(dir);
+  const watchdogs = sleeps(30);
+  const { took, result } = timed(() => edited(dir, join(dir, "a.ts"), bare(FORMAT_TOOLS)));
+  expect(result).toEqual(QUIET);
+  expect(took).toBeLessThan(5000);
+  expect(sleeps(30)).toBe(watchdogs);
+  expect([readText(dir, "a.ts"), readText(dir, "b.ts")]).toEqual([
+    "export const a = 2;\n",
+    "export const b = 2;\n",
+  ]);
+  expect(git(dir, ["diff", "--cached"])).toBe(index);
+
+  const sleepless = formatGated({ "late.cjs": 'setTimeout(() => require("./fmt.cjs"), 1000);\n' });
+  install(sleepless, ["format", "--command", "node late.cjs"]);
+  writeFiles(sleepless, { "a.ts": "export const a = 2; // why\n" });
+  expect(edited(sleepless, join(sleepless, "a.ts"), bare(["bash", "git", "node", "jq"]))).toEqual(QUIET);
+  expect(readText(sleepless, "a.ts")).toBe("export const a = 2;\n");
+});
+
+test("AC-49 tells the agent in one line when the format command fails or runs past its bound, and still scans", () => {
+  const reply = commentReply([KEPT_JAVASCRIPT], [["a.ts", ["1  // why"]]]).trimEnd();
+  const failing = formatGated({ "fmt.cjs": 'process.stderr.write("broken\\n");\nprocess.exitCode = 3;\n' });
+  install(failing, ["format", "--command", "node 'fmt.cjs'"]);
+  const failingIndex = stagedThenEdited(failing);
+  expect(edited(failing, join(failing, "a.ts"), bare(FORMAT_TOOLS))).toEqual(
+    told(`format: \`node 'fmt.cjs'\` exited 3, so the edited file was not formatted\n${reply}`),
+  );
+  expect(git(failing, ["diff", "--cached"])).toBe(failingIndex);
+
+  const slow = formatGated({
+    "late.cjs": 'setTimeout(() => require("./fmt.cjs"), 33000);\n',
+    "slow.sh": "node late.cjs\nexit 0\n",
+  });
+  install(slow, ["format", "--command", "sh slow.sh"]);
+  const slowIndex = stagedThenEdited(slow);
+  const { took, result } = timed(() => edited(slow, join(slow, "a.ts"), bare(FORMAT_TOOLS)));
+  expect(result).toEqual(
+    told(
+      `format: \`sh slow.sh\` ran past 30 s and was stopped, so the edited file was not formatted\n${reply}`,
+    ),
+  );
+  expect(took).toBeLessThan(33000);
+  Bun.sleepSync(Math.max(0, 36000 - took));
+  expect([readText(slow, "a.ts"), git(slow, ["diff", "--cached"])]).toEqual([
+    "export const a = 2; // why\n",
+    slowIndex,
+  ]);
+}, 60000);
+
+test("AC-50 leaves an earlier format hook and a checkout without the gate alone", () => {
+  const dir = formatGated();
+  writeFiles(dir, { [FORMAT_HOOK]: FORMAT_HOOK_V2.replace("command=''", "command='node fmt.cjs'") });
+  const index = stagedThenEdited(dir);
+  writeFiles(dir, { "a.ts": "export const a = 2;\n" });
+  expect(edited(dir, join(dir, "a.ts"))).toEqual({
+    ...QUIET,
+    stderr:
+      "cniska-gates: .githooks/pre-commit.d/format has no --run before agent-gate:format:3, so the edit was not formatted; agent-gates install updates it\n",
+  });
+  expect([readText(dir, "b.ts"), git(dir, ["diff", "--cached"])]).toEqual([
+    "export const b = 2; // why\n",
+    index,
+  ]);
+
+  const ungated = checkout({ "fmt.cjs": STRIP_WHY, "a.ts": "export const a = 2; // why\n" });
+  expect(edited(ungated, join(ungated, "a.ts"), bare(FORMAT_TOOLS))).toEqual(QUIET);
+  expect(readText(ungated, "a.ts")).toBe("export const a = 2; // why\n");
 });
 
 function ranCommand(cwd: string, command: string, env: Env = {}) {

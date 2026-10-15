@@ -1,6 +1,6 @@
 # agent-gates Specification
 
-> Gate your agents' work and save them round trips: git hooks refuse a bad commit locally and GitHub workflows refuse its subject and comments again in CI, for every contributor, and an optional Claude Code plugin shows the agent the comments it added, right after each edit.
+> Gate your agents' work and save them round trips: git hooks refuse a bad commit locally and GitHub workflows refuse its subject and comments again in CI, for every contributor, and an optional Claude Code plugin formats each edit and shows the agent the comments it added, right after the edit.
 
 This document states what must hold, not how. [`README.md`](README.md) lists every gate with a summary of what it refuses, [`docs/`](docs/) states those refusals in full, says how the gates judge and holds the commands, and [`src/README.md`](src/README.md) maps the modules that meet these requirements.
 
@@ -8,7 +8,7 @@ This document states what must hold, not how. [`README.md`](README.md) lists eve
 
 ## 1. Purpose & context
 
-A coding agent excuses a workaround in a comment, writes a commit message nobody can scan, or commits unformatted code that fails the project's check, and a reviewer reading the diff tends to accept all of it. agent-gates installs gates that git hooks enforce on commit and push, for every developer: the commit subject, the format and no added comments, and the hooks run the project's own check steps, which `doctor` holds CI to running. GitHub workflows enforce the commit subject and no added comments again in CI. The format gate formats, so it runs only where code is written, on commit, and never in CI, where the project's own check refuses unformatted code. The gates are files committed with the project, so contributors and CI are gated without installing agent-gates; agent-gates installs them, brings them up to date, and judges their health. The optional `cniska-gates` Claude Code plugin optimizes the agent's loop: it shows the agent the comments each edit added, before a gate refuses the commit, and denies a git command that skips the gates.
+A coding agent excuses a workaround in a comment, writes a commit message nobody can scan, or commits unformatted code that fails the project's check, and a reviewer reading the diff tends to accept all of it. agent-gates installs gates that git hooks enforce on commit and push, for every developer: the commit subject, the format and no added comments, and the hooks run the project's own check steps, which `doctor` holds CI to running. GitHub workflows enforce the commit subject and no added comments again in CI. The format gate formats, so it runs only where code is written, on commit and after an agent's edit, and never in CI, where the project's own check refuses unformatted code. The gates are files committed with the project, so contributors and CI are gated without installing agent-gates; agent-gates installs them, brings them up to date, and judges their health. The optional `cniska-gates` Claude Code plugin optimizes the agent's loop: it formats each edit with the project's own command and shows the agent the comments the edit added, before a gate refuses the commit, and denies a git command that skips the gates.
 
 **Primary user:** coding agents and their owner, installing gates into a project, reading why a commit was refused, and running the plugin in the agent's sessions. Not the audience: projects that want a configurable linter; a gate here has no options.
 
@@ -131,7 +131,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 - **FR-84** — `format` installs `.githooks/pre-commit`, `.githooks/pre-commit.d/format` and `.githooks/.gitattributes`.
 - **FR-85** — `install format --command <command>` writes the project's format command into the hook; agent-gates looks up no format task of its own. A reinstall without `--command` keeps the installed command. With none given and none installed, install is refused as `fill_missing`, naming `--command` with an example, and writes nothing.
-- **FR-86** — `format` installs no workflow and no CI setup: it runs on commit, never in CI.
+- **FR-86** — `format` installs no workflow and no CI setup: it runs on commit and, through the plugin, after an agent's edit (FR-119), never in CI.
 - **FR-87** — `--command` with no command, `--prefixes` with no list, either given twice, or with no gate named that runs it, `format` for the command and `commit-subject` for the list, is a usage error, `flag_misplaced`; another argument starting with `-`, `--setup` included, is an `unknown_gate`.
 - **FR-88** — A hook holding the current release with another command or list than install was given is `reconfigured`, and install rewrites it without a backup.
 - **FR-89** — On commit, the `format` hook runs the command; when it fails, the commit is refused with its output.
@@ -152,12 +152,12 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ### 2.13 The Claude Code plugin
 
-- **FR-101** — The `cniska-gates` plugin runs its hook after each `Edit`, `Write` or `MultiEdit`.
+- **FR-101** — The `cniska-gates` plugin runs its hook after each `Edit`, `Write` or `MultiEdit`, allowing it 60 s.
 - **FR-102** — The hook runs `scan.cjs --file` on the edited file, a relative path read from the edit's working directory, in the checkout holding the file.
-- **FR-103** — When the scanner refuses, the hook prints its reply as the PostToolUse `additionalContext`; otherwise it prints nothing.
-- **FR-104** — The hook exits 0 whatever happens, and changes no file.
-- **FR-105** — The hook does nothing for input naming no file, a file outside a checkout, or a checkout without `.githooks/no-comments/scan.cjs`.
-- **FR-106** — Without `jq` or `node` on `PATH`, with input that is not JSON, or with a scanner that exits other than 0 or 1, the hook prints nothing and writes to stderr a note naming why the edit was not judged.
+- **FR-103** — The hook prints as the PostToolUse `additionalContext` the format step's line (FR-120) and, when the scanner refuses, its reply; with neither, it prints nothing.
+- **FR-104** — The hook exits 0 whatever happens, and changes no file but what the format command writes; the index stays as it was.
+- **FR-105** — The hook does nothing for input naming no file, or a file outside a checkout. In a checkout without `.githooks/no-comments/scan.cjs` it does not scan, and without `.githooks/pre-commit.d/format` it does not format.
+- **FR-106** — Without `jq` on `PATH`, or with input that is not JSON, the hook prints nothing and writes to stderr a note naming why the edit was neither formatted nor judged. Without `node` on `PATH`, or with a scanner that exits other than 0 or 1, it does not scan and writes to stderr a note naming why the edit's comments were not judged.
 
 ### 2.14 The project's own steps
 
@@ -189,17 +189,23 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **FR-117** — `install.sh`, run by `curl … | sh`, downloads the latest release's build for this platform, checks it against its published sha256, runs it for its version, and installs it as `~/.local/bin/agent-gates`, writing it beside that path and renaming it into place. A download that fails, does not match its checksum, or reports a version that is not `x.y.z` installs nothing. Run again, it replaces the install.
 - **FR-118** — The npm package `@cniska/agent-gates` installs the build for its platform from `@cniska/agent-gates-darwin-arm64` or `@cniska/agent-gates-linux-x64` and runs it with the arguments it was given, exiting as it exits. On another platform, or with the platform package missing, it refuses with `no_build_for_platform` or `platform_package_missing`; with a platform build that cannot start, with `binary_failed`.
 
+### 2.20 The Claude Code plugin: formatting the edit
+
+- **FR-119** — After each edit, before the scan, in a checkout whose `.githooks/pre-commit.d/format` carries `agent-gate:format:3` or later, the hook runs that file with `--run` (FR-94), so the project's own command formats the edited file before the scanner reads it.
+- **FR-120** — The format run is stopped after 30 s, with every process it started. When the command fails or is stopped, the hook adds one line to the context naming the command and its exit status, or that it was stopped, then scans and exits 0, the index unchanged; when the command succeeds, it adds nothing. Without `sleep` on `PATH`, the run is not bounded.
+- **FR-121** — Over a `format` hook before `agent-gate:format:3`, the hook does not format, and writes to stderr a note naming `agent-gates install`.
+
 ## 3. Non-functional requirements
 
 - **NF-1** — The installed gates run with git, a POSIX shell and `node` alone: nothing installed in the project, and neither agent-gates nor Bun on `PATH`. The `format` gate also runs the project's own format command.
-- **NF-2** — The plugin's hooks run with bash, git, `node` and `jq` alone.
+- **NF-2** — The plugin's hooks run with bash, git, `node`, `jq` and `sleep` alone; the format step also runs the project's own format command.
 
 ## 4. Out of scope
 
 - Configuring a gate: a gate has no options beyond the format command (FR-85) and the commit prefixes (FR-114), and the installed files are the only state; configurable rules belong to the project's own linter.
 - Finding a project's format command, and what its formatting is: the project's formatter owns that, and install is given its command (FR-85).
 - Driving a project's comment count to zero; the project sweeps with `scan.cjs --all`, and the gates stop the count growing (FR-34).
-- Blocking or changing an edit, an installed gate file's included: the plugin reports the comments an edit added (FR-103, FR-104), and the gates refuse at commit.
+- Blocking an edit, an installed gate file's included: the plugin formats the edit and reports the comments it added (FR-103, FR-119), and the gates refuse at commit.
 - The workflow an agent follows; cniska-skills holds it.
 - Recording or measuring agent work; agent-record does that.
 - Isolating the checkouts of agents working in parallel; agent-worktree does that.
@@ -245,7 +251,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **AC-33** — Run the `format` hook with `--run` from a subdirectory, over a staged file the command changes: it exits 0, the command runs at the checkout's root and formats the file in the working tree, and the index is unchanged; with a command that fails with status 3: it exits 3 with the command's output. (FR-94)
 - **AC-34** — `doctor` with a command whose program is not on `PATH`: it fails; with one on `PATH`: every check passes; with the hook's command emptied: it fails the hook with install's refusal. With `commit-subject` installed, it passes the commit prefixes, saying the default set applies, then naming the installed list. (FR-30, FR-95)
 - **AC-35** — Run `scan.cjs --file` on a tracked file whose working tree adds a comment to one `HEAD` holds, a comment the index does not hold, from the checkout's root, from the file's directory, and by an absolute path from another directory; on a file whose index adds a comment its working tree removed; on an ignored, a generated and a binary file, a symlink and a missing path; on a new file, a renamed file and a file a comment moved into; and on a file outside the checkout: the first is refused with the reply naming only the new comment, the same each way; the next six pass; the next three are refused; the last exits 2 naming the path and the checkout; the files and git's status are unchanged. (FR-96, FR-97, FR-98, FR-99, FR-100)
-- **AC-36** — Run the hook as `hooks.json` registers it, from the plugin `plugin.json` names `cniska-gates`, with only a shell to run the command, bash, git, `node` and `jq` on `PATH`, after an edit adding a comment, named by an absolute path and by a path relative to a subdirectory: it exits 0, printing the scanner's reply as the PostToolUse context, the file unchanged; after a clean edit, for a file outside a checkout, for a file in a directory that does not exist, in a checkout without the gate, and for input naming no file: it exits 0, printing nothing. (FR-101, FR-102, FR-103, FR-104, FR-105, NF-2)
+- **AC-36** — Run the hook as `hooks.json` registers it, with a 60 s timeout, from the plugin `plugin.json` names `cniska-gates`, with only a shell to run the command, bash, git, `node` and `jq` on `PATH`, after an edit adding a comment, named by an absolute path and by a path relative to a subdirectory: it exits 0, printing the scanner's reply as the PostToolUse context, the file unchanged; after a clean edit, for a file outside a checkout, for a file in a directory that does not exist, in a checkout without the gate, and for input naming no file: it exits 0, printing nothing. (FR-101, FR-102, FR-103, FR-104, FR-105, NF-2)
 - **AC-37** — Run the hook without `jq`, without `node`, with input that is not JSON, and with a scanner that exits 2: each exits 0, prints nothing, and writes a note naming why. (FR-104, FR-106)
 - **AC-38** — Over an install, add an executable step to `pre-commit.d` and one to `pre-push.d`, a step that is not executable and an executable one with a marker: `doctor` reports no step check before them, then, with a workflow naming only a longer path that starts with one of them, warns naming the first two, with a fix naming them; once a workflow runs both, the check passes. (FR-107)
 
@@ -259,6 +265,9 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **AC-45** — Compile the release binary and run it with only its own directory and git on `PATH`, in a fresh checkout of made-up content: `--version` prints the version, `install commit-subject` succeeds, and `doctor` then passes with no failing check. (FR-116)
 - **AC-46** — Run `install.sh` in a fresh home against a stand-in for the release downloads, twice, then once with a wrong checksum in another fresh home, then against builds that report an empty version, `1.2.3.4` and `../x`: the installed `agent-gates --version` prints the release's version and `~/.local/bin` holds only it, and the bad download and each mislabelled build are refused with nothing written. (FR-117)
 - **AC-47** — Build the npm packages from a release build, install the shim into a prefix and run it through Node, first with its manifest naming only another platform's package, then without its platform package, then with it unexecutable, then whole: the first is refused as `no_build_for_platform`, the second as `platform_package_missing`, the third as `binary_failed`; then `--version` prints the package version and `install commit-subject` succeeds in a fresh checkout. (FR-118)
+- **AC-48** — Install `no-comments-javascript` and `format` with a command that strips the edit's comment, stage another file, then run the `PostToolUse` hook with only bash, git, `node`, `jq` and `sleep` on `PATH` after an edit adding a comment: it exits 0 within seconds, printing nothing, the edited file is formatted, the scanner finds no comment, no watchdog is left running, and the index is unchanged. Without `sleep` on `PATH`, a command taking a second still formats the file, printing nothing. (FR-119, FR-120, FR-104, NF-2)
+- **AC-49** — With a command that fails with status 3: the context holds one line naming the command, an apostrophe in it kept, and its status, then the scanner's reply, the index unchanged. With a command that would format only after 33 s: within 33 s the context holds one line saying it ran past 30 s and was stopped, then the scanner's reply; after 36 s the file is still unformatted and the index unchanged. (FR-120, FR-103)
+- **AC-50** — Over the `format` hook's earlier release with its command filled in: the hook writes a note naming `agent-gates install`, prints nothing, and formats nothing, the index unchanged. In a checkout without the gate, it prints nothing and the file is unchanged. (FR-121, FR-105)
 
 ## 6. Deliverables
 

@@ -4,7 +4,10 @@ The optional `cniska-gates` plugin in `plugin/` saves a Claude Code agent the ro
 
 ## After each edit
 
-After each `Edit`, `Write` or `MultiEdit`, in a repo that commits `.githooks/no-comments/scan.cjs`, the plugin runs `scan.cjs --file` on the edited file and hands the agent the scanner's reply, so it removes the comments before it commits. It never blocks an edit, never changes a file, and does nothing in a repo without the gate. It needs `jq` and `node` on `PATH`; without either, or with a scanner too old for `--file`, it leaves only a note on stderr.
+After each `Edit`, `Write` or `MultiEdit`, the plugin formats the edit, then judges its comments, and hands the agent one context holding what each step found. It never blocks an edit, and does nothing in a repo without the gates. It needs `jq` on `PATH`; without it, it leaves only a note on stderr.
+
+- **Format.** In a repo that commits the `format` gate, the plugin runs `.githooks/pre-commit.d/format --run`, so the project's own command formats the edited file before the scan reads it. The index stays as it was. A run that succeeds says nothing. A command that fails, or runs past 30 s and is stopped with every process it started, gives the agent one line naming the command and its exit. A hook from before `--run` is left alone, with a note on stderr that `agent-gates install` updates it. Bounding the run needs `sleep` on `PATH`; without it the run is not bounded, and Claude Code still stops the whole hook at 60 s.
+- **Comments.** In a repo that commits `.githooks/no-comments/scan.cjs`, the plugin runs `scan.cjs --file` on the edited file and hands the agent the scanner's reply, so it removes the comments before it commits. It needs `node` on `PATH`; without it, or with a scanner too old for `--file`, it leaves only a note on stderr.
 
 ## The skip block
 

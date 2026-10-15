@@ -4,7 +4,7 @@ Gate your agents' work and save them round trips. A coding agent excuses a worka
 
 - `agent-gates install` writes the gates into the project, which commits them, so contributors and CI are gated without installing agent-gates.
 - `agent-gates doctor` judges their health.
-- An optional Claude Code plugin shows the agent the comments each edit added and stops it skipping the gates; the gates hold without it.
+- An optional Claude Code plugin formats each edit, shows the agent the comments the edit added and stops it skipping the gates; the gates hold without it.
 
 ## Install
 
@@ -27,6 +27,15 @@ agent-gates doctor
 
 Each `install` takes one gate and also updates every gate already installed. `no-comments` installs the gate for each language the project's tracked files hold. `format` needs the project's own format command.
 
+Then, once per machine, install the Claude Code plugin:
+
+```bash
+claude plugin marketplace add cniska/agent-skills
+claude plugin install cniska-gates@cniska
+```
+
+The plugin acts only in a checkout with the gates installed.
+
 ## Gates
 
 | Gate | Refuses |
@@ -44,7 +53,7 @@ Each gate refuses on commit, and `commit-subject` and `no-comments` also on push
 
 ## Claude Code plugin
 
-The optional [plugin](docs/plugin.md) blocks a git command that skips the gates: `git commit` or `git push` with `--no-verify`, `git commit -n`, and `core.hooksPath` set or unset to anything but `.githooks`. The block holds only for a Claude Code agent with the plugin installed.
+The optional [plugin](docs/plugin.md) formats each edit with the `format` gate's command, shows the agent the comments the edit added, and blocks a git command that skips the gates: `git commit` or `git push` with `--no-verify`, `git commit -n`, and `core.hooksPath` set or unset to anything but `.githooks`. The block holds only for a Claude Code agent with the plugin installed.
 
 ## Docs
 
