@@ -184,6 +184,13 @@ test(
       stdout: `${packageVersion()}\n`,
       stderr: "",
     });
+    const extra = run("agent-gates", ["--version", "now"], project, { PATH: path });
+    expect([extra.status, extra.stdout]).toEqual([2, ""]);
+    expect(jsonLine(extra.stderr)).toMatchObject({
+      command: "agent-gates",
+      ok: false,
+      error: { kind: "usage", code: "wrong_arity", resolve: "agent-gates --version" },
+    });
     const installed = run("agent-gates", ["install", "commit-subject"], project, { PATH: path });
     expect([installed.status, installed.stderr]).toEqual([0, ""]);
     expect(jsonLine(installed.stdout)).toMatchObject({ command: "install", ok: true });
