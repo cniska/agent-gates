@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { symlinkSync } from "node:fs";
+import { rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import {
   checkout,
@@ -25,6 +25,8 @@ const QUIET = { status: 0, stdout: "", stderr: "" };
 const COMMAND = `"\${CLAUDE_PLUGIN_ROOT}"/hooks/after-edit.sh`;
 
 const SKIP_COMMAND = `"\${CLAUDE_PLUGIN_ROOT}"/hooks/no-skip.sh`;
+
+const SESSION_COMMAND = `"\${CLAUDE_PLUGIN_ROOT}"/hooks/session-start.sh`;
 
 function hookRan(input: string, env: Env = {}) {
   return shell(scratchDir(), COMMAND, { CLAUDE_PLUGIN_ROOT: PLUGIN, ...env }, input);
@@ -70,6 +72,7 @@ test("AC-36 hands the agent the scanner's reply after an edit adding a comment, 
       PostToolUse: [
         { matcher: "Edit|Write|MultiEdit", hooks: [{ type: "command", command: COMMAND, timeout: 60 }] },
       ],
+      SessionStart: [{ hooks: [{ type: "command", command: SESSION_COMMAND }] }],
     },
   });
   const dir = gated(["no-comments-javascript"], { "src/a.ts": "export const a = 1;\n" });
@@ -371,4 +374,108 @@ test("AC-42 judges each git command against the repo it targets, past heredoc bo
     'cat > notes.md <<"E F"\nnotes\nE F\ngit commit --no-verify -m x',
   ])
     expect(ranCommand(dir, command, tools)).toEqual(skipped);
+});
+
+function sessionStarted(cwd: string, env: Env = {}) {
+  const input = JSON.stringify({
+    session_id: "made-up",
+    cwd,
+    hook_event_name: "SessionStart",
+    source: "startup",
+  });
+  return shell(scratchDir(), SESSION_COMMAND, { CLAUDE_PLUGIN_ROOT: PLUGIN, ...env }, input);
+}
+
+function noted(lines: readonly string[]) {
+  return {
+    status: 0,
+    stdout: `${JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "SessionStart",
+        additionalContext: [
+          "cniska-gates: the gates installed in this checkout:",
+          ...lines,
+          "Each refusal names what to fix. The plugin denies a git command that skips the gates, such as `git commit --no-verify`.",
+        ].join("\n"),
+      },
+    })}\n`,
+    stderr: "",
+  };
+}
+
+const AT_COMMIT_FORMATS =
+  "at commit the gate runs it again and stages what it changed in each file the commit stages whole. It refuses the commit when the command fails, showing its output, or when it changes a partly staged file: stage that file whole or not at all.";
+
+const NO_COMMENTS_GATES =
+  "- no-comments-javascript, no-comments-shell: after each edit the plugin names the comments the edit added.";
+
+const REMOVE_COMMENTS = "remove each comment; a why belongs in a name, a test or the docs.";
+
+const SUBJECT_AT_COMMIT =
+  "at commit it refuses a subject that is not a Conventional Commit `type(scope): description` of an allowed type, is over 50 characters or is not ASCII, and a message with a body.";
+
+const SUBJECT_AT_PUSH =
+  "At push it judges the pushed commits the same way and also refuses a fixup!, squash! or amend! commit: squash it into the commit it names.";
+
+const PUSH_UNJUDGED = "As installed, a push is not judged until `agent-gates install` adds its step.";
+
+test("AC-51 tells the agent at session start which gates the checkout installs and how each refuses", () => {
+  const dir = checkout({ "src/a.ts": "export const a = 1;\n", "run.sh": "echo hi\n" });
+  install(dir, ["no-comments-javascript"]);
+  install(dir, ["no-comments-shell"]);
+  install(dir, ["format", "--command", "node 'fmt.cjs'"]);
+  install(dir, ["commit-subject", "--prefixes", "feat,fix"]);
+  const tools = bare(["bash", "git", "jq"]);
+
+  expect(sessionStarted(join(dir, "src"), tools)).toEqual(
+    noted([
+      `- format runs \`node 'fmt.cjs'\`: the plugin runs it after each edit, and ${AT_COMMIT_FORMATS}`,
+      `${NO_COMMENTS_GATES} At commit and at push, a change that adds a comment is refused: ${REMOVE_COMMENTS}`,
+      `- commit-subject, allowing the types feat, fix: ${SUBJECT_AT_COMMIT} ${SUBJECT_AT_PUSH}`,
+    ]),
+  );
+
+  writeFiles(dir, { [FORMAT_HOOK]: FORMAT_HOOK_V2.replace("command=''", "command='make fmt'") });
+  writeFiles(dir, { ".githooks/commit-msg": "#!/bin/sh\nexit 0\n" });
+  rmSync(join(dir, ".githooks/pre-push.d/no-comments"));
+  expect(sessionStarted(dir, tools)).toEqual(
+    noted([
+      `- format runs \`make fmt\`: the plugin does not run it after an edit until \`agent-gates install\` updates the hook; ${AT_COMMIT_FORMATS}`,
+      `${NO_COMMENTS_GATES} At commit, a change that adds a comment is refused: ${REMOVE_COMMENTS} ${PUSH_UNJUDGED}`,
+    ]),
+  );
+
+  const subjectOnly = gated(["commit-subject"]);
+  expect(sessionStarted(subjectOnly, tools)).toEqual(
+    noted([`- commit-subject: ${SUBJECT_AT_COMMIT} ${SUBJECT_AT_PUSH}`]),
+  );
+  rmSync(join(subjectOnly, ".githooks/pre-push.d/commit-subject"));
+  expect(sessionStarted(subjectOnly, tools)).toEqual(
+    noted([`- commit-subject: ${SUBJECT_AT_COMMIT} ${PUSH_UNJUDGED}`]),
+  );
+});
+
+test("AC-52 says nothing at session start without the gates, and only a note when it cannot read them", () => {
+  const tools = bare(["bash", "git", "jq"]);
+  const unmarked = checkout({
+    "package.json": '{ "scripts": { "format": "biome format --write" } }\n',
+    ".githooks/commit-msg": "#!/bin/sh\nexit 0\n",
+    ".githooks/pre-commit.d/format": "#!/bin/sh\ncommand='npm run format'\n",
+    ".githooks/no-comments/javascript.cjs": "module.exports = {};\n",
+  });
+  expect(sessionStarted(unmarked, tools)).toEqual(QUIET);
+  expect(sessionStarted(scratchDir(), tools)).toEqual(QUIET);
+  expect(sessionStarted(join(scratchDir(), "gone"), tools)).toEqual(QUIET);
+  expect(sessionStarted("relative/dir", tools)).toEqual(QUIET);
+
+  const dir = gated(["commit-subject"]);
+  expect(sessionStarted(dir, bare(["bash", "git"]))).toEqual({
+    ...QUIET,
+    stderr: "cniska-gates: jq is not on PATH, so the session was not told which gates are installed\n",
+  });
+  expect(shell(scratchDir(), SESSION_COMMAND, { CLAUDE_PLUGIN_ROOT: PLUGIN }, "not json")).toEqual({
+    ...QUIET,
+    stderr:
+      "cniska-gates: the hook input did not parse as JSON, so the session was not told which gates are installed\n",
+  });
 });

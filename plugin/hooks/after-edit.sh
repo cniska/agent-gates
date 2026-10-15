@@ -1,22 +1,15 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-readonly SCANNER=".githooks/no-comments/scan.cjs"
 readonly REFUSED=1
-readonly FORMAT_HOOK=".githooks/pre-commit.d/format"
-readonly FORMAT_MARKER="# agent-gate:format:"
-readonly FORMAT_RUN_SINCE=3
 readonly FORMAT_BOUND_SECONDS=30
 readonly STOPPED_STATUS=143
-readonly QUOTE="'"
-readonly ESCAPED_QUOTE="'\\''"
+
+source "${BASH_SOURCE[0]%/*}/installed.sh"
+source "${BASH_SOURCE[0]%/*}/note.sh"
 
 told=()
 format_outcome=""
-
-note() {
-  printf 'cniska-gates: %s\n' "$1" >&2
-}
 
 tell() {
   told+=("$1")
@@ -24,37 +17,6 @@ tell() {
 
 edited_file() {
   jq -r '(.tool_input.file_path // "") as $file | if ($file | startswith("/")) or $file == "" then $file else "\(.cwd)/\($file)" end' 2>/dev/null
-}
-
-format_version() {
-  local line
-  while IFS= read -r line; do
-    case "$line" in
-      "$FORMAT_MARKER"*)
-        line="${line#"$FORMAT_MARKER"}"
-        case "$line" in
-          '' | *[!0-9]*) return 1 ;;
-        esac
-        printf '%s' "$line"
-        return 0
-        ;;
-    esac
-  done <"$1"
-  return 1
-}
-
-format_command() {
-  local line
-  while IFS= read -r line; do
-    case "$line" in
-      "command='"*"'")
-        line="${line#command=\'}"
-        line="${line%\'}"
-        printf '%s' "${line//"$ESCAPED_QUOTE"/$QUOTE}"
-        return 0
-        ;;
-    esac
-  done <"$1"
 }
 
 bounded_format() {
@@ -80,15 +42,14 @@ format_step() {
   local root="$1"
   local hook="$root/$FORMAT_HOOK"
   [ -f "$hook" ] || return 0
-  local version
-  if ! version="$(format_version "$hook")" || [ "$version" -lt "$FORMAT_RUN_SINCE" ]; then
-    note "$FORMAT_HOOK has no --run before ${FORMAT_MARKER#\# }$FORMAT_RUN_SINCE, so the edit was not formatted; agent-gates install updates it"
+  if ! formats_edits "$root"; then
+    note "$FORMAT_HOOK has no --run before $MARKER_TAG:format:$FORMAT_RUN_SINCE, so the edit was not formatted; agent-gates install updates it"
     return 0
   fi
   bounded_format "$root"
   [ "$format_outcome" = 0 ] && return 0
   local command
-  command="$(format_command "$hook")"
+  command="$(filled_value "$hook" command)"
   if [ "$format_outcome" = stopped ]; then
     tell "format: \`$command\` ran past $FORMAT_BOUND_SECONDS s and was stopped, so the edited file was not formatted"
   else

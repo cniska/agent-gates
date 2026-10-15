@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-readonly HOOKS=".githooks"
 readonly QUOTED_SPACE=$'\x1f'
 readonly DETACHED=$'\x1e'
 readonly HEREDOC='(^|[^<])<<-?[[:space:]]*(["'"'"'\]?)([A-Za-z0-9_.-]+)["'"'"']?(.*)$'
 readonly DATA_SINK='^(cat|tee|git)$'
 
-note() {
-  printf 'cniska-gates: %s\n' "$1" >&2
-}
+source "${BASH_SOURCE[0]%/*}/installed.sh"
+source "${BASH_SOURCE[0]%/*}/note.sh"
 
 feeds_data() {
   [[ "$1$2" != *"|"* ]] || return 1
@@ -309,11 +307,12 @@ denial_of() {
 
 gates_for() {
   local root="$1" kind="$2" names=()
-  local step
+  local steps="$PUSH_STEPS" step
   if [ "$kind" = commit ]; then
-    [ -f "$root/$HOOKS/commit-msg" ] && names+=("commit-subject")
+    steps="$COMMIT_STEPS"
+    [ -f "$root/$COMMIT_MSG_HOOK" ] && names+=("commit-subject")
   fi
-  for step in "$root/$HOOKS/pre-$kind.d"/*; do
+  for step in "$root/$steps"/*; do
     [ -f "$step" ] && [ -x "$step" ] && names+=("${step##*/}")
   done
   local listed="" name
@@ -338,11 +337,9 @@ reason_for() {
 }
 
 gated() {
-  local hook
-  for hook in commit-msg pre-commit pre-push; do
-    [ -f "$1/$HOOKS/$hook" ] && [[ "$(<"$1/$HOOKS/$hook")" == *agent-gate:* ]] && return 0
-  done
-  return 1
+  marker_version "$1/$COMMIT_MSG_HOOK" commit-subject >/dev/null ||
+    marker_version "$1/$PRE_COMMIT_HOOK" githooks >/dev/null ||
+    marker_version "$1/$PRE_PUSH_HOOK" githooks >/dev/null
 }
 
 main() {

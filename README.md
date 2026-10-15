@@ -53,7 +53,7 @@ Each gate refuses on commit, and `commit-subject` and `no-comments` also on push
 
 ## Claude Code plugin
 
-The optional [plugin](docs/plugin.md) formats each edit with the `format` gate's command, shows the agent the comments the edit added, and blocks a git command that skips the gates: `git commit` or `git push` with `--no-verify`, `git commit -n`, and `core.hooksPath` set or unset to anything but `.githooks`. The block holds only for a Claude Code agent with the plugin installed.
+The optional [plugin](docs/plugin.md) tells the agent at session start which gates the checkout installs and how each refuses, formats each edit with the `format` gate's command, shows the agent the comments the edit added, and blocks a git command that skips the gates: `git commit` or `git push` with `--no-verify`, `git commit -n`, and `core.hooksPath` set or unset to anything but `.githooks`. The block holds only for a Claude Code agent with the plugin installed.
 
 ## Docs
 

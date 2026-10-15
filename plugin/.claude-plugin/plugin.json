@@ -1,6 +1,6 @@
 {
   "name": "cniska-gates",
-  "description": "Saves agents the round trip through agent-gates' gates: after each edit in a repo that commits the no-comments scanner, it scans the edited file against HEAD and tells the agent which comments the edit added and why they are refused, before it commits; and it denies a git command that would skip the gates, such as --no-verify or a core.hooksPath override, naming the gates to fix instead. It never blocks an edit or changes a file.",
+  "description": "Saves agents the round trip through agent-gates' gates: at session start it tells the agent which gates the checkout installs, read from their markers, and how each refuses; after each edit it runs the format gate's command and tells the agent which comments the edit added and why they are refused, before it commits; and it denies a git command that would skip the gates, such as --no-verify or a core.hooksPath override, naming the gates to fix instead. It never blocks an edit, and changes no file but what the format command writes.",
   "author": {
     "name": "Christoffer Niska"
   },
