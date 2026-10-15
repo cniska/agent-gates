@@ -206,9 +206,9 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - Finding a project's format command, and what its formatting is: the project's formatter owns that, and install is given its command (FR-85).
 - Driving a project's comment count to zero; the project sweeps with `scan.cjs --all`, and the gates stop the count growing (FR-34).
 - Blocking an edit, an installed gate file's included: the plugin formats the edit and reports the comments it added (FR-103, FR-119), and the gates refuse at commit.
-- The workflow an agent follows; cniska-skills holds it.
-- Recording or measuring agent work; agent-record does that.
-- Isolating the checkouts of agents working in parallel; agent-worktree does that.
+- The workflow an agent follows.
+- Recording or measuring agent work.
+- Isolating the checkouts of agents working in parallel.
 - Judging code embedded in another language: shell in a workflow's `run:`, SQL in a string, `.vue` files.
 - Another SQL dialect than PostgreSQL.
 - Checking Python's indentation; Python's own parser refuses it.
