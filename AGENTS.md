@@ -1,6 +1,6 @@
 # agent-gates
 
-Installs commit gates into a project and judges their health. [`README.md`](README.md) lists every gate with a summary of what it refuses, and [`docs/`](docs/) states those refusals in full and holds the rest: how the gates judge, the commands, the plugin, development and releasing. [`SPEC.md`](SPEC.md) states what must hold and changes in the same commit as the behavior it describes.
+Installs commit gates into a project and judges their health. [`README.md`](README.md) lists every gate with a summary of what it refuses, and [`docs/`](docs/) states those refusals in full and holds the rest: how the gates judge, the commands, the plugin, development and releasing. Every release goes through `scripts/release.sh <patch|minor|major>`, run by `cniska-skills:ship`. [`SPEC.md`](SPEC.md) states what must hold and changes in the same commit as the behavior it describes.
 
 ## Rules
 
@@ -13,4 +13,4 @@ Installs commit gates into a project and judges their health. [`README.md`](READ
 - Fix the cause, never work around it, and add no debt. Debt you find is fixed where it is found.
 - Code carries no comments, tool contracts aside. A why goes into a name, a test, or this file.
 - Work each task on a topic branch in its own worktree. Commit each slice there, in Conventional Commits, once `bun run check` passes and a fresh reviewer accepts it, and push the branch after each. The message is the subject line alone: no body, no trailers. The user stays the author.
-- Land a task as a whole, with no pull request: once a fresh reviewer, given the branch's whole diff against `main`, accepts it (for a one-commit branch, that commit's accept), fast-forward `main` to the branch, push `main` and delete the branch on origin. That accept is the owner's standing sign-off, so no landing waits on them.
+- Land a task as a whole, with no pull request: once a fresh reviewer, given the branch's whole diff against `main`, accepts it (for a one-commit branch, that commit's accept), fast-forward `main` to the branch, push `main` and delete the branch on origin. That accept is the owner's standing sign-off, so no landing waits on them. A release is not a task: its commit and tag stay on `main`, as `scripts/release.sh` makes them.
