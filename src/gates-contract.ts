@@ -444,8 +444,8 @@ const GATE_CHOICES = [...GATE_NAMES, `${EACH_TRACKED_LANGUAGE} (each language th
   ", ",
 );
 
-export const INSTALL_USAGE = `agent-gates install [<gate>...] [${FILLS.command.flag} <format command>] [${FILLS.prefixes.flag} ${FILLS.prefixes.placeholder}], choosing from ${GATE_CHOICES}`;
+export const INSTALL_USAGE = `agent-gates install [<gate>] [${FILLS.command.flag} <format command>] [${FILLS.prefixes.flag} ${FILLS.prefixes.placeholder}], choosing from ${GATE_CHOICES}`;
 
-export const INSTALL_GATES = `agent-gates install <gate>..., choosing from ${GATE_CHOICES}`;
+export const INSTALL_GATES = `agent-gates install <gate>, once per gate, choosing from ${GATE_CHOICES}`;
 
 export const REINSTALL = "agent-gates install";

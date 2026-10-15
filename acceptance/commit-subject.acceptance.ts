@@ -152,7 +152,8 @@ test("AC-16 judges the message git keeps, and an autosquash by the subject it ca
 
 test("AC-17 lets a merge commit through", () => {
   const dir = checkout({ "a.ts": "export const a = 1;\n" });
-  install(dir, ["commit-subject", "no-comments-javascript"]);
+  install(dir, ["commit-subject"]);
+  install(dir, ["no-comments-javascript"]);
   git(dir, ["add", "-A"]);
   git(dir, ["commit", "-q", "-m", "chore: start"]);
   git(dir, ["checkout", "-q", "-b", "side"]);

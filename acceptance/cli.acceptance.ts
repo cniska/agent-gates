@@ -5,7 +5,7 @@ import { agentGates, checkout, jsonLine, packageVersion, removeScratch, scratchD
 afterEach(removeScratch);
 
 const INSTALL_USAGE =
-  "agent-gates install [<gate>...] [--command <format command>] [--prefixes <a,b,c>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)";
+  "agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)";
 
 test("AC-1 lists the commands and --version, and refuses a bad call with its usage and writes nothing", () => {
   const dir = checkout();
@@ -19,7 +19,7 @@ test("AC-1 lists the commands and --version, and refuses a bad call with its usa
         {
           name: "install",
           usage: INSTALL_USAGE,
-          summary: "install the named gates, and bring the installed ones up to date",
+          summary: "install the named gate, and bring the installed ones up to date",
         },
         {
           name: "doctor",
@@ -61,7 +61,7 @@ test("AC-1 lists the commands and --version, and refuses a bad call with its usa
     },
   });
 
-  const gate = agentGates(dir, ["install", "commit-subject", "lint-free"]);
+  const gate = agentGates(dir, ["install", "lint-free"]);
   expect([gate.status, gate.stdout]).toEqual([2, ""]);
   expect(jsonLine(gate.stderr)).toEqual({
     command: "install",

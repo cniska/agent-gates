@@ -1,7 +1,8 @@
 import { parseArgs } from "node:util";
+import { unreachable } from "./assert";
 import { checkArity, usageError } from "./cli-args";
 import type { Command } from "./cli-contract";
-import { GATE_NAMES, type GateName, isGateName } from "./gate-parts";
+import { type GateName, isGateName } from "./gate-parts";
 import { installGates, trackedLanguageGates } from "./gates";
 import {
   EACH_TRACKED_LANGUAGE,
@@ -15,38 +16,45 @@ import {
 } from "./gates-contract";
 import { checkoutRoot } from "./git";
 
-type Named = {
-  readonly gates: readonly GateName[];
-  readonly eachTrackedLanguage: boolean;
-};
+type Named =
+  | { readonly kind: "none" }
+  | { readonly kind: "gate"; readonly gate: GateName }
+  | { readonly kind: "each-tracked-language" };
 
 const OPTIONS = eachFill(() => ({ type: "string", multiple: true }) as const);
 
 const PARSE_ERROR = "ERR_PARSE_ARGS";
 
-function namedIn(names: readonly string[], usage: string): Named {
-  const gates: GateName[] = [];
-  const unknown: string[] = [];
-  let eachTrackedLanguage = false;
-  for (const name of names) {
-    if (name === EACH_TRACKED_LANGUAGE) eachTrackedLanguage = true;
-    else if (isGateName(name)) gates.push(name);
-    else unknown.push(name);
+function namedIn(name: string | undefined, usage: string): Named {
+  if (name === undefined) return { kind: "none" };
+  if (name === EACH_TRACKED_LANGUAGE) return { kind: "each-tracked-language" };
+  if (isGateName(name)) return { kind: "gate", gate: name };
+  throw usageError("unknown_gate", { names: [name], usage });
+}
+
+function gatesOf(named: Named, root: string): readonly GateName[] {
+  switch (named.kind) {
+    case "none":
+      return [];
+    case "gate":
+      return [named.gate];
+    case "each-tracked-language":
+      return trackedLanguageGates(root);
+    default:
+      return unreachable(named);
   }
-  if (unknown.length > 0) throw usageError("unknown_gate", { names: unknown, usage });
-  return { gates, eachTrackedLanguage };
 }
 
 function fillOf(
   values: Readonly<Partial<Record<Fill, readonly string[]>>>,
   fill: Fill,
-  gates: readonly GateName[],
+  named: Named,
   usage: string,
 ): string | null {
   const given = values[fill];
   if (given === undefined) return null;
   const [value, ...more] = given;
-  const used = gates.some((gate) => GATES[gate].some((file) => file.fills === fill));
+  const used = named.kind === "gate" && GATES[named.gate].some((file) => file.fills === fill);
   const { flag, pattern } = FILLS[fill];
   if (value === undefined || value.trim() === "" || more.length > 0 || !used)
     throw usageError("flag_misplaced", { flag, usage });
@@ -76,14 +84,13 @@ function parsed(args: readonly string[], usage: string) {
 export const installCommand: Command = {
   name: "install",
   usage: INSTALL_USAGE,
-  summary: "install the named gates, and bring the installed ones up to date",
+  summary: "install the named gate, and bring the installed ones up to date",
   run(args) {
     const { values, positionals } = parsed(args, this.usage);
-    checkArity(positionals, [0, GATE_NAMES.length + 1], this);
-    const named = namedIn(positionals, this.usage);
-    const given: Fills = eachFill((fill) => fillOf(values, fill, named.gates, this.usage));
+    checkArity(positionals, [0, 1], this);
+    const named = namedIn(positionals[0], this.usage);
+    const given: Fills = eachFill((fill) => fillOf(values, fill, named, this.usage));
     const root = checkoutRoot(process.cwd());
-    const tracked = named.eachTrackedLanguage ? trackedLanguageGates(root) : [];
-    return { value: installGates(root, [...named.gates, ...tracked], given), exitCode: 0 };
+    return { value: installGates(root, gatesOf(named, root), given), exitCode: 0 };
   },
 };

@@ -23,7 +23,7 @@ describe("the cli", () => {
     expect(cli("doctor")).toEqual({
       status: 0,
       stdout:
-        '{"command":"doctor","ok":true,"result":{"checks":[{"name":"gates","state":"warn","detail":"no gate is installed","fix":"agent-gates install <gate>..., choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)"}],"failing":0}}\n',
+        '{"command":"doctor","ok":true,"result":{"checks":[{"name":"gates","state":"warn","detail":"no gate is installed","fix":"agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)"}],"failing":0}}\n',
       stderr: "",
     });
     const installed = cli("install", "commit-subject");
@@ -66,20 +66,16 @@ describe("the cli", () => {
   test("install no-comments installs the gate for each language the tracked files hold", () => {
     const tracked = repo({ "a.ts": "export {};\n", "db/a.sql": "select 1;\n", "b.py": "", "notes.txt": "" });
     execFileSync("git", ["-C", tracked, "add", "a.ts", "db/a.sql", "notes.txt"]);
-    const run = cliIn(tracked, "install", "commit-subject", "no-comments");
+    const run = cliIn(tracked, "install", "no-comments");
     expect([run.status, run.stderr]).toEqual([0, ""]);
-    expect(JSON.parse(run.stdout).result.gates).toEqual([
-      "commit-subject",
-      "no-comments-javascript",
-      "no-comments-sql",
-    ]);
+    expect(JSON.parse(run.stdout).result.gates).toEqual(["no-comments-javascript", "no-comments-sql"]);
     expect(existsSync(join(tracked, ".githooks/no-comments/python.cjs"))).toBe(false);
   });
 
   test("install no-comments refuses when the tracked files hold no language, and writes nothing", () => {
     const bare = repo({ "notes.txt": "" });
     execFileSync("git", ["-C", bare, "add", "-A"]);
-    const run = cliIn(bare, "install", "commit-subject", "no-comments");
+    const run = cliIn(bare, "install", "no-comments");
     expect([run.status, run.stdout]).toEqual([1, ""]);
     expect(JSON.parse(run.stderr).error).toMatchObject({
       kind: "refusal",
@@ -127,10 +123,10 @@ describe("the cli", () => {
         meta: {
           names: ["lint-free"],
           usage:
-            "agent-gates install [<gate>...] [--command <format command>] [--prefixes <a,b,c>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)",
+            "agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)",
         },
         resolve:
-          "agent-gates install [<gate>...] [--command <format command>] [--prefixes <a,b,c>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)",
+          "agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)",
       },
     });
     expect(cli("doctor").stdout).toBe(before);

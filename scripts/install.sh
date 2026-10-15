@@ -115,7 +115,7 @@ main() {
 
   put_on_path "$install_dir"
   echo "agent-gates ${version} installed as ${install_dir}/agent-gates."
-  echo "In a project to gate, run 'agent-gates install <gate>...', then 'agent-gates doctor'."
+  echo "In a project to gate, run 'agent-gates install <gate>' once per gate, then 'agent-gates doctor'."
 }
 
 main

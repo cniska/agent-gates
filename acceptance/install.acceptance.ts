@@ -21,6 +21,7 @@ import {
   removeScratch,
   scratchDir,
   shell,
+  usageCode,
   writeFiles,
 } from "./cli";
 import { ALL_LANGUAGES, LANGUAGES } from "./no-comments";
@@ -51,7 +52,7 @@ const NO_COMMENTS_AFTER_COMMIT_SUBJECT = NO_COMMENTS_FILES.filter((path) => !PUS
 
 function currentBytes(gates: readonly string[], path: string): string {
   const reference = checkout();
-  install(reference, gates);
+  for (const gate of gates) install(reference, [gate]);
   return readText(reference, path);
 }
 
@@ -113,7 +114,7 @@ test("AC-4 installs each no-comments language, and reads the gates back from the
   });
 });
 
-test("AC-5 refuses an install that names no gate where none is installed", () => {
+test("AC-5 refuses an install that names no gate where none is installed, or names two", () => {
   const dir = checkout();
   refuses(dir, [], {
     kind: "refusal",
@@ -121,16 +122,24 @@ test("AC-5 refuses an install that names no gate where none is installed", () =>
     message: `${dir} has no gates installed and none were named, so there is nothing to install`,
     meta: { root: dir },
     resolve:
-      "stop and ask the owner which gates the project runs, then agent-gates install <gate>..., choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)",
+      "stop and ask the owner which gates the project runs, then agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)",
   });
   expect(readdirSync(dir)).toEqual([".git"]);
   expect(hooksPath(dir)).toBe("");
+
+  for (const args of [
+    ["format", "commit-subject"],
+    ["commit-subject", "no-comments"],
+    ["format", "commit-subject", "--command", "true"],
+  ])
+    expect(usageCode(dir, args)).toEqual([args, 2, "wrong_arity"]);
+  expect(readdirSync(dir)).toEqual([".git"]);
 });
 
 test("AC-6 acts on each file's state, keeping a backup of each hand edit", () => {
   const gates = ["commit-subject", "no-comments-javascript"];
   const dir = checkout();
-  install(dir, gates);
+  for (const gate of gates) install(dir, [gate]);
   const ahead = readText(dir, ".githooks/commit-msg").replace(
     /agent-gate:commit-subject:\d+/,
     "agent-gate:commit-subject:999",

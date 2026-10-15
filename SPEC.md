@@ -27,7 +27,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 ### 2.2 Install
 
 - **FR-8** — The gates are `commit-subject`, `format`, and `no-comments-<language>` for each of `javascript`, `dart`, `sql`, `shell`, `rust` and `python`.
-- **FR-9** — `install` installs the named gates and every gate already installed. Named none with none installed, it is refused as `no_gates_chosen`.
+- **FR-9** — `install <gate>` installs that one gate and updates every gate already installed, and `install` alone updates every installed gate. Named none with none installed, it is refused as `no_gates_chosen`; naming two gates is the usage error `wrong_arity`.
 - **FR-10** — `commit-subject` installs `.githooks/commit-msg`, `.github/workflows/commits.yml`, `.githooks/.gitattributes`, `.githooks/pre-push`, `.githooks/pre-push.d/commit-subject` and `.githooks/judge-push`.
 - **FR-11** — `no-comments-<language>` installs `.githooks/pre-commit`, `.githooks/pre-commit.d/no-comments`, `.githooks/pre-push`, `.githooks/pre-push.d/no-comments`, `.githooks/judge-push`, `.githooks/no-comments/scan.cjs`, `.githooks/no-comments/<language>.cjs`, `.github/workflows/no-comments.yml` and `.githooks/.gitattributes`.
 - **FR-12** — The installed hooks and hook steps are executable, and the other installed files are not.
@@ -125,7 +125,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ### 2.10 Installing by language
 
-- **FR-83** — `install no-comments` installs the `no-comments-<language>` gate of each language the tracked files hold, beside any gate named with it. With no tracked file a language's gate reads, it is refused as `no_language_tracked`, writing nothing.
+- **FR-83** — `install no-comments` installs the `no-comments-<language>` gate of each language the tracked files hold. With no tracked file a language's gate reads, it is refused as `no_language_tracked`, writing nothing.
 
 ### 2.11 Format
 
@@ -214,7 +214,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **AC-2** — Run `doctor` and `install` outside a git checkout, and with no git on `PATH`: a `not_a_checkout` refusal exiting 1, and a `git_unavailable` fault exiting 3. (FR-4, FR-6, FR-7)
 - **AC-3** — `install commit-subject` from a subdirectory of a fresh checkout: its six files at the checkout's root, the hooks and the step alone executable, each carrying its marker, `.githooks/.gitattributes` marking the hooks generated with LF endings, `core.hooksPath` set to `.githooks`, and one JSON line naming the gate, each file `missing` with no backup, and `prepare` `absent`. (FR-2, FR-6, FR-10, FR-12, FR-13, FR-14, FR-20, FR-21)
 - **AC-4** — Install each `no-comments-<language>` gate: its nine files; then `install` with no gate named reinstalls every one, and after one adapter is deleted, `doctor` no longer names its gate. (FR-8, FR-9, FR-11, FR-13)
-- **AC-5** — `install` with no gate named in a checkout with none installed: refused as `no_gates_chosen`, and nothing written. (FR-9)
+- **AC-5** — `install` with no gate named in a checkout with none installed: refused as `no_gates_chosen`, and nothing written. `install` naming two gates, `no-comments` among them or with `--command`: `wrong_arity`, writing nothing. (FR-5, FR-9)
 - **AC-6** — Over an install, put an earlier release's bytes in one file, edit another by hand, mark a third with a later version and clear the hook's executable bit: `doctor` warns `behind`, `changed` and `ahead` and fails `not-executable`, exiting 1; `install` reports each state, restores the behind and not-executable files without a backup, sets the changed one aside before replacing it, and leaves the ahead one. Edit the same file again and install: the second backup takes the next free name. (FR-15, FR-16, FR-17, FR-18, FR-20, FR-30)
 - **AC-7** — A project's own `commit-msg` hook, and its own `pre-commit.d/no-comments` step, without a marker: `install` is refused as `hook_occupied` and writes nothing, and `doctor` fails the hook with the same message and fix. A project's own unmarked `commits.yml` is set aside and replaced instead. (FR-19, FR-30)
 - **AC-8** — With `core.hooksPath` spelled `./.githooks/`, install succeeds; set to `.husky`, install is refused as `hooks_path_occupied`, writing nothing, and `doctor` fails it with that refusal; unset after an install, `doctor` fails it, exits 1 and prints its report on stdout. (FR-21, FR-22, FR-27, FR-31)

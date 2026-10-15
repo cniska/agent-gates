@@ -1,5 +1,15 @@
 import { afterEach, expect, test } from "bun:test";
-import { committing, git, PASSED, pathOf, refusedWith, removeScratch, writeFiles } from "./cli";
+import {
+  commitAs,
+  committing,
+  git,
+  install,
+  PASSED,
+  pathOf,
+  refusedWith,
+  removeScratch,
+  writeFiles,
+} from "./cli";
 import {
   ALL_LANGUAGES,
   commentReply,
@@ -138,9 +148,10 @@ test("AC-27 reads comments where each language's tokenizer does", () => {
 const SHELL_UTILITIES = ["sh", "sed", "tr", "head", "tail", "grep", "wc", "dirname", "od", "awk"];
 
 test("AC-28 runs the hooks with git, a shell and node alone", () => {
-  const dir = gated(["commit-subject", "format", ...ALL_LANGUAGES, "--command", "true"], {
-    "a.ts": "export const a = 1;\n",
-  });
+  const dir = gated(["commit-subject", ...ALL_LANGUAGES], { "a.ts": "export const a = 1;\n" });
+  install(dir, ["format", "--command", "true"]);
+  git(dir, ["add", "-A"]);
+  commitAs(dir, "chore: format");
   const bare = { PATH: pathOf(["git", "node", ...SHELL_UTILITIES]) };
 
   writeFiles(dir, { "a.ts": "export const a = 2;\n" });

@@ -37,7 +37,7 @@ type Findings = readonly (readonly [path: string, lines: readonly string[]])[];
 
 export function gated(gates: readonly string[], files: Readonly<Record<string, string>> = {}): string {
   const dir = checkout(files);
-  install(dir, gates);
+  for (const gate of gates) install(dir, [gate]);
   git(dir, ["add", "-A"]);
   commitAs(dir, "chore: start");
   return dir;

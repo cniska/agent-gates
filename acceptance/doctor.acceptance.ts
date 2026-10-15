@@ -20,7 +20,7 @@ import {
 afterEach(removeScratch);
 
 const INSTALL_USAGE =
-  "agent-gates install <gate>..., choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)";
+  "agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)";
 
 const NO_PACKAGE_JSON = "no package.json, so each contributor runs git config core.hooksPath .githooks once";
 
@@ -49,7 +49,8 @@ test("AC-11 reports no gate, then every check passing", () => {
   const dir = checkout();
   doctorReports(dir, [{ name: "gates", state: "warn", detail: "no gate is installed", fix: INSTALL_USAGE }]);
 
-  install(dir, ["commit-subject", "no-comments-javascript"]);
+  install(dir, ["commit-subject"]);
+  install(dir, ["no-comments-javascript"]);
   writeFiles(dir, { "src/a.ts": "export const a = 1;\n" });
   git(dir, ["add", "-A"]);
   doctorReports(dir, [
@@ -78,7 +79,8 @@ test("AC-11 reports no gate, then every check passing", () => {
 
 test("AC-12 warns of tracked languages without a gate and gates without a language", () => {
   const dir = checkout({ "a.ts": "export const a = 1;\n", "b.py": "x = 1\n" });
-  install(dir, ["no-comments-javascript", "no-comments-rust"]);
+  install(dir, ["no-comments-javascript"]);
+  install(dir, ["no-comments-rust"]);
   git(dir, ["add", "-A"]);
   doctorReports(dir, [
     passing("gates", "no-comments-javascript, no-comments-rust"),

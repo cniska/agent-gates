@@ -16,14 +16,16 @@ cd agent-gates
 mise trust && mise install
 ```
 
-In the clone, `mise install` links `agent-gates` into `~/.bun/bin`; put that directory on your `PATH`. Then, in the project you want to gate:
+In the clone, `mise install` links `agent-gates` into `~/.bun/bin`; put that directory on your `PATH`. Then, in the project you want to gate, install each gate on its own line:
 
 ```bash
-agent-gates install commit-subject no-comments
+agent-gates install commit-subject
+agent-gates install no-comments
+agent-gates install format --command "npm run lint:fix"
 agent-gates doctor
 ```
 
-`no-comments` installs the gate for each language the project's tracked files hold. `format` needs the project's format command, such as `agent-gates install format --command "npm run lint:fix"`.
+Each `install` takes one gate and also updates every gate already installed. `no-comments` installs the gate for each language the project's tracked files hold. `format` needs the project's own format command.
 
 ## Gates
 
