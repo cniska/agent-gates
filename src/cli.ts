@@ -7,18 +7,22 @@ import { exitWithError, exitWithResult, exitWithVersion } from "./cli-output";
 
 const VERSION_FLAG = "--version";
 
+const VERSION_USAGE = `agent-gates ${VERSION_FLAG}`;
+
+const FLAGS = [{ name: VERSION_FLAG, usage: VERSION_USAGE, summary: "print the version alone on one line" }];
+
 const [name, ...args] = process.argv.slice(2);
 
 if (name === undefined)
   exitWithResult(
     "agent-gates",
-    { commands: COMMANDS.map(({ name, usage, summary }) => ({ name, usage, summary })) },
+    { commands: COMMANDS.map(({ name, usage, summary }) => ({ name, usage, summary })), flags: FLAGS },
     0,
   );
 
 function versionOrExited(): string {
   try {
-    checkArity(args, [0, 0], { name: VERSION_FLAG, usage: `agent-gates ${VERSION_FLAG}` });
+    checkArity(args, [0, 0], { name: VERSION_FLAG, usage: VERSION_USAGE });
     return version;
   } catch (error) {
     return exitWithError("agent-gates", error);
@@ -34,7 +38,7 @@ if (command === undefined)
     "agent-gates",
     usageError("unknown_command", {
       name,
-      usage: `agent-gates ${COMMANDS.map(({ name }) => name).join("|")}`,
+      usage: `agent-gates ${[...COMMANDS.map(({ name }) => name), VERSION_FLAG].join("|")}`,
     }),
   );
 

@@ -7,7 +7,7 @@ afterEach(removeScratch);
 const INSTALL_USAGE =
   "agent-gates install [<gate>...] [--command <format command>] [--setup <CI setup command>] [--prefixes <a,b,c>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)";
 
-test("AC-1 lists the commands, and refuses a bad call with its usage and writes nothing", () => {
+test("AC-1 lists the commands and --version, and refuses a bad call with its usage and writes nothing", () => {
   const dir = checkout();
   const listing = agentGates(dir, []);
   expect([listing.status, listing.stderr]).toEqual([0, ""]);
@@ -27,6 +27,9 @@ test("AC-1 lists the commands, and refuses a bad call with its usage and writes 
           summary: "judge each installed gate file and the hook wiring, naming the fix for each problem",
         },
       ],
+      flags: [
+        { name: "--version", usage: "agent-gates --version", summary: "print the version alone on one line" },
+      ],
     },
   });
 
@@ -39,8 +42,8 @@ test("AC-1 lists the commands, and refuses a bad call with its usage and writes 
       kind: "usage",
       code: "unknown_command",
       message: "uninstall is not an agent-gates command; agent-gates with no command lists them",
-      meta: { name: "uninstall", usage: "agent-gates install|doctor" },
-      resolve: "agent-gates install|doctor",
+      meta: { name: "uninstall", usage: "agent-gates install|doctor|--version" },
+      resolve: "agent-gates install|doctor|--version",
     },
   });
 

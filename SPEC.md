@@ -16,7 +16,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ### 2.1 The CLI
 
-- **FR-1** — `agent-gates` with no command prints the commands, each with its name, usage and summary, and exits 0.
+- **FR-1** — `agent-gates` with no command prints the commands, each with its name, usage and summary, and `--version` (FR-115) the same way as a flag, and exits 0.
 - **FR-2** — A command that succeeds prints one JSON line on stdout naming the command, with `ok: true` and its result.
 - **FR-3** — A command that fails prints one JSON line on stderr naming the command, with `ok: false` and an error carrying its kind, code, message, meta and resolve, and prints nothing on stdout.
 - **FR-4** — An error exits 2 for the kind `usage`, 1 for `refusal` and 3 for `fault`.
@@ -210,7 +210,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ## 5. Acceptance criteria
 
-- **AC-1** — Run `agent-gates` alone, an unknown command, `doctor` with an argument and `install` with an unknown gate: the listing on stdout with exit 0, then three usage errors on stderr, each exiting 2 with its usage as the resolve and nothing on stdout, and nothing written. (FR-1, FR-3, FR-4, FR-5)
+- **AC-1** — Run `agent-gates` alone, an unknown command, `doctor` with an argument and `install` with an unknown gate: the listing, with `--version` among its flags, on stdout with exit 0, then three usage errors on stderr, each exiting 2 with its usage as the resolve and nothing on stdout, and nothing written. (FR-1, FR-3, FR-4, FR-5)
 - **AC-2** — Run `doctor` and `install` outside a git checkout, and with no git on `PATH`: a `not_a_checkout` refusal exiting 1, and a `git_unavailable` fault exiting 3. (FR-4, FR-6, FR-7)
 - **AC-3** — `install commit-subject` from a subdirectory of a fresh checkout: its six files at the checkout's root, the hooks and the step alone executable, each carrying its marker, `.githooks/.gitattributes` marking the hooks generated with LF endings, `core.hooksPath` set to `.githooks`, and one JSON line naming the gate, each file `missing` with no backup, and `prepare` `absent`. (FR-2, FR-6, FR-10, FR-12, FR-13, FR-14, FR-20, FR-21)
 - **AC-4** — Install each `no-comments-<language>` gate: its nine files; then `install` with no gate named reinstalls every one, and after one adapter is deleted, `doctor` no longer names its gate. (FR-8, FR-9, FR-11, FR-13)
