@@ -4,11 +4,13 @@ The files `agent-gates install` writes, how the hooks and workflows run them, an
 
 ## Installed files
 
-| Gate | Hooks | Workflow |
+| Gate | Files in `.githooks/` | Workflow in `.github/workflows/` |
 | --- | --- | --- |
-| `commit-subject` | `.githooks/commit-msg`, `.githooks/pre-push.d/commit-subject` | `commits.yml` |
-| `format` | `.githooks/pre-commit.d/format` | `format.yml` |
-| `no-comments-<language>` | `.githooks/pre-commit.d/no-comments`, `.githooks/pre-push.d/no-comments`, `.githooks/no-comments/scan.cjs`, `.githooks/no-comments/<language>.cjs` | `no-comments.yml` |
+| `commit-subject` | `commit-msg`, `pre-push`, `pre-push.d/commit-subject`, `judge-push` | `commits.yml` |
+| `format` | `pre-commit`, `pre-commit.d/format`, `ci-setup` | `format.yml` |
+| `no-comments-<language>` | `pre-commit`, `pre-commit.d/no-comments`, `pre-push`, `pre-push.d/no-comments`, `judge-push`, `no-comments/scan.cjs`, `no-comments/<language>.cjs` | `no-comments.yml` |
+
+Every gate also installs `.githooks/.gitattributes`. A file two gates list is installed once and shared.
 
 Installed files:
 
