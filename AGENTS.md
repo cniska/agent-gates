@@ -11,5 +11,5 @@ Installs commit gates into a project and judges their health. [`README.md`](READ
 - A file several gates share carries a shared part (`githooks`, `no-comments`), never a gate name, so it does not read back as a chosen gate.
 - Fix the cause, never work around it, and add no debt. Debt you find is fixed where it is found.
 - Code carries no comments, tool contracts aside. A why goes into a name, a test, or this file.
-- Commit directly to `main`, in Conventional Commits. The message is the subject line alone: no body, no trailers. The user stays the author.
-- Push each commit to `main` once `bun run check` passes and a fresh reviewer accepts it; that accept is the owner's standing sign-off, so no push waits on them.
+- Work each task on a topic branch in its own worktree. Commit each slice there, in Conventional Commits, once `bun run check` passes and a fresh reviewer accepts it, and push the branch after each. The message is the subject line alone: no body, no trailers. The user stays the author.
+- Land a task as a whole, with no pull request: once a fresh reviewer, given the branch's whole diff against `main`, accepts it (for a one-commit branch, that commit's accept), fast-forward `main` to the branch, push `main` and delete the branch on origin. That accept is the owner's standing sign-off, so no landing waits on them.
