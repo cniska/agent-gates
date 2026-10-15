@@ -37,10 +37,12 @@ agent-gates doctor
 | `no-comments-shell` | An added comment in shell, and a file that does not parse |
 | `no-comments-rust` | An added comment in Rust, and a file that does not parse |
 | `no-comments-python` | An added comment in Python, and a file that does not parse |
-| Suppressions and tool settings, in every `no-comments` language | Every added doc comment, suppression, formatter hint, tool setting and test expectation; only a shebang, a gate marker and the few [forms a toolchain reads](docs/no-comments.md#kept-comments) are kept |
-| The plugin's skip block | A git command that skips the gates: `git commit` or `git push` with `--no-verify`, `git commit -n`, and `core.hooksPath` set or unset to anything but `.githooks` |
 
-Each gate refuses on commit and again in CI, and `commit-subject` and `no-comments` also on push. The skip block holds only for a Claude Code agent with the [plugin](docs/plugin.md) installed.
+Each gate refuses on commit and again in CI, and `commit-subject` and `no-comments` also on push. Each `no-comments` gate also refuses every added doc comment, suppression, formatter hint, tool setting and test expectation; only a shebang, a gate marker and the few [forms a toolchain reads](docs/no-comments.md#kept-comments) are kept.
+
+## Claude Code plugin
+
+The optional [plugin](docs/plugin.md) blocks a git command that skips the gates: `git commit` or `git push` with `--no-verify`, `git commit -n`, and `core.hooksPath` set or unset to anything but `.githooks`. The block holds only for a Claude Code agent with the plugin installed.
 
 ## Docs
 

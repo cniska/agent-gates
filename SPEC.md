@@ -2,7 +2,7 @@
 
 > Gate your agents' work and save them round trips: git hooks refuse a bad commit locally and GitHub workflows refuse it again in CI, for every contributor, and an optional Claude Code plugin shows the agent the comments it added, right after each edit.
 
-This document states what must hold, not how. [`README.md`](README.md) lists every gate and what it refuses, [`docs/`](docs/) says how the gates judge and holds the commands, and [`src/README.md`](src/README.md) maps the modules that meet these requirements.
+This document states what must hold, not how. [`README.md`](README.md) lists every gate with a summary of what it refuses, [`docs/`](docs/) states those refusals in full, says how the gates judge and holds the commands, and [`src/README.md`](src/README.md) maps the modules that meet these requirements.
 
 **Status: reverse-engineered from the code at `db5b96e`, unverified.** Each requirement states behavior the code shows today. None is contract until the owner confirms it. §9 lists the open questions.
 
@@ -264,7 +264,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 - **D-1** — The `agent-gates` CLI, run by Bun from a checkout and linked onto `PATH` by `mise install` in the primary checkout, never in a worktree.
 - **D-2** — The gate files in `gates/`, installed byte for byte, the `no-comments` scanner and adapters bundled into them from `src/`.
-- **D-3** — `README.md` (what agent-gates is, the install, and every gate and what it refuses), `docs/` (the installed files, what the gates judge and keep, the commands, the plugin, development and releasing), `AGENTS.md` (repository rules), `src/README.md` (module map), and this spec.
+- **D-3** — `README.md` (what agent-gates is, the install, and every gate with a summary of what it refuses), `docs/` (the installed files, each gate's refusals in full, what the gates judge and keep, the commands, the plugin, development and releasing), `AGENTS.md` (repository rules), `src/README.md` (module map), and this spec.
 - **D-4** — The test suite, run by `bun run check`, and the acceptance suite in `acceptance/`, run by `bun run acceptance`. The acceptance suite drives the CLI, the installed hooks through git, the installed scanner through `node`, the installed workflows' steps with the environment GitHub Actions gives them, the plugin's hook as its `hooks.json` registers it, the compiled release binary, `install.sh` against a stand-in for the release downloads, and the npm packages through Node; it imports nothing from `src/`.
 - **D-5** — The optional `cniska-gates` Claude Code plugin in `plugin/`.
 - **D-6** — The release binary `scripts/build-compiled.sh` compiles, for darwin-arm64 and linux-x64, shipped by a GitHub release with `install.sh`, by the npm packages and by the `cniska/tap` Homebrew formula, as [`docs/releasing.md`](docs/releasing.md) says.

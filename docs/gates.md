@@ -1,6 +1,6 @@
 # Gates
 
-The files `agent-gates install` writes, how the hooks and workflows run them, and the `commit-subject` and `format` gates in detail; the [README](../README.md#gates) lists every gate and what it refuses, and [No comments](no-comments.md) covers the no-comments gates.
+The files `agent-gates install` writes, how the hooks and workflows run them, and the `commit-subject` and `format` gates in detail; the [README](../README.md#gates) lists every gate with a summary of what it refuses, which this page states in full for `commit-subject` and `format`, and [No comments](no-comments.md) for the no-comments gates.
 
 ## Installed files
 
@@ -27,6 +27,8 @@ Install also points `core.hooksPath` at `.githooks` in the current clone, and `.
 - **Merges:** no gate judges a merge commit locally.
 
 ## Commit subjects
+
+The `commit-msg` hook refuses a subject that is empty, is not a Conventional Commit of an allowed type, is over 50 characters or holds a character outside printable ASCII, and a message with a body: a line after the subject that is neither blank nor a `#` line.
 
 Allowed types, by default: `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style` and `test`, the set `@commitlint/config-conventional` allows, each with an optional lowercase scope and `!`. `agent-gates install commit-subject --prefixes <a,b,c>` replaces the set with the project's own, lowercase words joined by commas, such as `--prefixes feat,fix,docs`. Install writes the list into the hook as `prefixes='<a,b,c>'`, so it shows in the diff, and a reinstall without `--prefixes` keeps it. A refusal names the allowed types.
 
