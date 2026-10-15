@@ -2,8 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { installGates, SOURCE_DIR } from "./gates";
+import { installGates } from "./gates";
 import { NO_FILLS } from "./gates-contract";
+import { SOURCE_DIR } from "./gates-sources";
 import { commitPastHooks, NO_COMMIT, removeScratchDirs, repo } from "./repo.test-support";
 
 function field(value: unknown, key: string): unknown {

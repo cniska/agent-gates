@@ -17,6 +17,10 @@ const CLI = join(import.meta.dir, "..", "src", "cli.ts");
 
 const MANIFEST = join(import.meta.dir, "..", "package.json");
 
+const BUILD_COMPILED = join(import.meta.dir, "..", "scripts", "build-compiled.sh");
+
+const SYSTEM_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
+
 const IDENTITY =
   "[user]\n\tname = Acceptance\n\temail = acceptance@example.com\n[init]\n\tdefaultBranch = main\n";
 
@@ -70,13 +74,22 @@ function hermetic(env: Env): Env {
   };
 }
 
-function run(command: string, args: readonly string[], cwd: string, env: Env = {}, input = ""): Ran {
+export function run(command: string, args: readonly string[], cwd: string, env: Env = {}, input = ""): Ran {
   const ran = spawnSync(command, args, { cwd, env: hermetic(env), encoding: "utf8", input });
   return { status: ran.status, stdout: ran.stdout, stderr: ran.stderr };
 }
 
 export function agentGates(cwd: string, args: readonly string[], env: Env = {}): Ran {
   return run(process.execPath, [CLI, ...args], cwd, env);
+}
+
+export function compiledBinary(dir: string): string {
+  const binary = join(dir, "agent-gates");
+  const built = run("bash", [BUILD_COMPILED, binary], dir, {
+    PATH: `${dirname(process.execPath)}:${SYSTEM_PATH}`,
+  });
+  if (built.status !== 0) throw new Error(`build-compiled.sh exited ${built.status}: ${built.stderr}`);
+  return binary;
 }
 
 export function jsonLine(text: string): unknown {

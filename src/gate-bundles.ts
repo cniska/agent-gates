@@ -1,8 +1,8 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { invariant } from "./assert";
-import { SOURCE_DIR } from "./gates";
 import { ADAPTER_FILES, type GateFile, SCANNER_FILE } from "./gates-contract";
+import { SOURCE_DIR } from "./gates-sources";
 import { LANGUAGE_NAMES } from "./no-comments-languages";
 
 const SRC = import.meta.dir;

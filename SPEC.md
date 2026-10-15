@@ -183,6 +183,10 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 - **FR-115** — `agent-gates --version` prints the running build's version, as `package.json` states it, alone on one line and exits 0; with an argument after it, it is the usage error `wrong_arity`. It is the one invocation that prints no JSON line (FR-2), so an installer and a package manager's test can read it.
 
+### 2.19 The release build
+
+- **FR-116** — `scripts/build-compiled.sh <outfile>` compiles the CLI into one executable that carries every gate file and the version, so it runs every command with no checkout of agent-gates and no Bun on the machine.
+
 ## 3. Non-functional requirements
 
 - **NF-1** — The installed gates run with git, a POSIX shell and `node` alone: nothing installed in the project, and neither agent-gates nor Bun on `PATH`. The `format` gate also runs the project's own format command.
@@ -250,6 +254,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **AC-42** — Run the same hook from that checkout: a commit with `--no-verify` to a fresh repo made after `cd` into a new scratch directory, to a checkout without the gates reached by `cd` or by `git -C`, a heredoc whose body holds `git commit --no-verify`, written by `cat` quoted or ended by a tab-indented delimiter after `<<-`, by `tee` after `&&`, or by `cat` inside `{ … }`, and a commit message from a quoted heredoc holding an apostrophe each pass, printing nothing; from a checkout without the gates, `git commit --no-verify` after `cd` or `cd -P` into the gated checkout, after `cd` into a quoted path with a space that leads there, and after `git -C` naming it, also after `cd ~`, and inside `( … )` or `{ … }` after `cd` there, are each denied; from the gated checkout, `git commit --no-verify` after a `cd` into a missing directory and `;`, after a `cd` ended by `&` or `|`, after `cd -` back from a checkout without the gates, and after `( cd … )`, `$( cd … )` or a backtick `cd` into one are each denied; and in the gated checkout `git commit --no-verify` is denied after a heredoc whose body holds an apostrophe, after a commit message or an arithmetic holding `<<`, in a heredoc fed to `bash`, `source` or `eval` or piped to `sh`, in a `bash` heredoc after a `cat` heredoc on the same line, inside `$(...)` in an unquoted heredoc's body, and after a heredoc whose quoted delimiter holds a space. (FR-112, FR-113)
 - **AC-43** — Install `commit-subject` with `--prefixes`, then `install` alone: the list kept, every file `installed`; then with another `--prefixes`: the hook is `reconfigured` and rewritten without a backup, and a push carrying a type outside the new list is refused before it leaves. Over the hook's earlier release, `install` alone reports it `behind` and replaces it, keeping the default set. `--prefixes` with an uppercase letter, a space, an empty word or a trailing comma: `fill_malformed`; with no list, twice, or without `commit-subject` named: `flag_misplaced`; each writing nothing. (FR-15, FR-87, FR-88, FR-109, FR-114)
 - **AC-44** — Run `agent-gates --version`, then with an argument after it: the version alone on stdout with exit 0 and nothing on stderr, then a `wrong_arity` usage error exiting 2 with nothing on stdout. (FR-115)
+- **AC-45** — Compile the release binary and run it with only its own directory and git on `PATH`, in a fresh checkout of made-up content: `--version` prints the version, `install commit-subject` succeeds, and `doctor` then passes with no failing check. (FR-116)
 
 ## 6. Deliverables
 
@@ -258,6 +263,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **D-3** — `README.md` (what agent-gates is, the install, and every gate and what it refuses), `docs/` (the installed files, what the gates judge and keep, the commands, the plugin and development), `AGENTS.md` (repository rules), `src/README.md` (module map), and this spec.
 - **D-4** — The test suite, run by `bun run check`, and the acceptance suite in `acceptance/`, run by `bun run acceptance`. The acceptance suite drives the CLI, the installed hooks through git, the installed scanner through `node`, the installed workflows' steps with the environment GitHub Actions gives them, and the plugin's hook as its `hooks.json` registers it; it imports nothing from `src/`.
 - **D-5** — The optional `cniska-gates` Claude Code plugin in `plugin/`.
+- **D-6** — The release binary `scripts/build-compiled.sh` compiles, for darwin-arm64 and linux-x64.
 
 ## 7. Constraints (fixed)
 

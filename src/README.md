@@ -22,7 +22,7 @@ Only an entry, such as `cli.ts`, reads the environment; it passes what a module 
 | `cli` | Dispatch a command and print its result or error as JSON |
 | `install` | The `install` command |
 | `doctor` | Report the installed gates' health: their files, the hooks path, `prepare`, the format and CI setup commands, the commit prefixes, the project's own hook steps no workflow runs, and the comments tracked files already hold |
-| `gates` | The registry of gate files, the commands and prefixes install writes into them, and installing them into a project |
+| `gates` | The registry of gate files, their text embedded in the build, the commands and prefixes install writes into them, and installing them into a project |
 | `gate` | Gate names and parts, the marker an installed file carries, and bundling the `no-comments` scanner into `gates/` |
 | `no-comments` | The scanner a `no-comments` gate runs: route a file to its language, read its comments, judge a change and report findings |
 | `package-manifest` | The `prepare` script in a project's `package.json` |
@@ -33,6 +33,6 @@ Only an entry, such as `cli.ts`, reads the environment; it passes what a module 
 ## Where to start
 
 - `cli-commands.ts` lists the commands; `cli-contract.ts` is what one is.
-- `gates-contract.ts` lists every gate's files, their versions and hashes; `gates.ts` installs them.
+- `gates-contract.ts` lists every gate's files, their versions and hashes; `gates.ts` installs them, from the text `gates-sources.ts` reads out of `gates/` when the code is bundled, so a compiled binary carries every gate file.
 - `no-comments-main.ts` is the scanner's entry, and `no-comments-<language>.ts` each language's adapter; `gate-bundles.ts` bundles them into `gates/no-comments/`.
 - Read a module's `.test.ts` before changing its contract.

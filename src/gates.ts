@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import { unreachable } from "./assert";
+import { invariant, unreachable } from "./assert";
 import { type Refusal, refusals } from "./coded-error";
 import { copyAside } from "./file-backup";
 import { ourMarker } from "./gate-marker";
@@ -39,11 +39,12 @@ import {
   type WritableState,
 } from "./gates-contract";
 import { filledIn, fillTemplateOf, withFill } from "./gates-fill";
+import { gateSources } from "./gates-sources" with { type: "macro" };
 import { configValue, setConfig } from "./git";
 import { trackedLanguages, trackedPerLanguage } from "./no-comments-tracked";
 import { type PrepareState, prepareState } from "./package-manifest";
 
-export const SOURCE_DIR = resolve(import.meta.dir, "..", "gates");
+const SOURCES = gateSources();
 
 const gatesRefusal = refusals<{
   readonly no_gates_chosen: { readonly root: string };
@@ -188,7 +189,8 @@ function rendered(
 
 function plannedFile(root: string, file: GateFile, given: Fills): PlannedFile {
   const path = join(root, file.target);
-  const template = readFileSync(join(SOURCE_DIR, file.source), "utf8");
+  const template = SOURCES[file.source];
+  invariant(template !== undefined, `the build embeds no gates/${file.source}`);
   const found = foundAt(path);
   const render = rendered(root, file, template, given, found);
   const at = { target: file.target, file, path };

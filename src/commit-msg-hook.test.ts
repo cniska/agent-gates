@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { SOURCE_DIR } from "./gates";
+import { SOURCE_DIR } from "./gates-sources";
 import { removeScratchDirs, repo } from "./repo.test-support";
 
 const HOOK = join(SOURCE_DIR, "commit-msg");

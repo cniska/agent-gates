@@ -13,7 +13,7 @@ const PUBLIC_FILES: Readonly<Record<string, readonly string[]>> = {
   doctor: ["doctor", "doctor-command"],
   "file-backup": ["file-backup"],
   gate: ["gate-bundles", "gate-marker", "gate-parts"],
-  gates: ["gates", "gates-contract"],
+  gates: ["gates", "gates-contract", "gates-sources"],
   git: ["git"],
   install: ["install-command"],
   "no-comments": [

@@ -12,8 +12,9 @@ import {
 import { join } from "node:path";
 import { gatesDoctor } from "./doctor";
 import { bundled } from "./gate-bundles";
-import { installGates, SOURCE_DIR } from "./gates";
+import { installGates } from "./gates";
 import { ADAPTER_FILES, NO_FILLS, SCANNER_FILE } from "./gates-contract";
+import { SOURCE_DIR } from "./gates-sources";
 import { type Comment, type Reading, SHARED_SHOWN } from "./no-comments-adapter";
 import { ADAPTERS } from "./no-comments-adapters.test-support";
 import { LANGUAGE_NAMES, LANGUAGES, type Language, languageOf } from "./no-comments-languages";
