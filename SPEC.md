@@ -179,6 +179,10 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 - **FR-114** — `install commit-subject --prefixes <a,b,c>` writes the project's allowed types into the `commit-msg` hook, which the pre-push step and the commits workflow judge through. A reinstall without `--prefixes` keeps the installed list; with none ever given, the hook allows the default set (FR-37). The list is lowercase letters in words joined by single commas; any other value is a usage error, `fill_malformed`, and nothing is written.
 
+### 2.18 The version
+
+- **FR-115** — `agent-gates --version` prints the running build's version, as `package.json` states it, alone on one line and exits 0; with an argument after it, it is the usage error `wrong_arity`. It is the one invocation that prints no JSON line (FR-2), so an installer and a package manager's test can read it.
+
 ## 3. Non-functional requirements
 
 - **NF-1** — The installed gates run with git, a POSIX shell and `node` alone: nothing installed in the project, and neither agent-gates nor Bun on `PATH`. The `format` gate also runs the project's own format command.
@@ -245,6 +249,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **AC-41** — Run the `PreToolUse` hook as `hooks.json` registers it, with only a shell, bash, git and `jq` on `PATH`, in a checkout with `commit-subject` and `no-comments-javascript` installed: `git commit --no-verify`, `git commit -anm` after `&&`, `git push --no-verify`, `git -c Core.HooksPath=/dev/null` after `;`, `git config core.hooksPath .husky` and `git config --unset core.hooksPath` are each denied, naming the gates on commit, on push, or both; a commit message holding `--no-verify` or `; git push --no-verify`, `git push -n`, `git config core.hooksPath .githooks`, a read of it, `-c core.hooksPath=./.githooks/` and a write to a gate file pass, printing nothing; and in a checkout without the gates, without `jq`, and with input that is not JSON, the command passes, the last two with a note. (FR-112, FR-113, NF-2)
 - **AC-42** — Run the same hook from that checkout: a commit with `--no-verify` to a fresh repo made after `cd` into a new scratch directory, to a checkout without the gates reached by `cd` or by `git -C`, a heredoc whose body holds `git commit --no-verify`, written by `cat` quoted or ended by a tab-indented delimiter after `<<-`, by `tee` after `&&`, or by `cat` inside `{ … }`, and a commit message from a quoted heredoc holding an apostrophe each pass, printing nothing; from a checkout without the gates, `git commit --no-verify` after `cd` or `cd -P` into the gated checkout, after `cd` into a quoted path with a space that leads there, and after `git -C` naming it, also after `cd ~`, and inside `( … )` or `{ … }` after `cd` there, are each denied; from the gated checkout, `git commit --no-verify` after a `cd` into a missing directory and `;`, after a `cd` ended by `&` or `|`, after `cd -` back from a checkout without the gates, and after `( cd … )`, `$( cd … )` or a backtick `cd` into one are each denied; and in the gated checkout `git commit --no-verify` is denied after a heredoc whose body holds an apostrophe, after a commit message or an arithmetic holding `<<`, in a heredoc fed to `bash`, `source` or `eval` or piped to `sh`, in a `bash` heredoc after a `cat` heredoc on the same line, inside `$(...)` in an unquoted heredoc's body, and after a heredoc whose quoted delimiter holds a space. (FR-112, FR-113)
 - **AC-43** — Install `commit-subject` with `--prefixes`, then `install` alone: the list kept, every file `installed`; then with another `--prefixes`: the hook is `reconfigured` and rewritten without a backup, and a push carrying a type outside the new list is refused before it leaves. Over the hook's earlier release, `install` alone reports it `behind` and replaces it, keeping the default set. `--prefixes` with an uppercase letter, a space, an empty word or a trailing comma: `fill_malformed`; with no list, twice, or without `commit-subject` named: `flag_misplaced`; each writing nothing. (FR-15, FR-87, FR-88, FR-109, FR-114)
+- **AC-44** — Run `agent-gates --version`, then with an argument after it: the version alone on stdout with exit 0 and nothing on stderr, then a `wrong_arity` usage error exiting 2 with nothing on stdout. (FR-115)
 
 ## 6. Deliverables
 
@@ -258,7 +263,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 - **C-1** — The CLI is TypeScript on Bun; the installed gates are POSIX shell and CommonJS run by `node`.
 - **C-2** — No config file: the installed files and their markers are the only state.
-- **C-3** — Every CLI command's output is one JSON line, for agents to read.
+- **C-3** — Every CLI command's output is one JSON line, for agents to read; `--version` alone prints plain text (FR-115).
 
 ## 8. Open decisions (left to the builder)
 

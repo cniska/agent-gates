@@ -1,8 +1,11 @@
 #!/usr/bin/env bun
-import { usageError } from "./cli-args";
+import { version } from "../package.json";
+import { checkArity, usageError } from "./cli-args";
 import { COMMANDS } from "./cli-commands";
 import type { Command } from "./cli-contract";
-import { exitWithError, exitWithResult } from "./cli-output";
+import { exitWithError, exitWithResult, exitWithVersion } from "./cli-output";
+
+const VERSION_FLAG = "--version";
 
 const [name, ...args] = process.argv.slice(2);
 
@@ -12,6 +15,17 @@ if (name === undefined)
     { commands: COMMANDS.map(({ name, usage, summary }) => ({ name, usage, summary })) },
     0,
   );
+
+function versionOrExited(): string {
+  try {
+    checkArity(args, [0, 0], { name: VERSION_FLAG, usage: `agent-gates ${VERSION_FLAG}` });
+    return version;
+  } catch (error) {
+    return exitWithError("agent-gates", error);
+  }
+}
+
+if (name === VERSION_FLAG) exitWithVersion(versionOrExited());
 
 const command = COMMANDS.find((known) => known.name === name);
 

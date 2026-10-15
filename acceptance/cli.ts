@@ -15,6 +15,8 @@ import { dirname, join } from "node:path";
 
 const CLI = join(import.meta.dir, "..", "src", "cli.ts");
 
+const MANIFEST = join(import.meta.dir, "..", "package.json");
+
 const IDENTITY =
   "[user]\n\tname = Acceptance\n\temail = acceptance@example.com\n[init]\n\tdefaultBranch = main\n";
 
@@ -85,6 +87,12 @@ export function jsonLine(text: string): unknown {
 
 function field(value: unknown, key: string): unknown {
   return typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined;
+}
+
+export function packageVersion(): string {
+  const version = field(JSON.parse(readFileSync(MANIFEST, "utf8")), "version");
+  if (typeof version !== "string") throw new Error(`${MANIFEST} names no version`);
+  return version;
 }
 
 export function doctor(dir: string): Judged {

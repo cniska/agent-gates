@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { readdirSync } from "node:fs";
-import { agentGates, checkout, jsonLine, removeScratch, scratchDir } from "./cli";
+import { agentGates, checkout, jsonLine, packageVersion, removeScratch, scratchDir } from "./cli";
 
 afterEach(removeScratch);
 
@@ -106,5 +106,18 @@ test("AC-2 refuses to run outside a checkout, and faults when git cannot run", (
       meta: { detail: expect.any(String) },
       resolve: "stop and hand this error to the owner: git must be installed and on PATH",
     },
+  });
+});
+
+test("AC-44 prints the version alone, and refuses an argument after it", () => {
+  const dir = checkout();
+  expect(agentGates(dir, ["--version"])).toEqual({ status: 0, stdout: `${packageVersion()}\n`, stderr: "" });
+
+  const extra = agentGates(dir, ["--version", "now"]);
+  expect([extra.status, extra.stdout]).toEqual([2, ""]);
+  expect(jsonLine(extra.stderr)).toMatchObject({
+    command: "agent-gates",
+    ok: false,
+    error: { kind: "usage", code: "wrong_arity", resolve: "agent-gates --version" },
   });
 });

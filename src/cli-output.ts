@@ -10,6 +10,11 @@ export function exitWithResult(command: string, value: unknown, status: 0 | 1): 
   return process.exit(status);
 }
 
+export function exitWithVersion(version: string): never {
+  writeSync(STDOUT, `${version}\n`);
+  return process.exit(0);
+}
+
 export function exitWithError(command: string, error: unknown): never {
   const record = recordOf(error);
   writeSync(STDERR, `${JSON.stringify({ command, ok: false, error: record })}\n`);
