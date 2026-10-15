@@ -83,7 +83,7 @@ export function jsonLine(text: string): unknown {
   return JSON.parse(lines[0] ?? "");
 }
 
-export function field(value: unknown, key: string): unknown {
+function field(value: unknown, key: string): unknown {
   return typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined;
 }
 
@@ -120,6 +120,20 @@ export type InstallResult = {
 };
 
 const NO_FILLS: Fills = { command: null, setup: null, prefixes: null };
+
+export const COMMIT_SUBJECT_FILES = [
+  ".githooks/commit-msg",
+  ".github/workflows/commits.yml",
+  ".githooks/.gitattributes",
+  ".githooks/pre-push",
+  ".githooks/pre-push.d/commit-subject",
+  ".githooks/judge-push",
+];
+
+export function usageCode(dir: string, args: readonly string[]): readonly unknown[] {
+  const ran = agentGates(dir, ["install", ...args]);
+  return [args, ran.status, field(field(jsonLine(ran.stderr), "error"), "code")];
+}
 
 export function each(state: string, targets: readonly string[]): FileResult[] {
   return targets.map((target) => ({ target, state, backup: null }));

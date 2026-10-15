@@ -2,7 +2,6 @@ import { afterEach, expect, test } from "bun:test";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
-  agentGates,
   bypassing,
   check,
   checkout,
@@ -10,18 +9,17 @@ import {
   committing,
   doctor,
   each,
-  field,
   git,
   githubStep,
   gitRan,
   install,
   installed,
   installs,
-  jsonLine,
   readText,
   refuses,
   removeScratch,
   stepScript,
+  usageCode,
   writeFiles,
 } from "./cli";
 
@@ -48,11 +46,6 @@ const NAME_THE_SETUP =
 const SETUP_STEP = "Set up the project as agent-gates install --setup named";
 
 const CHECK_STEP = "Run the format command the hook installs, and refuse what it changes";
-
-function usageCode(dir: string, args: readonly string[]): readonly unknown[] {
-  const ran = agentGates(dir, ["install", ...args]);
-  return [args, ran.status, field(field(jsonLine(ran.stderr), "error"), "code")];
-}
 
 function formatted(files: Readonly<Record<string, string>> = {}): string {
   const dir = checkout({ "fmt.sh": UPPERCASE, ...files });

@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import {
   agentGates,
+  COMMIT_SUBJECT_FILES,
   check,
   checkout,
   commitAs,
@@ -35,15 +36,6 @@ const GITATTRIBUTES_V1 = "# agent-gate:githooks:1\n* linguist-generated\n";
 const OWN_HOOK = "#!/bin/sh\nexit 0\n";
 
 const PUSH_FILES = [".githooks/pre-push", ".githooks/judge-push"];
-
-const COMMIT_SUBJECT_FILES = [
-  ".githooks/commit-msg",
-  ".github/workflows/commits.yml",
-  ".githooks/.gitattributes",
-  ".githooks/pre-push",
-  ".githooks/pre-push.d/commit-subject",
-  ".githooks/judge-push",
-];
 
 const NO_COMMENTS_FILES = [
   ".githooks/pre-commit",

@@ -2,20 +2,18 @@ import { afterEach, expect, test } from "bun:test";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  agentGates,
   bypassing,
+  COMMIT_SUBJECT_FILES,
   checkout,
   cloneOf,
   commitAs,
   committing,
   each,
-  field,
   git,
   githubStep,
   gitRan,
   install,
   installed,
-  jsonLine,
   NO_COMMIT,
   type Outcome,
   PASSED,
@@ -25,6 +23,7 @@ import {
   scratchDir,
   shell,
   stepScript,
+  usageCode,
   writeFiles,
 } from "./cli";
 
@@ -36,15 +35,6 @@ const NOT_CONVENTIONAL =
   "subject is not a Conventional Commit (type(scope): what changed); types: build,chore,ci,docs,feat,fix,perf,refactor,revert,style,test.";
 
 const HOOK = ".githooks/commit-msg";
-
-const FILES = [
-  HOOK,
-  ".github/workflows/commits.yml",
-  ".githooks/.gitattributes",
-  ".githooks/pre-push",
-  ".githooks/pre-push.d/commit-subject",
-  ".githooks/judge-push",
-];
 
 const HOOK_V2 = readFileSync(join(import.meta.dir, "fixtures/commit-msg-v2"), "utf8");
 
@@ -285,22 +275,20 @@ test("AC-18 judges every commit the pushed range holds in CI", () => {
   });
 });
 
-function usageCode(dir: string, args: readonly string[]): readonly unknown[] {
-  const ran = agentGates(dir, ["install", ...args]);
-  return [args, ran.status, field(field(jsonLine(ran.stderr), "error"), "code")];
-}
-
 test("AC-43 keeps the prefixes a reinstall is not given, rewrites a new list, and upgrades the earlier hook", () => {
   const dir = checkout();
   install(dir, ["commit-subject", "--prefixes", "feat,fix"]);
   expect(installed(dir, [])).toEqual({
     gates: ["commit-subject"],
-    files: each("installed", FILES),
+    files: each("installed", COMMIT_SUBJECT_FILES),
     prepare: "absent",
     fills: { command: null, setup: null, prefixes: "feat,fix" },
   });
   expect(installed(dir, ["commit-subject", "--prefixes", "feat,spec"])).toMatchObject({
-    files: [{ target: HOOK, state: "reconfigured", backup: null }, ...each("installed", FILES).slice(1)],
+    files: [
+      { target: HOOK, state: "reconfigured", backup: null },
+      ...each("installed", COMMIT_SUBJECT_FILES).slice(1),
+    ],
     fills: { prefixes: "feat,spec" },
   });
   expect(readText(dir, HOOK)).toContain("\nprefixes='feat,spec'\n");
@@ -323,11 +311,14 @@ test("AC-43 keeps the prefixes a reinstall is not given, rewrites a new list, an
   install(earlier, ["commit-subject"]);
   writeFiles(earlier, { [HOOK]: HOOK_V2 });
   expect(installed(earlier, [])).toMatchObject({
-    files: [{ target: HOOK, state: "behind", backup: null }, ...each("installed", FILES).slice(1)],
+    files: [
+      { target: HOOK, state: "behind", backup: null },
+      ...each("installed", COMMIT_SUBJECT_FILES).slice(1),
+    ],
     fills: { prefixes: null },
   });
   expect(readText(earlier, HOOK)).toContain("\nprefixes=''\n");
-  expect(installed(earlier, [])).toMatchObject({ files: each("installed", FILES) });
+  expect(installed(earlier, [])).toMatchObject({ files: each("installed", COMMIT_SUBJECT_FILES) });
 
   const bare = checkout();
   for (const args of [
