@@ -87,6 +87,12 @@ describe("the gate registry", () => {
       ]);
     }
   });
+
+  test("has a row in the README's gate table for each gate, and no row for another", () => {
+    const readme = readFileSync(join(import.meta.dir, "../README.md"), "utf8");
+    const rows = [...readme.matchAll(/^\| `([a-z-]+)` \|/gm)].map(([, gate]) => gate);
+    expect(rows).toEqual(Object.keys(GATES));
+  });
 });
 
 describe("this repo", () => {

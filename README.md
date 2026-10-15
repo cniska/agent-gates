@@ -1,14 +1,14 @@
 # agent-gates
 
-Gate your agents' work and save them round trips: git hooks refuse a bad commit locally and GitHub workflows refuse it again in CI, for every contributor, and an optional Claude Code plugin shows the agent the comments it added, right after each edit, and stops it skipping the gates. It leaves the rest to its siblings: [cniska-skills](https://github.com/cniska/agent-skills) holds the workflow, [agent-record](https://github.com/cniska/agent-record) records past sessions, and [agent-worktree](https://github.com/cniska/agent-worktree) isolates checkouts.
+Gate your agents' work and save them round trips. A coding agent excuses a workaround in a comment, writes a commit message nobody can scan, or commits unformatted code, and a reviewer reading the diff tends to accept it. agent-gates installs git hooks that refuse such a commit locally and GitHub workflows that refuse it again in CI, for every contributor. It judges the commit only, and leaves how an agent works, and what it records, to other tools.
 
-- `agent-gates install` writes the gates into the project, which commits them, and `agent-gates doctor` judges their health.
-- The gates refuse a commit subject that is not a Conventional Commit and an added comment, and run the project's formatter on every commit.
-- The `cniska-gates` [plugin](#claude-code-plugin) is optional; the gates hold without it.
+- `agent-gates install` writes the gates into the project, which commits them, so contributors and CI are gated without installing agent-gates.
+- `agent-gates doctor` judges their health.
+- An optional Claude Code plugin shows the agent the comments each edit added and stops it skipping the gates; the gates hold without it.
 
 ## Install
 
-agent-gates runs on [Bun](https://bun.sh); its tests also run the shipped scanner under Node. [mise](https://mise.jdx.dev) installs both:
+agent-gates runs on [Bun](https://bun.sh), which [mise](https://mise.jdx.dev) installs:
 
 ```bash
 git clone https://github.com/cniska/agent-gates.git
@@ -16,181 +16,36 @@ cd agent-gates
 mise trust && mise install
 ```
 
-In the clone, never in a worktree, `mise install` also links `agent-gates` into `~/.bun/bin`, so removing a worktree never leaves the command pointing at a deleted checkout; put that directory on your `PATH`. Then, in the project you want to gate:
+In the clone, `mise install` links `agent-gates` into `~/.bun/bin`; put that directory on your `PATH`. Then, in the project you want to gate:
 
 ```bash
 agent-gates install commit-subject no-comments
 agent-gates doctor
 ```
 
-To allow other commit types than the default set, name them: `agent-gates install commit-subject --prefixes feat,fix,docs`.
+`no-comments` installs the gate for each language the project's tracked files hold. `format` needs the project's format command, such as `agent-gates install format --command "npm run lint:fix"`.
 
 ## Gates
 
-| Gate | Hooks | Workflow | Refuses |
-| --- | --- | --- | --- |
-| `commit-subject` | `.githooks/commit-msg`, `.githooks/pre-push.d/commit-subject` | `commits.yml` | A subject that is not a Conventional Commit of an allowed type, is over 50 characters or is not ASCII, and any message body; on push, a `fixup!`, `squash!` or `amend!` commit |
-| `format` | `.githooks/pre-commit.d/format` | `format.yml` | A partly staged file the format command changes, and a failing command; anything else it formats into the commit |
-| `no-comments-<language>` | `.githooks/pre-commit.d/no-comments`, `.githooks/pre-push.d/no-comments` | `no-comments.yml` | A comment the change adds, other than a [kept form](#kept-comments) |
-
-The languages are `javascript` (JavaScript and TypeScript), `dart`, `sql` (PostgreSQL), `shell`, `rust` and `python`. `agent-gates install no-comments` installs the gate for each language the tracked files hold, and refuses when they hold none.
-
-Installed files:
-
-- are committed with the project, so contributors and CI are gated without installing agent-gates;
-- carry a marker, `# agent-gate:<part>:<version>` (`//` in a `.cjs`), from which agent-gates reads back what is installed, so there is no config file. To remove a language, delete its `.githooks/no-comments/<language>.cjs`.
-
-Install also points `core.hooksPath` at `.githooks` in the current clone, and `.githooks/.gitattributes` marks the hooks `linguist-generated` with LF endings. With a `package.json`, install adds the same wiring to its `prepare` script, so a fresh clone wires itself. Without one, each contributor runs `git config core.hooksPath .githooks` once. CI checks every push either way.
-
-`.githooks/pre-commit` runs the `format` step first, then each other executable in `.githooks/pre-commit.d/` in name order, and stops at the first failure. Your own pre-commit step belongs there.
-
-`.githooks/pre-push` runs each executable in `.githooks/pre-push.d/` in name order, handing each git's arguments and pushed refs, and stops at the first failure. Your own pre-push step belongs there. The `commit-subject` and `no-comments` steps judge each pushed ref with `.githooks/judge-push`, the script their workflows run in CI, so a push the workflows would refuse never leaves: the range starts at the remote's tip, or, for a new branch, at the remote's default branch.
-
-No gate judges a merge commit locally.
-
-### Commit subjects
-
-Allowed types, by default: `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style` and `test`, the set `@commitlint/config-conventional` allows, each with an optional lowercase scope and `!`. `agent-gates install commit-subject --prefixes <a,b,c>` replaces the set with the project's own, lowercase words joined by commas, such as `--prefixes feat,fix,docs`. Install writes the list into the hook as `prefixes='<a,b,c>'`, so it shows in the diff, and a reinstall without `--prefixes` keeps it. A refusal names the allowed types.
-
-`commits.yml` and the pre-push step check every non-merge commit a push or pull request brings. Set the repository's squash-merge message to the pull request title alone, because GitHub's default squash body is refused. Git's own `Revert "..."` message is refused too; a `revert:` subject passes. The `commit-msg` hook lets a `fixup!`, `squash!` or `amend!` commit through, judging the subject it carries, and the push refuses it, so it is squashed before it leaves.
-
-### Format
-
-The hook runs the project's format command on each commit, then stages what it changed in the files the commit stages whole, so the commit goes through formatted. It refuses a partly staged file the command changes, naming it, and stages nothing. A file the commit leaves out that the command changed stays in the worktree, listed. A command that fails refuses the commit with its output.
-
-agent-gates does not look for a formatter: `agent-gates install format --command "<command>"` names it, such as `--command "npm run lint:fix"` or `--command "cargo fmt"`, and install refuses `format` without one. Install writes the command into the hook as `command='<command>'`, so it shows in the diff, and a reinstall without `--command` keeps it.
-
-`format.yml` runs `.githooks/ci-setup`, then the hook with `--check`, which runs the command and refuses each tracked file it changes. `agent-gates install format --setup "<command>"` writes the project's setup into `.githooks/ci-setup`, such as `--setup "mise install && pnpm install --frozen-lockfile"`; every gate workflow that needs the project set up runs that one file, and a reinstall without `--setup` keeps it. Without one, the setup step does nothing.
-
-`doctor` fails when the format command's program is not on `PATH`, and warns when no setup command is installed or its program is not on `PATH`.
-
-The `format` step runs before every other `pre-commit.d/` step, so each of them judges the formatted change.
-
-### No comments
-
-A comment is where a coding agent excuses a workaround instead of fixing it, and a reviewer reading the diff tends to accept it. Without comments, the reason for a choice goes into a name, a test or the docs, and a workaround is fixed or left visibly unfinished. Cursor's [pstack `/no-comments`](https://github.com/cursor/plugins/blob/main/pstack/skills/no-comments/SKILL.md) skill works from the same idea; these gates enforce it on commit, on push and in CI.
-
-What is judged:
-
-- **On commit:** the staged changes against `HEAD`.
-- **One file:** `node .githooks/no-comments/scan.cjs --file <path>` judges the file as it stands in the working tree against `HEAD`, whatever the index holds, and skips what a commit would not judge, an ignored file included. It compares the file only with the same path at `HEAD`: a comment moved in from another file reads as added, and so does every comment of a file moved or renamed since `HEAD`.
-- **In CI:** a pull request against the point it left its base branch; a push against the branch's previous tip, or against the default branch when the push creates the branch.
-- **Added** means the comment's text, trimmed and with whitespace collapsed, is not among the comments the changed files held before. Moving, reindenting or renaming keeps a comment; editing a word, splitting, joining or duplicating one adds it. A file the change deletes, and git does not pair as a rename, counts for none, since removing comments is the goal: a comment moved out of it is added.
-- **Not parsing:** JavaScript and TypeScript refuse any syntax error Babel reports, at its line. The other languages refuse a string, comment, quote, character, expansion or heredoc that never closes, at the line where it opens. Dart and SQL also refuse an unbalanced bracket, Python one that never closes and a line continuation at the end of the file, and SQL a `$` that starts neither a dollar quote nor a parameter.
-- **Skipped:** files marked `linguist-generated` or `linguist-vendored`, binary files, symlinks, and code embedded in another language (shell in a workflow's `run:`, SQL in a string, `.vue` files). A file without an extension is routed by its shebang.
-
-The gates need `node` on `PATH` and nothing installed in the project.
-
-A refusal:
-
-- starts with the total and the fix, then lists findings by file and line, each comment's first line cut at 120 characters;
-- stops at 4,000 bytes, which every [measured](docs/no-comments-measurements.md) agent harness shows whole;
-- in CI, also annotates each finding, or the first nine and a count of the rest when there are more than ten. The step's log holds the full reply.
-
-The gates stop the comment count from growing; they do not drive it to zero. `node .githooks/no-comments/scan.cjs --all` lists every comment in the tracked files, and `agent-gates doctor` warns while that count is above zero.
-
-#### Kept comments
-
-A comment stays only when a tool reads it, and deleting it changes what that tool does. Even then, only the forms below are kept: every doc comment, suppression, formatter hint, tool setting and test expectation is refused. Fix the code, or put the setting in the tool's config file, where a reason can live.
-
-| Language | Kept comments |
+| Gate | Refuses |
 | --- | --- |
-| JavaScript and TypeScript | the first-line shebang, with no `#` word or `\c` after `#!`; a leading `/// <reference …/>` holding only its attributes |
-| Dart | the first-line shebang, with no `#` word or `\c` after `#!` |
-| SQL | drizzle's `--> statement-breakpoint` |
-| shell | the first-line shebang, with no `#` word or `\c` after `#!` |
-| Rust | the first-line shebang, with no `#` word or `\c` after `#!` |
-| Python | the first-line shebang, with no `#` word or `\c` after `#!` |
-| Every language | a gate marker on a line of its own |
+| `commit-subject` | A subject that is not a Conventional Commit of an allowed type, is over 50 characters or is not ASCII, and any message body; on push and in CI, a `fixup!`, `squash!` or `amend!` commit |
+| `format` | A commit the project's format command fails on, and a partly staged file the command changes, formatting the rest into the commit; in CI, each tracked file the command would change |
+| `no-comments-javascript` | An added comment in JavaScript or TypeScript, and a file Babel cannot parse |
+| `no-comments-dart` | An added comment in Dart, and a file that does not parse |
+| `no-comments-sql` | An added comment in PostgreSQL, and a file that does not parse |
+| `no-comments-shell` | An added comment in shell, and a file that does not parse |
+| `no-comments-rust` | An added comment in Rust, and a file that does not parse |
+| `no-comments-python` | An added comment in Python, and a file that does not parse |
+| Suppressions and tool settings, in every `no-comments` language | Every added doc comment, suppression, formatter hint, tool setting and test expectation; only a shebang, a gate marker and the few [forms a toolchain reads](docs/no-comments.md#kept-comments) are kept |
+| The plugin's skip block | A git command that skips the gates: `git commit` or `git push` with `--no-verify`, `git commit -n`, and `core.hooksPath` set or unset to anything but `.githooks` |
 
-- Every kept form stands alone in its comment: no reason, no trailing text. A directive in a block comment that spans lines is refused.
-- Every TypeScript, ESLint and Biome suppression is refused, `@ts-expect-error` included, and so are `prettier-ignore`, `@ts-check` and `@vitest-environment`; their settings belong in `tsconfig.json`, the linter's config, `.prettierignore` and the Vitest config. Every `shellcheck` directive is refused; its settings belong in `.shellcheckrc`. Every Dart `ignore:` and `ignore_for_file:` is refused; the analyzer's settings belong in `analysis_options.yaml`. Tool configuration in a comment is refused too: `eslint-env`, `/* eslint … */`, `/* global */`, Dart's `coverage:`.
-- A gate marker is `agent-gate:<part>:<version>`, where `<part>` is one of agent-gates' parts, or another tool's `<tool>-gate:[<part>:]<version>`, where `<tool>` and `<part>` are each one lowercase word.
-- A refusal lists the kept forms of each language it refused a comment in.
+Each gate refuses on commit and again in CI, and `commit-subject` and `no-comments` also on push. The skip block holds only for a Claude Code agent with the [plugin](docs/plugin.md) installed.
 
-How each language is read:
+## Docs
 
-- **JavaScript and TypeScript** with Babel's parser.
-- **SQL** as PostgreSQL, with dollar quotes and `E''` strings. A dollar-quoted body that parses as SQL is judged as code; one that does not is text.
-- **Dart, shell, Rust and Python** by lexers that find the comments the language's own tokenizer finds. Shell treats `#` as a comment only where a word starts.
-- **Rust** reads an attribute carrying `doc = …` anywhere, such as `#[cfg_attr(docsrs, doc = …)]`, as a doc comment; `#[doc(hidden)]` is code.
-- **Python** judges a string that stands alone as a statement, a docstring included, as a comment. Indentation is not checked.
-
-## Commands
-
-Each command prints one JSON line. An error goes to stderr and exits 2 for `usage`, 1 for a `refusal` you can resolve, and 3 for a `fault`.
-
-| Command | Does |
-| --- | --- |
-| `agent-gates install [<gate>...] [--command <format command>] [--setup <CI setup command>] [--prefixes <a,b,c>]` | Install the named gates, update the installed ones, and report each file's state before acting, the format and setup commands and the commit prefixes |
-| `agent-gates doctor` | Check each gate file, `core.hooksPath`, the `prepare` script and the format and CI setup commands, and report the commit prefixes; report each tracked language without its no-comments gate, each installed language with no files left to read, each of the project's own steps in `.githooks/pre-commit.d` or `pre-push.d` that no workflow runs, and the comment count; exit 1 on a failure |
-
-Gate file states:
-
-| State | Means | `install` |
-| --- | --- | --- |
-| `installed` | the current version | leaves it |
-| `missing` | not there | writes it |
-| `behind` | an earlier version | writes it |
-| `changed` | matches no version | sets it aside as `<file>.agent-gates-backup`, then writes it |
-| `ahead` | written by a newer agent-gates | leaves it |
-| `not-executable` | a hook git would skip | writes it |
-| `reconfigured` | the current version, holding another command or list than `--command`, `--setup` or `--prefixes` gave | writes it |
-| `occupied` | a hook without an `agent-gate` marker | refuses, writing nothing |
-
-`install` also refuses when `core.hooksPath` or `prepare` already hold something else, when `package.json` does not parse, when no gate is named and none is installed, and, for `format`, when no command is given or installed. `commit-subject` owns `.githooks/commit-msg`.
-
-## Claude Code plugin
-
-The gates stay the check for every contributor. The optional `cniska-gates` plugin in `plugin/` saves a Claude Code agent the round trip through them: after each `Edit`, `Write` or `MultiEdit`, in a repo that commits `.githooks/no-comments/scan.cjs`, it runs `scan.cjs --file` on the edited file and hands the agent the scanner's reply, so it removes the comments before it commits. It never blocks an edit, never changes a file, and does nothing in a repo without the gate. It needs `jq` and `node` on `PATH`; without either, or with a scanner too old for `--file`, it leaves only a note on stderr.
-
-Before each `Bash` command, it judges each git command against the repo that command targets, after any `cd` before it and its own `git -C`, and in a repo whose `.githooks` hooks carry agent-gates' markers it denies a git command that skips the gates: `git commit` or `git push` with `--no-verify`, `git commit` with `-n`, and `core.hooksPath` set by `-c` or `git config`, or unset, to anything but `.githooks`. The denial names the gates the command skips, so the agent fixes what the refusing gate names instead; CI refuses what they refuse anyway, so the block saves the round trip. A command into a repo without the gates, such as a fresh scratch repo, passes. Text inside a quoted string, such as a commit message, or the body of a heredoc `cat`, `tee` or `git` reads with nothing piped after it, is not read as a command. Edits to installed gate files are never blocked, since install writes them.
-
-```bash
-claude plugin marketplace add cniska/agent-skills
-claude plugin install cniska-gates@cniska
-```
-
-## Extending
-
-To add a language:
-
-1. Add it to `LANGUAGE_NAMES` and `LANGUAGES` in `src/no-comments-languages.ts`, with its extensions and shebang interpreters.
-2. Write `src/no-comments-<language>.ts` on the model of `src/no-comments-dart.ts`, the smallest adapter: `export const { comments, kept } = adapter({ lex, kept })`. `lex` returns each comment's `Span`, or `unterminated(<offset>, "<construct>")` where the file stops parsing. A comment the toolchain reads is kept with `directive(shown, { pattern, where })`, which matches the whole comment body and nothing after it; any other rule is a `{ shown, keeps }` form.
-3. Check the lexer against the language's own tokenizer on real and deliberately broken files: same comments, and no refusal of a file the tokenizer accepts.
-4. Add tests, a `GATES` and an `ADAPTER_FILES` entry in `src/gates-contract.ts`, a row in the kept-comments table (a test checks it), and the language in the list under Gates.
-5. Run `bun run gates:bundle` and record the hash, as [AGENTS.md](AGENTS.md) describes. `bun run check` fails until the entry, bundle and hash agree.
-
-Another SQL dialect (MySQL, BigQuery, Snowflake) would need per-dialect lexer rules, chosen per path by a git attribute such as `agent-gates-sql=mysql`.
-
-## Development
-
-### Setup
-
-```bash
-mise trust && mise install
-agent-worktree create <name>
-bin/agent-gates doctor
-```
-
-- `mise install` sets up the clone as [Install](#install) says, and the `bun install` its postinstall runs calls the `prepare` script, which points `core.hooksPath` at `.githooks/`.
-- `agent-worktree create <name>` makes a task worktree and runs its `.worktree-hooks/setup` hook, which installs the same way without linking the CLI.
-- `.githooks/` holds the commit-subject, format and no-comments gates this repo installs on itself, and `bin/agent-gates doctor` reports their health.
-
-### Checks
-
-- `bun run check` runs lint, typecheck, knip (an export, file or dependency nothing uses) and tests, and `.githooks/pre-commit.d/check` runs it before each commit.
-- `bun run acceptance` proves the criteria in [`SPEC.md`](SPEC.md) through the CLI and the files it installs alone, as the spec's D-4 says; each test in `acceptance/` is named for the criteria it proves, and `src/spec.test.ts`, in the check, fails when the tests and the criteria do not cite each other.
-- `bun run format` formats `src/` and `acceptance/` with Biome, and the format gate runs it with the linter off before each commit and stages what it changes in the staged files, as [Format](#format) says.
-- `bun run gates:bundle` bundles `gates/no-comments/*.cjs` from `src/`.
-- `.github/workflows/check.yml` runs the check and the acceptance suite on each push and pull request, and `commits.yml`, `format.yml` and `no-comments.yml` run the gates.
-
-### Layout
-
-- `gates/` holds each gate file as it is installed, and a change to one bumps its version first, as [`AGENTS.md`](AGENTS.md) describes.
-- [`docs/no-comments-measurements.md`](docs/no-comments-measurements.md) holds the measurements the no-comments reply cap is taken from.
-- [`src/README.md`](src/README.md) maps the modules and the boundaries between them.
-
-### Rules
-
-[`AGENTS.md`](AGENTS.md) holds the repository's rules, and [`SPEC.md`](SPEC.md) states what must hold.
+- [Gates](docs/gates.md): the files install writes, how the hooks run, and the commit-subject and format gates in detail.
+- [No comments](docs/no-comments.md): what the no-comments gates judge, the refusal, the comments each language keeps and how each is read.
+- [Commands](docs/commands.md): `install` and `doctor`, their output, and the states of a gate file.
+- [Claude Code plugin](docs/plugin.md): what the plugin does and how to install it.
+- [Development](docs/development.md): setup, checks, layout and adding a language, for working on this repo.

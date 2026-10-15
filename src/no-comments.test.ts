@@ -975,10 +975,10 @@ describe("the python adapter", () => {
   });
 });
 
-describe("the README", () => {
+describe("the no-comments doc", () => {
   test("lists the forms each adapter keeps, and those every language keeps", () => {
     const cell = (forms: readonly string[]) => (forms.length === 0 ? "none" : forms.join("; "));
-    const readme = readFileSync(join(import.meta.dir, "../README.md"), "utf8");
+    const doc = readFileSync(join(import.meta.dir, "../docs/no-comments.md"), "utf8");
     const own = (language: Language) => {
       const { kept } = ADAPTERS[language];
       expect(kept.slice(kept.length - SHARED_SHOWN.length)).toEqual([...SHARED_SHOWN]);
@@ -988,7 +988,7 @@ describe("the README", () => {
       ...LANGUAGE_NAMES.map((language) => `| ${LANGUAGES[language].shown} | ${cell(own(language))} |`),
       `| Every language | ${cell(SHARED_SHOWN)} |`,
     ];
-    expect(readme).toContain(["| Language | Kept comments |", "| --- | --- |", ...rows].join("\n"));
+    expect(doc).toContain(["| Language | Kept comments |", "| --- | --- |", ...rows].join("\n"));
   });
 });
 
