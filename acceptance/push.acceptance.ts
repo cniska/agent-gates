@@ -18,7 +18,8 @@ import { commentReply, gated, KEPT_JAVASCRIPT } from "./no-comments";
 
 afterEach(removeScratch);
 
-const NOT_CONVENTIONAL = "subject is not a Conventional Commit (type(scope): what changed).";
+const NOT_CONVENTIONAL =
+  "subject is not a Conventional Commit (type(scope): what changed); types: build,chore,ci,docs,feat,fix,perf,refactor,revert,style,test.";
 
 test("AC-39 hands git's arguments and pushed refs to each executable pre-push step in name order, stopping at the first failure", () => {
   const dir = gated(["commit-subject"]);

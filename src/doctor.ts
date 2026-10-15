@@ -92,21 +92,33 @@ function onPath(program: string): boolean {
   return spawnSync("sh", ["-c", 'command -v "$1" >/dev/null', "sh", program]).status === 0;
 }
 
+function unsetHealth(fill: Fill): Health[] {
+  const { check, unset } = FILLS[fill];
+  switch (unset.kind) {
+    case "required":
+      return [];
+    case "optional":
+      return [{ name: check, state: "warn", detail: unset.detail, fix: nameTheFill(fill) }];
+    case "defaulted":
+      return [{ name: check, state: "ok", detail: unset.detail, fix: null }];
+    default:
+      return unreachable(unset);
+  }
+}
+
 function fillHealth(fill: Fill, value: string | null): Health[] {
-  const { check, offPath, unset } = FILLS[fill];
-  if (value === null)
-    return unset.kind === "required"
-      ? []
-      : [{ name: check, state: "warn", detail: unset.detail, fix: nameTheFill(fill) }];
-  const program = programOf(value);
-  if (onPath(program))
-    return [{ name: check, state: "ok", detail: `\`${value}\`; ${program} is on PATH`, fix: null }];
+  const { check, program } = FILLS[fill];
+  if (value === null) return unsetHealth(fill);
+  if (program === null) return [{ name: check, state: "ok", detail: `\`${value}\``, fix: null }];
+  const named = programOf(value);
+  if (onPath(named))
+    return [{ name: check, state: "ok", detail: `\`${value}\`; ${named} is on PATH`, fix: null }];
   return [
     {
       name: check,
-      state: offPath.state,
-      detail: `\`${value}\`, but ${program} is not on PATH${offPath.effect}`,
-      fix: `install ${program}, or ${nameTheFill(fill)}`,
+      state: program.offPath.state,
+      detail: `\`${value}\`, but ${named} is not on PATH${program.offPath.effect}`,
+      fix: `install ${named}, or ${nameTheFill(fill)}`,
     },
   ];
 }

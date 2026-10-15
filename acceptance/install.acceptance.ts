@@ -345,6 +345,12 @@ test("AC-8 accepts the hooks path however it is spelled, and refuses another", (
           detail: "no package.json, so each contributor runs git config core.hooksPath .githooks once",
           fix: null,
         },
+        {
+          name: "commit prefixes",
+          state: "ok",
+          detail: "none installed, so the gate allows its default set",
+          fix: null,
+        },
       ],
       failing: 1,
     },

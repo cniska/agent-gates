@@ -147,7 +147,7 @@ test("AC-28 runs the hooks with git, a shell and node alone", () => {
   git(dir, ["add", "-A"]);
   expect(committing(dir, ["-q", "-m", "Change a"], bare)).toEqual(
     refusedWith(
-      "commit-msg: subject is not a Conventional Commit (type(scope): what changed).\n  got: Change a\n",
+      "commit-msg: subject is not a Conventional Commit (type(scope): what changed); types: build,chore,ci,docs,feat,fix,perf,refactor,revert,style,test.\n  got: Change a\n",
     ),
   );
   expect(commitStaged(dir, [], bare)).toEqual(PASSED);

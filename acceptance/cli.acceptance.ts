@@ -5,7 +5,7 @@ import { agentGates, checkout, jsonLine, removeScratch, scratchDir } from "./cli
 afterEach(removeScratch);
 
 const INSTALL_USAGE =
-  "agent-gates install [<gate>...] [--command <format command>] [--setup <CI setup command>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)";
+  "agent-gates install [<gate>...] [--command <format command>] [--setup <CI setup command>] [--prefixes <a,b,c>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)";
 
 test("AC-1 lists the commands, and refuses a bad call with its usage and writes nothing", () => {
   const dir = checkout();

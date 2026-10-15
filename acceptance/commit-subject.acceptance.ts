@@ -1,16 +1,21 @@
 import { afterEach, expect, test } from "bun:test";
-import { chmodSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  agentGates,
   bypassing,
   checkout,
   cloneOf,
   commitAs,
   committing,
+  each,
+  field,
   git,
   githubStep,
   gitRan,
   install,
+  installed,
+  jsonLine,
   NO_COMMIT,
   type Outcome,
   PASSED,
@@ -25,9 +30,27 @@ import {
 
 afterEach(removeScratch);
 
-const TYPES = ["feat", "fix", "refactor", "docs", "test", "chore", "style", "perf", "build", "ci"];
+const TYPES = ["build", "chore", "ci", "docs", "feat", "fix", "perf", "refactor", "revert", "style", "test"];
 
-const NOT_CONVENTIONAL = "subject is not a Conventional Commit (type(scope): what changed).";
+const NOT_CONVENTIONAL =
+  "subject is not a Conventional Commit (type(scope): what changed); types: build,chore,ci,docs,feat,fix,perf,refactor,revert,style,test.";
+
+const HOOK = ".githooks/commit-msg";
+
+const FILES = [
+  HOOK,
+  ".github/workflows/commits.yml",
+  ".githooks/.gitattributes",
+  ".githooks/pre-push",
+  ".githooks/pre-push.d/commit-subject",
+  ".githooks/judge-push",
+];
+
+const HOOK_V2 = readFileSync(join(import.meta.dir, "fixtures/commit-msg-v2"), "utf8");
+
+function notListed(prefixes: string): string {
+  return `subject is not a Conventional Commit (type(scope): what changed); types: ${prefixes}.`;
+}
 
 const SCISSORS = "# ------------------------ >8 ------------------------";
 
@@ -96,6 +119,7 @@ test("AC-15 refuses a subject that breaks a rule, naming the reason", () => {
   refused(dir, "fix(CLI): change a thing\n", NOT_CONVENTIONAL, "fix(CLI): change a thing");
   refused(dir, "fix:  change a thing\n", NOT_CONVENTIONAL, "fix:  change a thing");
   refused(dir, "wip: change a thing\n", NOT_CONVENTIONAL, "wip: change a thing");
+  refused(dir, 'Revert "feat: add a thing"\n', NOT_CONVENTIONAL, 'Revert "feat: add a thing"');
   refused(
     dir,
     `feat: ${"a".repeat(45)}\n`,
@@ -112,6 +136,13 @@ test("AC-15 refuses a subject that breaks a rule, naming the reason", () => {
   );
   refused(dir, "", "subject is empty.", "");
   refused(dir, "   \n", "subject is empty.", "   ", "verbatim");
+
+  const listed = checkout();
+  install(listed, ["commit-subject", "--prefixes", "feat,spec"]);
+  commitAs(listed, "chore: start");
+  passes(listed, "spec: say a thing\n");
+  passes(listed, "feat(api)!: drop a thing\n");
+  refused(listed, "fix: change a thing\n", notListed("feat,spec"), "fix: change a thing");
 });
 
 test("AC-16 judges the message git keeps, and an autosquash by the subject it carries", () => {
@@ -252,4 +283,66 @@ test("AC-18 judges every commit the pushed range holds in CI", () => {
     status: 1,
     stderr: `commit-msg: ${NOT_CONVENTIONAL}\n  got: Add an old thing\n`,
   });
+});
+
+function usageCode(dir: string, args: readonly string[]): readonly unknown[] {
+  const ran = agentGates(dir, ["install", ...args]);
+  return [args, ran.status, field(field(jsonLine(ran.stderr), "error"), "code")];
+}
+
+test("AC-43 keeps the prefixes a reinstall is not given, rewrites a new list, and upgrades the earlier hook", () => {
+  const dir = checkout();
+  install(dir, ["commit-subject", "--prefixes", "feat,fix"]);
+  expect(installed(dir, [])).toEqual({
+    gates: ["commit-subject"],
+    files: each("installed", FILES),
+    prepare: "absent",
+    fills: { command: null, setup: null, prefixes: "feat,fix" },
+  });
+  expect(installed(dir, ["commit-subject", "--prefixes", "feat,spec"])).toMatchObject({
+    files: [{ target: HOOK, state: "reconfigured", backup: null }, ...each("installed", FILES).slice(1)],
+    fills: { prefixes: "feat,spec" },
+  });
+  expect(readText(dir, HOOK)).toContain("\nprefixes='feat,spec'\n");
+  expect(existsSync(join(dir, `${HOOK}.agent-gates-backup`))).toBe(false);
+
+  git(dir, ["add", "-A"]);
+  const start = commitAs(dir, "feat: start");
+  const remote = join(scratchDir(), "remote.git");
+  git(dir, ["clone", "-q", "--bare", dir, remote]);
+  git(dir, ["remote", "add", "origin", remote]);
+  commitAs(dir, "fix: change a thing");
+  const pushed = gitRan(dir, ["push", "-q", "origin", "HEAD:main"]);
+  expect([pushed.status, pushed.stderr.startsWith(`commit-msg: ${notListed("feat,spec")}\n`)]).toEqual([
+    1,
+    true,
+  ]);
+  expect(git(remote, ["rev-parse", "main"])).toBe(start);
+
+  const earlier = checkout();
+  install(earlier, ["commit-subject"]);
+  writeFiles(earlier, { [HOOK]: HOOK_V2 });
+  expect(installed(earlier, [])).toMatchObject({
+    files: [{ target: HOOK, state: "behind", backup: null }, ...each("installed", FILES).slice(1)],
+    fills: { prefixes: null },
+  });
+  expect(readText(earlier, HOOK)).toContain("\nprefixes=''\n");
+  expect(installed(earlier, [])).toMatchObject({ files: each("installed", FILES) });
+
+  const bare = checkout();
+  for (const args of [
+    ["commit-subject", "--prefixes", "feat,Fix"],
+    ["commit-subject", "--prefixes", "feat, fix"],
+    ["commit-subject", "--prefixes", "feat,,fix"],
+    ["commit-subject", "--prefixes", "feat,fix,"],
+  ])
+    expect(usageCode(bare, args)).toEqual([args, 2, "fill_malformed"]);
+  for (const args of [
+    ["commit-subject", "--prefixes"],
+    ["commit-subject", "--prefixes", "feat", "--prefixes", "fix"],
+    ["format", "--command", "true", "--prefixes", "feat"],
+    ["--prefixes", "feat"],
+  ])
+    expect(usageCode(bare, args)).toEqual([args, 2, "flag_misplaced"]);
+  expect(existsSync(join(bare, ".githooks"))).toBe(false);
 });

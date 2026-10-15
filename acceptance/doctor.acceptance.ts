@@ -70,6 +70,7 @@ test("AC-11 reports no gate, then every check passing", () => {
     ].map((name) => passing(name, "installed")),
     passing("hooksPath", "core.hooksPath is .githooks"),
     passing("prepare", NO_PACKAGE_JSON),
+    passing("commit prefixes", "none installed, so the gate allows its default set"),
     passing("no-comments languages", "javascript, as the tracked files need"),
     passing("no-comments backlog", "the tracked files hold no comment"),
   ]);

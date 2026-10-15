@@ -47,8 +47,11 @@ function fillOf(
   if (given === undefined) return null;
   const [value, ...more] = given;
   const used = gates.some((gate) => GATES[gate].some((file) => file.fills === fill));
+  const { flag, pattern } = FILLS[fill];
   if (value === undefined || value.trim() === "" || more.length > 0 || !used)
-    throw usageError("flag_misplaced", { flag: FILLS[fill].flag, usage });
+    throw usageError("flag_misplaced", { flag, usage });
+  if (pattern !== null && !pattern.matches.test(value))
+    throw usageError("fill_malformed", { flag, value, form: pattern.form, usage });
   return value;
 }
 

@@ -108,7 +108,7 @@ describe("the cli", () => {
     const set = cliIn(bare, "install", "format", "--setup", "pnpm install", "--command", "cargo fmt");
     expect([set.status, JSON.parse(set.stdout).result.fills]).toEqual([
       0,
-      { command: "cargo fmt", setup: "pnpm install" },
+      { command: "cargo fmt", setup: "pnpm install", prefixes: null },
     ]);
   });
 
@@ -127,10 +127,10 @@ describe("the cli", () => {
         meta: {
           names: ["lint-free"],
           usage:
-            "agent-gates install [<gate>...] [--command <format command>] [--setup <CI setup command>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)",
+            "agent-gates install [<gate>...] [--command <format command>] [--setup <CI setup command>] [--prefixes <a,b,c>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)",
         },
         resolve:
-          "agent-gates install [<gate>...] [--command <format command>] [--setup <CI setup command>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)",
+          "agent-gates install [<gate>...] [--command <format command>] [--setup <CI setup command>] [--prefixes <a,b,c>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)",
       },
     });
     expect(cli("doctor").stdout).toBe(before);

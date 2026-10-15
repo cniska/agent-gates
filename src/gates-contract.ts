@@ -27,49 +27,71 @@ export type FileState =
 
 export type WritableState = Exclude<FileState, "occupied">;
 
-export const FILL_NAMES = ["command", "setup"] as const;
+export const FILL_NAMES = ["command", "setup", "prefixes"] as const;
 
 export type Fill = (typeof FILL_NAMES)[number];
 
 export type Fills = { readonly [F in Fill]: string | null };
 
 export function eachFill<T>(of: (fill: Fill) => T): Readonly<Record<Fill, T>> {
-  return { command: of("command"), setup: of("setup") };
+  return { command: of("command"), setup: of("setup"), prefixes: of("prefixes") };
 }
 
 export const NO_FILLS: Fills = eachFill(() => null);
 
 type FillSpec = {
+  readonly gate: GateName;
   readonly flag: string;
+  readonly placeholder: string;
   readonly example: string;
   readonly check: string;
-  readonly offPath: { readonly state: "fail" | "warn"; readonly effect: string };
-  readonly unset: { readonly kind: "required" } | { readonly kind: "optional"; readonly detail: string };
+  readonly pattern: { readonly matches: RegExp; readonly form: string } | null;
+  readonly program: { readonly offPath: { readonly state: "fail" | "warn"; readonly effect: string } } | null;
+  readonly unset:
+    | { readonly kind: "required" }
+    | { readonly kind: "optional"; readonly detail: string }
+    | { readonly kind: "defaulted"; readonly detail: string };
 };
 
 export const FILLS: Readonly<Record<Fill, FillSpec>> = {
   command: {
+    gate: "format",
     flag: "--command",
+    placeholder: "<command>",
     example: "npm run lint:fix",
     check: "format command",
-    offPath: { state: "fail", effect: ", so the format hook refuses every commit" },
+    pattern: null,
+    program: { offPath: { state: "fail", effect: ", so the format hook refuses every commit" } },
     unset: { kind: "required" },
   },
   setup: {
+    gate: "format",
     flag: "--setup",
+    placeholder: "<command>",
     example: "mise install && pnpm install --frozen-lockfile",
     check: "CI setup",
-    offPath: { state: "warn", effect: " here, so CI may not find it either" },
+    pattern: null,
+    program: { offPath: { state: "warn", effect: " here, so CI may not find it either" } },
     unset: {
       kind: "optional",
       detail: "no setup command is installed, so the format workflow runs on a bare checkout",
     },
   },
+  prefixes: {
+    gate: "commit-subject",
+    flag: "--prefixes",
+    placeholder: "<a,b,c>",
+    example: "feat,fix,docs",
+    check: "commit prefixes",
+    pattern: { matches: /^[a-z]+(,[a-z]+)*$/, form: "lowercase words joined by commas" },
+    program: null,
+    unset: { kind: "defaulted", detail: "none installed, so the gate allows its default set" },
+  },
 };
 
 export function nameTheFill(fill: Fill): string {
-  const { flag, example } = FILLS[fill];
-  return `agent-gates install format ${flag} "<command>", such as ${flag} "${example}"`;
+  const { gate, flag, placeholder, example } = FILLS[fill];
+  return `agent-gates install ${gate} ${flag} "${placeholder}", such as ${flag} "${example}"`;
 }
 
 type GateVersion = { readonly version: number; readonly sha256: string };
@@ -385,10 +407,11 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
       source: "commit-msg",
       target: `${HOOKS_DIR}/commit-msg`,
       executable: true,
-      fills: null,
+      fills: "prefixes",
       versions: [
         { version: 1, sha256: "73ec5976bae1e77235a86ee02051f2d60c4abc0fe2d9d6dfd00e9599cfdafa46" },
         { version: 2, sha256: "79602ae373e09db09960aa1aa25cb36df35ed91a8c6780499e4434f082943d41" },
+        { version: 3, sha256: "946e91a80c62699b564b92e731cd3fa84caccbaa55bac450a85e7823232f5629" },
       ],
     },
     {
@@ -454,7 +477,7 @@ const GATE_CHOICES = [...GATE_NAMES, `${EACH_TRACKED_LANGUAGE} (each language th
   ", ",
 );
 
-export const INSTALL_USAGE = `agent-gates install [<gate>...] [${FILLS.command.flag} <format command>] [${FILLS.setup.flag} <CI setup command>], choosing from ${GATE_CHOICES}`;
+export const INSTALL_USAGE = `agent-gates install [<gate>...] [${FILLS.command.flag} <format command>] [${FILLS.setup.flag} <CI setup command>] [${FILLS.prefixes.flag} ${FILLS.prefixes.placeholder}], choosing from ${GATE_CHOICES}`;
 
 export const INSTALL_GATES = `agent-gates install <gate>..., choosing from ${GATE_CHOICES}`;
 

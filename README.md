@@ -23,11 +23,13 @@ agent-gates install commit-subject no-comments
 agent-gates doctor
 ```
 
+To allow other commit types than the default set, name them: `agent-gates install commit-subject --prefixes feat,fix,docs`.
+
 ## Gates
 
 | Gate | Hooks | Workflow | Refuses |
 | --- | --- | --- | --- |
-| `commit-subject` | `.githooks/commit-msg`, `.githooks/pre-push.d/commit-subject` | `commits.yml` | A subject that is not a Conventional Commit, is over 50 characters or is not ASCII, and any message body; on push, a `fixup!`, `squash!` or `amend!` commit |
+| `commit-subject` | `.githooks/commit-msg`, `.githooks/pre-push.d/commit-subject` | `commits.yml` | A subject that is not a Conventional Commit of an allowed type, is over 50 characters or is not ASCII, and any message body; on push, a `fixup!`, `squash!` or `amend!` commit |
 | `format` | `.githooks/pre-commit.d/format` | `format.yml` | A partly staged file the format command changes, and a failing command; anything else it formats into the commit |
 | `no-comments-<language>` | `.githooks/pre-commit.d/no-comments`, `.githooks/pre-push.d/no-comments` | `no-comments.yml` | A comment the change adds, other than a [kept form](#kept-comments) |
 
@@ -48,9 +50,9 @@ No gate judges a merge commit locally.
 
 ### Commit subjects
 
-Allowed types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `style`, `perf`, `build` and `ci`, with an optional lowercase scope and `!`.
+Allowed types, by default: `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style` and `test`, the set `@commitlint/config-conventional` allows, each with an optional lowercase scope and `!`. `agent-gates install commit-subject --prefixes <a,b,c>` replaces the set with the project's own, lowercase words joined by commas, such as `--prefixes feat,fix,docs`. Install writes the list into the hook as `prefixes='<a,b,c>'`, so it shows in the diff, and a reinstall without `--prefixes` keeps it. A refusal names the allowed types.
 
-`commits.yml` and the pre-push step check every non-merge commit a push or pull request brings. Set the repository's squash-merge message to the pull request title alone, because GitHub's default squash body is refused. Revert messages are refused too. The `commit-msg` hook lets a `fixup!`, `squash!` or `amend!` commit through, judging the subject it carries, and the push refuses it, so it is squashed before it leaves.
+`commits.yml` and the pre-push step check every non-merge commit a push or pull request brings. Set the repository's squash-merge message to the pull request title alone, because GitHub's default squash body is refused. Git's own `Revert "..."` message is refused too; a `revert:` subject passes. The `commit-msg` hook lets a `fixup!`, `squash!` or `amend!` commit through, judging the subject it carries, and the push refuses it, so it is squashed before it leaves.
 
 ### Format
 
@@ -120,8 +122,8 @@ Each command prints one JSON line. An error goes to stderr and exits 2 for `usag
 
 | Command | Does |
 | --- | --- |
-| `agent-gates install [<gate>...] [--command <format command>] [--setup <CI setup command>]` | Install the named gates, update the installed ones, and report each file's state before acting and the format and setup commands |
-| `agent-gates doctor` | Check each gate file, `core.hooksPath`, the `prepare` script and the format and CI setup commands; report each tracked language without its no-comments gate, each installed language with no files left to read, each of the project's own steps in `.githooks/pre-commit.d` or `pre-push.d` that no workflow runs, and the comment count; exit 1 on a failure |
+| `agent-gates install [<gate>...] [--command <format command>] [--setup <CI setup command>] [--prefixes <a,b,c>]` | Install the named gates, update the installed ones, and report each file's state before acting, the format and setup commands and the commit prefixes |
+| `agent-gates doctor` | Check each gate file, `core.hooksPath`, the `prepare` script and the format and CI setup commands, and report the commit prefixes; report each tracked language without its no-comments gate, each installed language with no files left to read, each of the project's own steps in `.githooks/pre-commit.d` or `pre-push.d` that no workflow runs, and the comment count; exit 1 on a failure |
 
 Gate file states:
 
@@ -133,7 +135,7 @@ Gate file states:
 | `changed` | matches no version | sets it aside as `<file>.agent-gates-backup`, then writes it |
 | `ahead` | written by a newer agent-gates | leaves it |
 | `not-executable` | a hook git would skip | writes it |
-| `reconfigured` | the current version, holding another command than `--command` or `--setup` gave | writes it |
+| `reconfigured` | the current version, holding another command or list than `--command`, `--setup` or `--prefixes` gave | writes it |
 | `occupied` | a hook without an `agent-gate` marker | refuses, writing nothing |
 
 `install` also refuses when `core.hooksPath` or `prepare` already hold something else, when `package.json` does not parse, when no gate is named and none is installed, and, for `format`, when no command is given or installed. `commit-subject` owns `.githooks/commit-msg`.

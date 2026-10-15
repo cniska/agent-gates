@@ -8,7 +8,7 @@ import { gatesDoctor } from "./doctor";
 import { ourMarker } from "./gate-marker";
 import { isGateName } from "./gate-parts";
 import { installGates, SOURCE_DIR } from "./gates";
-import { GATES, NO_FILLS } from "./gates-contract";
+import { FILL_NAMES, FILLS, GATES, NO_FILLS } from "./gates-contract";
 import { commit, refusalOf, removeScratchDirs, repo, scratchDir } from "./repo.test-support";
 
 const GITATTRIBUTES_V1 = "# agent-gate:githooks:1\n* linguist-generated\n";
@@ -63,6 +63,15 @@ describe("the gate registry", () => {
     }
   });
 
+  test("names for each fill the one gate whose file it is written into", () => {
+    for (const fill of FILL_NAMES) {
+      const holders = Object.entries(GATES)
+        .filter(([, held]) => held.some((file) => file.fills === fill))
+        .map(([gate]) => gate);
+      expect([fill, holders]).toEqual([fill, [FILLS[fill].gate]]);
+    }
+  });
+
   test("keeps every version a source was released at, the current bytes last", () => {
     for (const { source, versions } of files) {
       const text = readFileSync(join(SOURCE_DIR, source), "utf8");
@@ -106,6 +115,7 @@ describe("this repo", () => {
       "prepare",
       "format command",
       "CI setup",
+      "commit prefixes",
       "hook steps",
       "no-comments languages",
       "no-comments backlog",
@@ -127,7 +137,7 @@ describe("install", () => {
         { target: ".githooks/judge-push", state: "missing", backup: null },
       ],
       prepare: "absent",
-      fills: { command: null, setup: null },
+      fills: { command: null, setup: null, prefixes: null },
     });
     expect(hooksPath(dir)).toBe(".githooks");
     expect(modeOf(dir, ".githooks/commit-msg")).toBe(0o755);
@@ -151,6 +161,12 @@ describe("install", () => {
           detail: "no package.json, so each contributor runs git config core.hooksPath .githooks once",
           fix: null,
         },
+        {
+          name: "commit prefixes",
+          state: "ok",
+          detail: "none installed, so the gate allows its default set",
+          fix: null,
+        },
       ],
       failing: 0,
     });
@@ -163,7 +179,7 @@ describe("install", () => {
     expect(commit(dir, { subject: "Add the gates" })).toEqual({
       status: 1,
       stderr:
-        "commit-msg: subject is not a Conventional Commit (type(scope): what changed).\n  got: Add the gates\n",
+        "commit-msg: subject is not a Conventional Commit (type(scope): what changed); types: build,chore,ci,docs,feat,fix,perf,refactor,revert,style,test.\n  got: Add the gates\n",
     });
     expect(commit(dir, { subject: "feat: add the gates" })).toEqual({ status: 0, stderr: "" });
   });
@@ -249,6 +265,7 @@ describe("file states", () => {
       ".githooks/judge-push": "ok",
       hooksPath: "ok",
       prepare: "ok",
+      "commit prefixes": "ok",
     });
     expect(installGates(dir, [], NO_FILLS).files).toEqual([
       { target: ".githooks/commit-msg", state: "missing", backup: null },
@@ -296,8 +313,8 @@ describe("file states", () => {
     const dir = repo();
     installGates(dir, ["commit-subject"], NO_FILLS);
     const ahead = read(dir, ".githooks/commit-msg").replace(
-      "agent-gate:commit-subject:2",
-      "agent-gate:commit-subject:9",
+      /agent-gate:commit-subject:\d+/,
+      "agent-gate:commit-subject:999",
     );
     writeFileSync(join(dir, ".githooks/commit-msg"), ahead);
     expect(checks(dir)[".githooks/commit-msg"]).toBe("warn");

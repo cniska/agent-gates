@@ -106,7 +106,11 @@ export function install(dir: string, args: readonly string[]): void {
 
 export type FileResult = { readonly target: string; readonly state: string; readonly backup: string | null };
 
-type Fills = { readonly command: string | null; readonly setup: string | null };
+type Fills = {
+  readonly command: string | null;
+  readonly setup: string | null;
+  readonly prefixes: string | null;
+};
 
 export type InstallResult = {
   readonly gates: readonly string[];
@@ -115,7 +119,7 @@ export type InstallResult = {
   readonly fills?: Fills;
 };
 
-const NO_FILLS: Fills = { command: null, setup: null };
+const NO_FILLS: Fills = { command: null, setup: null, prefixes: null };
 
 export function each(state: string, targets: readonly string[]): FileResult[] {
   return targets.map((target) => ({ target, state, backup: null }));

@@ -80,7 +80,7 @@ const gatesRefusal = refusals<{
   },
   fill_missing: {
     message: ({ root, fill }) =>
-      `${root}'s format gate runs the project's own ${FILLS[fill].check}, and none was given with ${FILLS[fill].flag}`,
+      `${root}'s ${FILLS[fill].gate} gate runs the project's own ${FILLS[fill].check}, and none was given with ${FILLS[fill].flag}`,
     resolve: ({ fill }) => nameTheFill(fill),
   },
 });

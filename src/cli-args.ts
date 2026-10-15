@@ -12,6 +12,12 @@ export const usageError = usageErrors<{
   };
   readonly unknown_gate: { readonly names: readonly string[]; readonly usage: string };
   readonly flag_misplaced: { readonly flag: string; readonly usage: string };
+  readonly fill_malformed: {
+    readonly flag: string;
+    readonly value: string;
+    readonly form: string;
+    readonly usage: string;
+  };
 }>({
   unknown_command: {
     message: ({ name }) => `${name} is not an agent-gates command; agent-gates with no command lists them`,
@@ -24,7 +30,11 @@ export const usageError = usageErrors<{
   },
   flag_misplaced: {
     message: ({ flag }) =>
-      `agent-gates install takes ${flag} once, followed by a command, and only with a gate named that runs it`,
+      `agent-gates install takes ${flag} once, followed by its value, and only with a gate named that runs it`,
+    resolve: ({ usage }) => usage,
+  },
+  fill_malformed: {
+    message: ({ flag, value, form }) => `agent-gates install takes ${flag} as ${form}, and got ${value}`,
     resolve: ({ usage }) => usage,
   },
   unknown_gate: {

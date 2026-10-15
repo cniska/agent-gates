@@ -91,7 +91,7 @@ test("AC-30 refuses format without --command, which then installs a working gate
     gates: ["format"],
     files: each("missing", FILES),
     prepare: "absent",
-    fills: { command: "make fmt", setup: null },
+    fills: { command: "make fmt", setup: null, prefixes: null },
   });
   expect(git(dir, ["status", "--porcelain", "--untracked-files=all", "--", ":!.githooks", ":!.github"])).toBe(
     before,
@@ -261,4 +261,21 @@ test("AC-34 checks the commands' programs are on PATH, and fails a hook with no 
     fix: NAME_THE_COMMAND,
   });
   expect(check(dir, "format command")).toBeUndefined();
+  expect(check(dir, "commit prefixes")).toBeUndefined();
+
+  const subjects = checkout();
+  install(subjects, ["commit-subject"]);
+  expect(check(subjects, "commit prefixes")).toEqual({
+    name: "commit prefixes",
+    state: "ok",
+    detail: "none installed, so the gate allows its default set",
+    fix: null,
+  });
+  install(subjects, ["commit-subject", "--prefixes", "nosuchtool,feat"]);
+  expect(check(subjects, "commit prefixes")).toEqual({
+    name: "commit prefixes",
+    state: "ok",
+    detail: "`nosuchtool,feat`",
+    fix: null,
+  });
 });

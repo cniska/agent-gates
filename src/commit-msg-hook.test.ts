@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { SOURCE_DIR } from "./gates";
 import { removeScratchDirs, repo } from "./repo.test-support";
@@ -9,10 +9,10 @@ const dir = repo();
 
 afterAll(removeScratchDirs);
 
-function judged(message: string) {
+function judged(message: string, hook = HOOK) {
   const file = join(dir, "MESSAGE");
   writeFileSync(file, message);
-  const ran = Bun.spawnSync(["sh", HOOK, file], { cwd: dir, stderr: "pipe" });
+  const ran = Bun.spawnSync(["sh", hook, file], { cwd: dir, stderr: "pipe" });
   return { exitCode: ran.exitCode, stderr: ran.stderr.toString() };
 }
 
@@ -54,7 +54,7 @@ describe("the commit-msg hook", () => {
     expect(judged("Add a thing\n")).toEqual({
       exitCode: 1,
       stderr:
-        "commit-msg: subject is not a Conventional Commit (type(scope): what changed).\n  got: Add a thing\n",
+        "commit-msg: subject is not a Conventional Commit (type(scope): what changed); types: build,chore,ci,docs,feat,fix,perf,refactor,revert,style,test.\n  got: Add a thing\n",
     });
   });
 
@@ -66,5 +66,17 @@ describe("the commit-msg hook", () => {
     expect(judged(`feat: ${"x".repeat(44)}\n`).exitCode).toBe(0);
     expect(judged("feat: café\n").stderr).toContain("subject is not ASCII.");
     expect(judged("\n").stderr).toContain("subject is empty.");
+  });
+
+  test("allows only the installed prefixes once a list is installed", () => {
+    const listed = join(dir, "commit-msg");
+    writeFileSync(listed, readFileSync(HOOK, "utf8").replace("\nprefixes=''\n", "\nprefixes='feat,spec'\n"));
+    expect(judged("spec: say what holds\n", listed)).toEqual({ exitCode: 0, stderr: "" });
+    expect(judged("revert: drop a thing\n", HOOK)).toEqual({ exitCode: 0, stderr: "" });
+    expect(judged("revert: drop a thing\n", listed)).toEqual({
+      exitCode: 1,
+      stderr:
+        "commit-msg: subject is not a Conventional Commit (type(scope): what changed); types: feat,spec.\n  got: revert: drop a thing\n",
+    });
   });
 });
