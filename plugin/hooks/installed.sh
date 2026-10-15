@@ -54,3 +54,21 @@ formats_edits() {
   version="$(marker_version "$1/$FORMAT_HOOK" format)" || return 1
   [ "$version" -ge "$FORMAT_RUN_SINCE" ]
 }
+
+is_gates_path() {
+  local root="$1" value="$2"
+  case "$value" in
+    /*) ;;
+    *) value="$root/$value" ;;
+  esac
+  local gates pointed
+  gates="$(cd -P "$root/$HOOKS" 2>/dev/null && pwd)" || return 1
+  pointed="$(cd -P "$value" 2>/dev/null && pwd)" || return 1
+  [ "$pointed" = "$gates" ]
+}
+
+hooks_run() {
+  local root="$1" value
+  value="$(git -C "$root" config --type=path --get core.hooksPath 2>/dev/null)" || return 1
+  is_gates_path "$root" "$value"
+}

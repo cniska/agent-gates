@@ -15,6 +15,7 @@ When a session starts, the plugin tells the agent which gates the checkout insta
 
 - The note names the format command and the commit prefixes as the installed hooks hold them.
 - For each gate it says what the gate refuses at commit, and the note ends by saying that a refusal names what to fix. For `commit-subject` and the no-comments gates it also says whether a push is judged, which needs the gate's `.githooks/pre-push.d/` step installed. For `format` and the no-comments gates it says what the plugin does after an edit.
+- The gates run only while `core.hooksPath` resolves to `.githooks`. In a clone where it does not, the note names no refusal and says instead that the gates do not run until `core.hooksPath` is `.githooks`.
 - In a checkout without the gates, or outside one, it says nothing. Without `jq` it leaves only a note on stderr.
 
 ## The skip block

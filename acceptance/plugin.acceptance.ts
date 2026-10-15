@@ -386,17 +386,21 @@ function sessionStarted(cwd: string, env: Env = {}) {
   return shell(scratchDir(), SESSION_COMMAND, { CLAUDE_PLUGIN_ROOT: PLUGIN, ...env }, input);
 }
 
-function noted(lines: readonly string[]) {
+const WIRED =
+  "Each refusal names what to fix. The plugin denies a git command that skips the gates, such as `git commit --no-verify`.";
+
+const UNWIRED =
+  "They do not run in this clone until `core.hooksPath` is `.githooks`, so none refuses a commit or a push: `git config core.hooksPath .githooks` sets it. The plugin denies a git command that skips the gates, such as `git commit --no-verify`.";
+
+function noted(lines: readonly string[], closing = WIRED) {
   return {
     status: 0,
     stdout: `${JSON.stringify({
       hookSpecificOutput: {
         hookEventName: "SessionStart",
-        additionalContext: [
-          "cniska-gates: the gates installed in this checkout:",
-          ...lines,
-          "Each refusal names what to fix. The plugin denies a git command that skips the gates, such as `git commit --no-verify`.",
-        ].join("\n"),
+        additionalContext: ["cniska-gates: the gates installed in this checkout:", ...lines, closing].join(
+          "\n",
+        ),
       },
     })}\n`,
     stderr: "",
@@ -452,6 +456,37 @@ test("AC-51 tells the agent at session start which gates the checkout installs a
   rmSync(join(subjectOnly, ".githooks/pre-push.d/commit-subject"));
   expect(sessionStarted(subjectOnly, tools)).toEqual(
     noted([`- commit-subject: ${SUBJECT_AT_COMMIT} ${PUSH_UNJUDGED}`]),
+  );
+});
+
+test("AC-53 names no refusal at session start while core.hooksPath does not resolve to .githooks", () => {
+  const dir = checkout({ "src/a.ts": "export const a = 1;\n", "run.sh": "echo hi\n" });
+  install(dir, ["no-comments-javascript"]);
+  install(dir, ["no-comments-shell"]);
+  install(dir, ["format", "--command", "node 'fmt.cjs'"]);
+  install(dir, ["commit-subject", "--prefixes", "feat,fix"]);
+  const tools = bare(["bash", "git", "jq"]);
+  const unwired = noted(
+    [
+      "- format runs `node 'fmt.cjs'`: the plugin runs it after each edit.",
+      NO_COMMENTS_GATES,
+      "- commit-subject, allowing the types feat, fix.",
+    ],
+    UNWIRED,
+  );
+
+  git(dir, ["config", "--unset", "core.hooksPath"]);
+  expect(sessionStarted(join(dir, "src"), tools)).toEqual(unwired);
+  git(dir, ["config", "core.hooksPath", ".husky"]);
+  expect(sessionStarted(join(dir, "src"), tools)).toEqual(unwired);
+
+  git(dir, ["config", "core.hooksPath", "./.githooks/"]);
+  expect(sessionStarted(join(dir, "src"), tools)).toEqual(
+    noted([
+      `- format runs \`node 'fmt.cjs'\`: the plugin runs it after each edit, and ${AT_COMMIT_FORMATS}`,
+      `${NO_COMMENTS_GATES} At commit and at push, a change that adds a comment is refused: ${REMOVE_COMMENTS}`,
+      `- commit-subject, allowing the types feat, fix: ${SUBJECT_AT_COMMIT} ${SUBJECT_AT_PUSH}`,
+    ]),
   );
 });
 

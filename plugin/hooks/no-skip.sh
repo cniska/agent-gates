@@ -170,18 +170,6 @@ gated_root_of() {
   printf '%s' "$root"
 }
 
-is_gates_path() {
-  local root="$1" value="$2"
-  case "$value" in
-    /*) ;;
-    *) value="$root/$value" ;;
-  esac
-  local gates pointed
-  gates="$(cd -P "$root/$HOOKS" 2>/dev/null && pwd)" || return 1
-  pointed="$(cd -P "$value" 2>/dev/null && pwd)" || return 1
-  [ "$pointed" = "$gates" ]
-}
-
 is_hooks_path_key() (
   shopt -s nocasematch
   [[ "$1" == core.hookspath ]]
