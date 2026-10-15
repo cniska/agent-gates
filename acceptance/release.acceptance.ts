@@ -1,5 +1,14 @@
 import { afterEach, expect, test } from "bun:test";
-import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import {
   checkout,
@@ -114,7 +123,7 @@ test(
 );
 
 test(
-  "AC-47 the npm package runs its platform's binary, and refuses when the platform package is missing or cannot start",
+  "AC-47 the npm package runs its platform's binary, and refuses on another platform and when the platform package is missing or cannot start",
   () => {
     const dir = scratchDir();
     const assets = releaseAssets(join(dir, "assets"), compiledBinary(join(dir, "build")), TARGET);
@@ -131,6 +140,24 @@ test(
     symlinkSync(join(modules, "agent-gates", "bin", "agent-gates.cjs"), join(bin, "agent-gates"));
     const path = `${bin}:${pathOf(["node", "git"])}`;
     const project = checkout({ "notes.txt": "made-up content\n" });
+
+    const manifest = join(modules, "agent-gates", "package.json");
+    const shipped = readFileSync(manifest, "utf8");
+    writeFileSync(
+      manifest,
+      JSON.stringify({
+        ...JSON.parse(shipped),
+        optionalDependencies: { "@cniska/agent-gates-plan9-mips": "9.9.9" },
+      }),
+    );
+    const unsupported = run("agent-gates", ["--version"], project, { PATH: path });
+    expect([unsupported.status, unsupported.stdout]).toEqual([1, ""]);
+    expect(jsonLine(unsupported.stderr)).toMatchObject({
+      command: "agent-gates",
+      ok: false,
+      error: { kind: "refusal", code: "no_build_for_platform" },
+    });
+    writeFileSync(manifest, shipped);
 
     const missing = run("agent-gates", ["--version"], project, { PATH: path });
     expect([missing.status, missing.stdout]).toEqual([1, ""]);
