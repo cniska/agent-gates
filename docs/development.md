@@ -17,8 +17,9 @@ bin/agent-gates doctor
 
 - `bun run check` runs lint, typecheck, knip (an export, file or dependency nothing uses) and tests, and `.githooks/pre-commit.d/check` runs it before each commit.
 - `bun run acceptance` proves the criteria in [`SPEC.md`](../SPEC.md) through the CLI and the files it installs alone, as the spec's D-4 says; each test in `acceptance/` is named for the criteria it proves, and `src/spec.test.ts`, in the check, fails when the tests and the criteria do not cite each other.
-- `bun run format` formats `src/` and `acceptance/` with Biome, and the format gate runs it with the linter off before each commit and stages what it changes in the staged files, as [Format](gates.md#format) says.
+- `bun run format` formats `src/`, `acceptance/`, `scripts/` and `npm/` with Biome, and the format gate runs it with the linter off before each commit and stages what it changes in the staged files, as [Format](gates.md#format) says.
 - `scripts/build-compiled.sh <outfile>` compiles the CLI into one executable with every gate file inside it, the binary a release ships.
+- `scripts/release.sh patch|minor|major` bumps the version and tags it; `.github/workflows/release.yml` builds the tag into a GitHub release, the npm packages and a Homebrew repin, as [Releasing](releasing.md) says.
 - `bun run gates:bundle` bundles `gates/no-comments/*.cjs` from `src/`; the tests also run the bundled scanner under Node.
 - `.github/workflows/check.yml` runs the check and the acceptance suite on each push and pull request, and `commits.yml`, `format.yml` and `no-comments.yml` run the gates.
 

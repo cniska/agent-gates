@@ -1,6 +1,6 @@
 # agent-gates
 
-Installs commit gates into a project and judges their health. [`README.md`](README.md) lists every gate and what it refuses, and [`docs/`](docs/) holds the rest: how the gates judge, the commands, the plugin and development. [`SPEC.md`](SPEC.md) states what must hold and changes in the same commit as the behavior it describes.
+Installs commit gates into a project and judges their health. [`README.md`](README.md) lists every gate and what it refuses, and [`docs/`](docs/) holds the rest: how the gates judge, the commands, the plugin, development and releasing. [`SPEC.md`](SPEC.md) states what must hold and changes in the same commit as the behavior it describes.
 
 ## Rules
 

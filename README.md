@@ -49,3 +49,4 @@ Each gate refuses on commit and again in CI, and `commit-subject` and `no-commen
 - [Commands](docs/commands.md): `install` and `doctor`, their output, and the states of a gate file.
 - [Claude Code plugin](docs/plugin.md): what the plugin does and how to install it.
 - [Development](docs/development.md): setup, checks, layout and adding a language, for working on this repo.
+- [Releasing](docs/releasing.md): the release workflow, the owner's one-time setup and each release's steps.

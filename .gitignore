@@ -2,3 +2,4 @@
 node_modules/
 *.agent-gates-backup
 *.agent-gates-backup-*
+dist/

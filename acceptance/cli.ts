@@ -1,6 +1,7 @@
 import { expect } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -11,7 +12,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 const CLI = join(import.meta.dir, "..", "src", "cli.ts");
 
@@ -19,7 +20,9 @@ const MANIFEST = join(import.meta.dir, "..", "package.json");
 
 const BUILD_COMPILED = join(import.meta.dir, "..", "scripts", "build-compiled.sh");
 
-const SYSTEM_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
+export const SYSTEM_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
+
+const RELEASE_DOWNLOADS = "https://github.com/cniska/agent-gates/releases/latest/download";
 
 const IDENTITY =
   "[user]\n\tname = Acceptance\n\temail = acceptance@example.com\n[init]\n\tdefaultBranch = main\n";
@@ -84,12 +87,43 @@ export function agentGates(cwd: string, args: readonly string[], env: Env = {}):
 }
 
 export function compiledBinary(dir: string): string {
+  mkdirSync(dir, { recursive: true });
   const binary = join(dir, "agent-gates");
   const built = run("bash", [BUILD_COMPILED, binary], dir, {
     PATH: `${dirname(process.execPath)}:${SYSTEM_PATH}`,
   });
   if (built.status !== 0) throw new Error(`build-compiled.sh exited ${built.status}: ${built.stderr}`);
   return binary;
+}
+
+export function releaseAssets(dir: string, binary: string, target: string): string {
+  mkdirSync(dir, { recursive: true });
+  const tarball = join(dir, `agent-gates-${target}.tar.gz`);
+  const packed = run("tar", ["-czf", tarball, "-C", dirname(binary), basename(binary)], dir);
+  if (packed.status !== 0) throw new Error(`tar exited ${packed.status}: ${packed.stderr}`);
+  const digest = new Bun.CryptoHasher("sha256").update(readFileSync(tarball)).digest("hex");
+  writeFileSync(join(dir, `agent-gates-${target}.sha256`), `${digest}  agent-gates-${target}.tar.gz\n`);
+  return dir;
+}
+
+export function curlServing(bin: string, assets: string): string {
+  mkdirSync(bin, { recursive: true });
+  const curl = join(bin, "curl");
+  writeFileSync(
+    curl,
+    [
+      "#!/bin/sh",
+      "url=; out=",
+      'while [ "$#" -gt 0 ]; do case "$1" in -o) out="$2"; shift ;; https://*) url="$1" ;; esac; shift; done',
+      `file="${assets}/\${url##*/}"`,
+      `case "$url" in ${RELEASE_DOWNLOADS}/*) ;; *) exit 22 ;; esac`,
+      '[ -f "$file" ] || exit 22',
+      'cp "$file" "$out"',
+      "",
+    ].join("\n"),
+  );
+  chmodSync(curl, 0o755);
+  return bin;
 }
 
 export function jsonLine(text: string): unknown {
