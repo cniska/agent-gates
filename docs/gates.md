@@ -7,7 +7,7 @@ The files `agent-gates install` writes, how the hooks and workflows run them, an
 | Gate | Files in `.githooks/` | Workflow in `.github/workflows/` |
 | --- | --- | --- |
 | `commit-subject` | `commit-msg`, `pre-push`, `pre-push.d/commit-subject`, `judge-push` | `commits.yml` |
-| `format` | `pre-commit`, `pre-commit.d/format`, `ci-setup` | `format.yml` |
+| `format` | `pre-commit`, `pre-commit.d/format` | none |
 | `no-comments-<language>` | `pre-commit`, `pre-commit.d/no-comments`, `pre-push`, `pre-push.d/no-comments`, `judge-push`, `no-comments/scan.cjs`, `no-comments/<language>.cjs` | `no-comments.yml` |
 
 Every gate also installs `.githooks/.gitattributes`. A file two gates list is installed once and shared.
@@ -40,6 +40,6 @@ The hook runs the project's format command on each commit, then stages what it c
 
 agent-gates does not look for a formatter: `agent-gates install format --command "<command>"` names it, such as `--command "npm run lint:fix"` or `--command "cargo fmt"`, and install refuses `format` without one. Install writes the command into the hook as `command='<command>'`, so it shows in the diff, and a reinstall without `--command` keeps it.
 
-`format.yml` runs `.githooks/ci-setup`, then the hook with `--check`, which runs the command and refuses each tracked file it changes. `agent-gates install format --setup "<command>"` writes the project's setup into `.githooks/ci-setup`, such as `--setup "mise install && pnpm install --frozen-lockfile"`; every gate workflow that needs the project set up runs that one file, and a reinstall without `--setup` keeps it. Without one, the setup step does nothing.
+Formatting writes files, so the gate runs only where code is written, on commit. The hook with `--run` runs the command from the checkout's root and exits with its status, staging nothing. The gate installs no workflow: CI can only refuse, and the project's own check already refuses unformatted code.
 
-`doctor` fails when the format command's program is not on `PATH`, and warns when no setup command is installed or its program is not on `PATH`.
+`doctor` fails when the format command's program is not on `PATH`.

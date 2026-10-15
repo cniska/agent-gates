@@ -21,7 +21,7 @@ bin/agent-gates doctor
 - `scripts/build-compiled.sh <outfile>` compiles the CLI into one executable with every gate file inside it, the binary a release ships.
 - `scripts/release.sh patch|minor|major` bumps the version and tags it; `.github/workflows/release.yml` builds the tag into a GitHub release, the npm packages and a Homebrew repin, as [Releasing](releasing.md) says.
 - `bun run gates:bundle` bundles `gates/no-comments/*.cjs` from `src/`; the tests also run the bundled scanner under Node.
-- `.github/workflows/check.yml` runs the check and the acceptance suite on each push and pull request, and `commits.yml`, `format.yml` and `no-comments.yml` run the gates.
+- `.github/workflows/check.yml` runs the check and the acceptance suite on each push and pull request, and `commits.yml` and `no-comments.yml` run the gates.
 
 ## Layout
 

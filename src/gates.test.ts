@@ -109,8 +109,6 @@ describe("this repo", () => {
       ".githooks/pre-push.d/commit-subject",
       ".githooks/judge-push",
       ".githooks/pre-commit.d/format",
-      ".github/workflows/format.yml",
-      ".githooks/ci-setup",
       ".githooks/pre-commit",
       ".githooks/pre-commit.d/no-comments",
       ".githooks/pre-push.d/no-comments",
@@ -121,7 +119,6 @@ describe("this repo", () => {
       "hooksPath",
       "prepare",
       "format command",
-      "CI setup",
       "commit prefixes",
       "hook steps",
       "no-comments languages",
@@ -144,7 +141,7 @@ describe("install", () => {
         { target: ".githooks/judge-push", state: "missing", backup: null },
       ],
       prepare: "absent",
-      fills: { command: null, setup: null, prefixes: null },
+      fills: { command: null, prefixes: null },
     });
     expect(hooksPath(dir)).toBe(".githooks");
     expect(modeOf(dir, ".githooks/commit-msg")).toBe(0o755);

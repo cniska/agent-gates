@@ -27,14 +27,14 @@ export type FileState =
 
 export type WritableState = Exclude<FileState, "occupied">;
 
-export const FILL_NAMES = ["command", "setup", "prefixes"] as const;
+export const FILL_NAMES = ["command", "prefixes"] as const;
 
 export type Fill = (typeof FILL_NAMES)[number];
 
 export type Fills = { readonly [F in Fill]: string | null };
 
 export function eachFill<T>(of: (fill: Fill) => T): Readonly<Record<Fill, T>> {
-  return { command: of("command"), setup: of("setup"), prefixes: of("prefixes") };
+  return { command: of("command"), prefixes: of("prefixes") };
 }
 
 export const NO_FILLS: Fills = eachFill(() => null);
@@ -46,11 +46,8 @@ type FillSpec = {
   readonly example: string;
   readonly check: string;
   readonly pattern: { readonly matches: RegExp; readonly form: string } | null;
-  readonly program: { readonly offPath: { readonly state: "fail" | "warn"; readonly effect: string } } | null;
-  readonly unset:
-    | { readonly kind: "required" }
-    | { readonly kind: "optional"; readonly detail: string }
-    | { readonly kind: "defaulted"; readonly detail: string };
+  readonly program: { readonly offPathEffect: string } | null;
+  readonly unset: { readonly kind: "required" } | { readonly kind: "defaulted"; readonly detail: string };
 };
 
 export const FILLS: Readonly<Record<Fill, FillSpec>> = {
@@ -61,21 +58,8 @@ export const FILLS: Readonly<Record<Fill, FillSpec>> = {
     example: "npm run lint:fix",
     check: "format command",
     pattern: null,
-    program: { offPath: { state: "fail", effect: ", so the format hook refuses every commit" } },
+    program: { offPathEffect: ", so the format hook refuses every commit" },
     unset: { kind: "required" },
-  },
-  setup: {
-    gate: "format",
-    flag: "--setup",
-    placeholder: "<command>",
-    example: "mise install && pnpm install --frozen-lockfile",
-    check: "CI setup",
-    pattern: null,
-    program: { offPath: { state: "warn", effect: " here, so CI may not find it either" } },
-    unset: {
-      kind: "optional",
-      detail: "no setup command is installed, so the format workflow runs on a bare checkout",
-    },
   },
   prefixes: {
     gate: "commit-subject",
@@ -145,15 +129,6 @@ const JUDGE_PUSH: GateFile = {
   executable: false,
   fills: null,
   versions: [{ version: 1, sha256: "96729bf4e237ca325315e1fe8f456d03b2b2705c501a4488fe7976b178f535eb" }],
-};
-
-const CI_SETUP: GateFile = {
-  part: "githooks",
-  source: "ci-setup",
-  target: `${HOOKS_DIR}/ci-setup`,
-  executable: false,
-  fills: "setup",
-  versions: [{ version: 1, sha256: "a88657c6a17d02d0892f384b52a65a78ccb8f89f14d89f360098282a94b23547" }],
 };
 
 export const SCANNER_FILE: GateFile = {
@@ -449,17 +424,9 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
       versions: [
         { version: 1, sha256: "b8f15bc902e2269640aae3022e919b8822fc85340fbd42c1f28c2bb028a2451d" },
         { version: 2, sha256: "761da3bc5de74f1b9204a36f9581fed6196e720cd57b3c9ae207d9f32681adbe" },
+        { version: 3, sha256: "aa8b4000beb086ca52091754f1998bd186be4bf781720ccf9f023af2e0040fa6" },
       ],
     },
-    {
-      part: "format",
-      source: "format.yml",
-      target: `${WORKFLOWS_DIR}/format.yml`,
-      executable: false,
-      fills: null,
-      versions: [{ version: 1, sha256: "9c36f14b44ac04a79de9aef33319f89cd61c4e6d0f931bf8bb95ecab9cc89a53" }],
-    },
-    CI_SETUP,
     GITATTRIBUTES,
     PRE_COMMIT,
   ],
@@ -477,7 +444,7 @@ const GATE_CHOICES = [...GATE_NAMES, `${EACH_TRACKED_LANGUAGE} (each language th
   ", ",
 );
 
-export const INSTALL_USAGE = `agent-gates install [<gate>...] [${FILLS.command.flag} <format command>] [${FILLS.setup.flag} <CI setup command>] [${FILLS.prefixes.flag} ${FILLS.prefixes.placeholder}], choosing from ${GATE_CHOICES}`;
+export const INSTALL_USAGE = `agent-gates install [<gate>...] [${FILLS.command.flag} <format command>] [${FILLS.prefixes.flag} ${FILLS.prefixes.placeholder}], choosing from ${GATE_CHOICES}`;
 
 export const INSTALL_GATES = `agent-gates install <gate>..., choosing from ${GATE_CHOICES}`;
 

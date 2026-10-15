@@ -163,7 +163,6 @@ export type FileResult = { readonly target: string; readonly state: string; read
 
 type Fills = {
   readonly command: string | null;
-  readonly setup: string | null;
   readonly prefixes: string | null;
 };
 
@@ -174,7 +173,7 @@ export type InstallResult = {
   readonly fills?: Fills;
 };
 
-const NO_FILLS: Fills = { command: null, setup: null, prefixes: null };
+const NO_FILLS: Fills = { command: null, prefixes: null };
 
 export const COMMIT_SUBJECT_FILES = [
   ".githooks/commit-msg",

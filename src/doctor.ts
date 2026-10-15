@@ -97,8 +97,6 @@ function unsetHealth(fill: Fill): Health[] {
   switch (unset.kind) {
     case "required":
       return [];
-    case "optional":
-      return [{ name: check, state: "warn", detail: unset.detail, fix: nameTheFill(fill) }];
     case "defaulted":
       return [{ name: check, state: "ok", detail: unset.detail, fix: null }];
     default:
@@ -116,8 +114,8 @@ function fillHealth(fill: Fill, value: string | null): Health[] {
   return [
     {
       name: check,
-      state: program.offPath.state,
-      detail: `\`${value}\`, but ${named} is not on PATH${program.offPath.effect}`,
+      state: "fail",
+      detail: `\`${value}\`, but ${named} is not on PATH${program.offPathEffect}`,
       fix: `install ${named}, or ${nameTheFill(fill)}`,
     },
   ];

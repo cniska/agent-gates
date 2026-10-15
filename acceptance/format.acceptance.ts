@@ -10,7 +10,6 @@ import {
   doctor,
   each,
   git,
-  githubStep,
   gitRan,
   install,
   installed,
@@ -18,7 +17,7 @@ import {
   readText,
   refuses,
   removeScratch,
-  stepScript,
+  shell,
   usageCode,
   writeFiles,
 } from "./cli";
@@ -31,21 +30,10 @@ const HOOK = ".githooks/pre-commit.d/format";
 
 const QUOTED = 'say "hi"\\\tnow.txt';
 
-const WORKFLOW = ".github/workflows/format.yml";
-
-const SETUP = ".githooks/ci-setup";
-
-const FILES = [HOOK, WORKFLOW, SETUP, ".githooks/.gitattributes", ".githooks/pre-commit"];
+const FILES = [HOOK, ".githooks/.gitattributes", ".githooks/pre-commit"];
 
 const NAME_THE_COMMAND =
   'agent-gates install format --command "<command>", such as --command "npm run lint:fix"';
-
-const NAME_THE_SETUP =
-  'agent-gates install format --setup "<command>", such as --setup "mise install && pnpm install --frozen-lockfile"';
-
-const SETUP_STEP = "Set up the project as agent-gates install --setup named";
-
-const CHECK_STEP = "Run the format command the hook installs, and refuse what it changes";
 
 function formatted(files: Readonly<Record<string, string>> = {}): string {
   const dir = checkout({ "fmt.sh": UPPERCASE, ...files });
@@ -57,10 +45,6 @@ function formatted(files: Readonly<Record<string, string>> = {}): string {
 
 function commitStaged(dir: string) {
   return committing(dir, ["-q", "-m", "feat: change"]);
-}
-
-function stepRun(dir: string, name: string): string {
-  return stepScript(readText(dir, WORKFLOW), name);
 }
 
 test("AC-30 refuses format without --command, which then installs a working gate", () => {
@@ -84,8 +68,12 @@ test("AC-30 refuses format without --command, which then installs a working gate
     gates: ["format"],
     files: each("missing", FILES),
     prepare: "absent",
-    fills: { command: "make fmt", setup: null, prefixes: null },
+    fills: { command: "make fmt", prefixes: null },
   });
+  expect([existsSync(join(dir, ".github")), existsSync(join(dir, ".githooks/ci-setup"))]).toEqual([
+    false,
+    false,
+  ]);
   expect(git(dir, ["status", "--porcelain", "--untracked-files=all", "--", ":!.githooks", ":!.github"])).toBe(
     before,
   );
@@ -97,16 +85,16 @@ test("AC-30 refuses format without --command, which then installs a working gate
   expect(git(dir, ["show", "HEAD:a.txt"])).toBe("HELLO");
 });
 
-test("AC-31 keeps the commands a reinstall is not given, and rewrites one it is", () => {
+test("AC-31 keeps the command a reinstall is not given, and rewrites one it is", () => {
   const dir = checkout();
-  install(dir, ["format", "--command", "sh fmt.sh", "--setup", "pnpm install"]);
+  install(dir, ["format", "--command", "sh fmt.sh"]);
   expect(installed(dir, [])).toMatchObject({
     files: each("installed", FILES),
-    fills: { command: "sh fmt.sh", setup: "pnpm install" },
+    fills: { command: "sh fmt.sh" },
   });
   expect(installed(dir, ["format", "--command", "cargo fmt"])).toMatchObject({
     files: [{ target: HOOK, state: "reconfigured", backup: null }, ...each("installed", FILES).slice(1)],
-    fills: { command: "cargo fmt", setup: "pnpm install" },
+    fills: { command: "cargo fmt" },
   });
   expect(readText(dir, HOOK)).toContain("\ncommand='cargo fmt'\n");
   expect(readdirSync(join(dir, ".githooks/pre-commit.d"))).toEqual(["format"]);
@@ -114,13 +102,13 @@ test("AC-31 keeps the commands a reinstall is not given, and rewrites one it is"
   const bare = checkout();
   for (const args of [
     ["--command", "cargo fmt"],
-    ["commit-subject", "--setup", "pnpm install"],
+    ["commit-subject", "--command", "cargo fmt"],
     ["format", "--command"],
-    ["format", "--setup"],
     ["format", "--command", "x", "--command", "y"],
-    ["format", "--command", "x", "--setup", "a", "--setup", "b"],
   ])
     expect(usageCode(bare, args)).toEqual([args, 2, "flag_misplaced"]);
+  const setup = ["format", "--command", "x", "--setup", "pnpm install"];
+  expect(usageCode(bare, setup)).toEqual([setup, 2, "unknown_gate"]);
   expect(existsSync(join(bare, ".githooks"))).toBe(false);
 });
 
@@ -197,31 +185,20 @@ test("AC-32 formats the commit, refusing a partly staged file the command change
   expect(git(dir, ["show", "HEAD:a.txt"])).toBe("merged");
 });
 
-test("AC-33 runs the CI setup, then refuses unformatted files", () => {
-  const dir = formatted({ "a.txt": "A\n" });
-  const setup = stepRun(dir, SETUP_STEP);
-  expect(setup).toBe(`sh ${SETUP}`);
-  expect(githubStep(dir, setup, {})).toEqual({ status: 0, stdout: "", stderr: "" });
-  expect(existsSync(join(dir, "out.log"))).toBe(false);
-  install(dir, ["format", "--setup", "echo set up > out.log"]);
-  expect(githubStep(dir, setup, {})).toEqual({ status: 0, stdout: "", stderr: "" });
-  expect(readText(dir, "out.log")).toBe("set up\n");
-  git(dir, ["add", "-A"]);
-  bypassing(dir, ["commit", "-qm", "chore: set up"]);
-
-  const formatCheck = stepRun(dir, CHECK_STEP);
-  expect(githubStep(dir, formatCheck, {})).toEqual({ status: 0, stdout: "", stderr: "" });
+test("AC-33 runs the command from the checkout root in --run, staging nothing", () => {
+  const dir = formatted({ "a.txt": "A\n", "sub/keep.txt": "keep\n" });
   writeFiles(dir, { "b.txt": "b\n" });
   git(dir, ["add", "b.txt"]);
-  bypassing(dir, ["commit", "-qm", "chore: add b"]);
-  expect(githubStep(dir, formatCheck, {})).toEqual({
-    status: 1,
-    stdout: "",
-    stderr: "format: `sh fmt.sh` changes these files; run it and commit the result:\n  b.txt\n",
-  });
+  writeFiles(dir, { "b.txt": "bc\n" });
+  expect(shell(join(dir, "sub"), `sh ../${HOOK} --run`)).toEqual({ status: 0, stdout: "", stderr: "" });
+  expect([readText(dir, "b.txt"), readText(dir, "sub/keep.txt")]).toEqual(["BC\n", "keep\n"]);
+  expect([git(dir, ["status", "--porcelain"]), git(dir, ["show", ":b.txt"])]).toEqual(["AM b.txt", "b"]);
+
+  writeFiles(dir, { "fmt.sh": "echo broken >&2\nexit 3\n" });
+  expect(shell(dir, `sh ${HOOK} --run`)).toEqual({ status: 3, stdout: "", stderr: "broken\n" });
 });
 
-test("AC-34 checks the commands' programs are on PATH, and fails a hook with no command", () => {
+test("AC-34 checks the command's program is on PATH, and fails a hook with no command", () => {
   const dir = checkout();
   install(dir, ["format", "--command", "no-such-formatter --write"]);
   expect(doctor(dir).status).toBe(1);
@@ -232,20 +209,9 @@ test("AC-34 checks the commands' programs are on PATH, and fails a hook with no 
       "`no-such-formatter --write`, but no-such-formatter is not on PATH, so the format hook refuses every commit",
     fix: `install no-such-formatter, or ${NAME_THE_COMMAND}`,
   });
-  expect(check(dir, "CI setup")).toEqual({
-    name: "CI setup",
-    state: "warn",
-    detail: "no setup command is installed, so the format workflow runs on a bare checkout",
-    fix: NAME_THE_SETUP,
-  });
-  install(dir, ["format", "--command", "sh fmt.sh", "--setup", "no-such-tool install"]);
+  install(dir, ["format", "--command", "sh fmt.sh"]);
   expect(check(dir, "format command")?.state).toBe("ok");
-  expect(check(dir, "CI setup")).toEqual({
-    name: "CI setup",
-    state: "warn",
-    detail: "`no-such-tool install`, but no-such-tool is not on PATH here, so CI may not find it either",
-    fix: `install no-such-tool, or ${NAME_THE_SETUP}`,
-  });
+  expect(doctor(dir).checks.filter(({ state }) => state !== "ok")).toEqual([]);
   writeFiles(dir, { [HOOK]: readText(dir, HOOK).replace("command='sh fmt.sh'", "command=''") });
   expect(check(dir, HOOK)).toEqual({
     name: HOOK,

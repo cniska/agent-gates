@@ -1,6 +1,6 @@
 # agent-gates
 
-Gate your agents' work and save them round trips. A coding agent excuses a workaround in a comment, writes a commit message nobody can scan, or commits unformatted code, and a reviewer reading the diff tends to accept it. agent-gates installs git hooks that refuse such a commit locally and GitHub workflows that refuse it again in CI, for every contributor. It judges the commit only, and leaves how an agent works, and what it records, to other tools.
+Gate your agents' work and save them round trips. A coding agent excuses a workaround in a comment, writes a commit message nobody can scan, or commits unformatted code, and a reviewer reading the diff tends to accept it. agent-gates installs git hooks that refuse such a commit locally, for every contributor, and GitHub workflows that refuse a bad subject or an added comment again in CI. It judges the commit only, and leaves how an agent works, and what it records, to other tools.
 
 - `agent-gates install` writes the gates into the project, which commits them, so contributors and CI are gated without installing agent-gates.
 - `agent-gates doctor` judges their health.
@@ -30,7 +30,7 @@ agent-gates doctor
 | Gate | Refuses |
 | --- | --- |
 | `commit-subject` | A subject that is not a Conventional Commit of an allowed type, is over 50 characters or is not ASCII, and any message body; on push and in CI, a `fixup!`, `squash!` or `amend!` commit |
-| `format` | A commit the project's format command fails on, and a partly staged file the command changes, formatting the rest into the commit; in CI, each tracked file the command would change |
+| `format` | A commit the project's format command fails on, and a partly staged file the command changes, formatting the rest into the commit |
 | `no-comments-javascript` | An added comment in JavaScript or TypeScript, and a file Babel cannot parse |
 | `no-comments-dart` | An added comment in Dart, and a file that does not parse |
 | `no-comments-sql` | An added comment in PostgreSQL, and a file that does not parse |
@@ -38,7 +38,7 @@ agent-gates doctor
 | `no-comments-rust` | An added comment in Rust, and a file that does not parse |
 | `no-comments-python` | An added comment in Python, and a file that does not parse |
 
-Each gate refuses on commit and again in CI, and `commit-subject` and `no-comments` also on push. Each `no-comments` gate also refuses every added doc comment, suppression, formatter hint, tool setting and test expectation; only a shebang, a gate marker and the few [forms a toolchain reads](docs/no-comments.md#kept-comments) are kept.
+Each gate refuses on commit, and `commit-subject` and `no-comments` also on push and again in CI. `format` never runs in CI: it formats, so it runs where code is written, and the project's own check refuses unformatted code there. Each `no-comments` gate also refuses every added doc comment, suppression, formatter hint, tool setting and test expectation; only a shebang, a gate marker and the few [forms a toolchain reads](docs/no-comments.md#kept-comments) are kept.
 
 ## Claude Code plugin
 
