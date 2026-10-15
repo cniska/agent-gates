@@ -174,7 +174,7 @@ bin/agent-gates doctor
 ```
 
 - `mise install` sets up the clone as [Install](#install) says, and the `bun install` its postinstall runs calls the `prepare` script, which points `core.hooksPath` at `.githooks/`.
-- `agent-worktree create <name>` makes a task worktree and runs `scripts/worktree-setup.sh` in it, which installs the same way without linking the CLI.
+- `agent-worktree create <name>` makes a task worktree and runs its `.worktree-hooks/setup` hook, which installs the same way without linking the CLI.
 - `.githooks/` holds the commit-subject, format and no-comments gates this repo installs on itself, and `bin/agent-gates doctor` reports their health.
 
 ### Checks
