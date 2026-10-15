@@ -39,6 +39,9 @@ no_comments_line() {
   done
   [ -n "$gates" ] || return 0
   local after_edit="- $gates: after each edit the plugin names the comments the edit added."
+  if ! scans_edits "$root"; then
+    after_edit="- $gates: the plugin does not name the comments an edit added until \`agent-gates install\` updates the scanner."
+  fi
   if [ "$running" = no ]; then
     lines+=("$after_edit")
     return 0

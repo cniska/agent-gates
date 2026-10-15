@@ -114,12 +114,22 @@ test("AC-37 leaves only a note when it cannot judge the edit", () => {
 
   writeFiles(dir, {
     ".githooks/no-comments/scan.cjs":
-      "process.stderr.write('no-comments: too old');\nprocess.exitCode = 2;\n",
+      "// agent-gate:no-comments:29\nprocess.stderr.write('no-comments: broken');\nprocess.exitCode = 2;\n",
   });
   expect(edited(dir, file)).toEqual({
     ...QUIET,
     stderr:
-      "cniska-gates: the no-comments scanner exited 2, so the edit's comments were not judged: no-comments: too old\n",
+      "cniska-gates: the no-comments scanner exited 2, so the edit's comments were not judged: no-comments: broken\n",
+  });
+
+  writeFiles(dir, {
+    ".githooks/no-comments/scan.cjs":
+      "// agent-gate:no-comments:28\nprocess.stderr.write('no-comments: ran');\nprocess.exitCode = 1;\n",
+  });
+  expect(edited(dir, file)).toEqual({
+    ...QUIET,
+    stderr:
+      "cniska-gates: .githooks/no-comments/scan.cjs has no --file before agent-gate:no-comments:29, so the edit's comments were not judged; agent-gates install updates it\n",
   });
 });
 
@@ -446,6 +456,14 @@ test("AC-51 tells the agent at session start which gates the checkout installs a
     noted([
       `- format runs \`make fmt\`: the plugin does not run it after an edit until \`agent-gates install\` updates the hook; ${AT_COMMIT_FORMATS}`,
       `${NO_COMMENTS_GATES} At commit, a change that adds a comment is refused: ${REMOVE_COMMENTS} ${PUSH_UNJUDGED}`,
+    ]),
+  );
+
+  writeFiles(dir, { ".githooks/no-comments/scan.cjs": "// agent-gate:no-comments:28\n" });
+  expect(sessionStarted(dir, tools)).toEqual(
+    noted([
+      `- format runs \`make fmt\`: the plugin does not run it after an edit until \`agent-gates install\` updates the hook; ${AT_COMMIT_FORMATS}`,
+      `- no-comments-javascript, no-comments-shell: the plugin does not name the comments an edit added until \`agent-gates install\` updates the scanner. At commit, a change that adds a comment is refused: ${REMOVE_COMMENTS} ${PUSH_UNJUDGED}`,
     ]),
   );
 

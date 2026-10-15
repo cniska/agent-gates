@@ -60,6 +60,10 @@ format_step() {
 scan_step() {
   local root="$1" file="$2"
   [ -f "$root/$SCANNER" ] || return 0
+  if ! scans_edits "$root"; then
+    note "$SCANNER has no --file before $MARKER_TAG:no-comments:$FILE_SCAN_SINCE, so the edit's comments were not judged; agent-gates install updates it"
+    return 0
+  fi
   if ! node --version >/dev/null 2>&1; then
     note "node is not on PATH, so the edit's comments were not judged"
     return 0

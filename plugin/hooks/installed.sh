@@ -12,6 +12,7 @@ readonly NO_COMMENTS_PUSH_STEP="$PUSH_STEPS/no-comments"
 readonly ADAPTERS="$HOOKS/no-comments"
 readonly SCANNER="$ADAPTERS/scan.cjs"
 readonly FORMAT_RUN_SINCE=3
+readonly FILE_SCAN_SINCE=29
 readonly MARKER_TAG="agent-gate"
 readonly QUOTE="'"
 readonly ESCAPED_QUOTE="'\\''"
@@ -53,6 +54,12 @@ formats_edits() {
   local version
   version="$(marker_version "$1/$FORMAT_HOOK" format)" || return 1
   [ "$version" -ge "$FORMAT_RUN_SINCE" ]
+}
+
+scans_edits() {
+  local version
+  version="$(marker_version "$1/$SCANNER" no-comments)" || return 1
+  [ "$version" -ge "$FILE_SCAN_SINCE" ]
 }
 
 is_gates_path() {
