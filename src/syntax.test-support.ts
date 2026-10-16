@@ -1,5 +1,6 @@
 import { parse } from "@babel/parser";
 import { isNode, type Node } from "@babel/types";
+import { invariant } from "./assert";
 
 function* nodesOf(text: string): Iterable<Node> {
   yield* walk(parse(text, { sourceType: "module", plugins: ["typescript"] }).program);
@@ -85,21 +86,50 @@ export function readsEnv(text: string): boolean {
   return [...nodesOf(text)].some(isEnvRead);
 }
 
-function isTestCall(callee: Node): boolean {
-  return (
-    (callee.type === "Identifier" && callee.name === "test") ||
-    (callee.type === "MemberExpression" &&
-      callee.object.type === "Identifier" &&
-      callee.object.name === "test")
-  );
+const TEST = "test";
+
+type Kind = "test" | "suite";
+
+const KINDS: ReadonlyMap<string, Kind> = new Map([
+  [TEST, "test"],
+  ["describe", "suite"],
+]);
+
+export type TestCall =
+  | { readonly kind: "test"; readonly name: string | null; readonly modifier: string | null }
+  | { readonly kind: "suite"; readonly name: string | null; readonly modifier: string };
+
+function chainOf(callee: Node): readonly Node[] {
+  if (callee.type === "CallExpression") return [callee, ...chainOf(callee.callee)];
+  if (callee.type === "MemberExpression") return [callee, ...chainOf(callee.object)];
+  return [callee];
 }
 
-export function testNamesOf(text: string): readonly (string | null)[] {
-  const names: (string | null)[] = [];
+function sourceOf(text: string, node: Node): string {
+  const { start, end } = node;
+  invariant(start != null && end != null, `Babel locates the ${node.type}`);
+  return text.slice(start, end);
+}
+
+export function testCallsOf(text: string): readonly TestCall[] {
+  const calls: TestCall[] = [];
+  const factories = new Set<Node>();
   for (const node of nodesOf(text)) {
-    if (node.type !== "CallExpression" || !isTestCall(node.callee)) continue;
-    const [name] = node.arguments;
-    names.push(name?.type === "StringLiteral" ? name.value : null);
+    if (node.type !== "CallExpression" || factories.has(node)) continue;
+    const { callee } = node;
+    const [first] = node.arguments;
+    const name = first?.type === "StringLiteral" ? first.value : null;
+    if (callee.type === "Identifier") {
+      if (callee.name === TEST) calls.push({ kind: "test", name, modifier: null });
+      continue;
+    }
+    const chain = chainOf(callee);
+    const root = chain.at(-1);
+    if (root?.type !== "Identifier") continue;
+    const kind = KINDS.get(root.name);
+    if (kind === undefined) continue;
+    for (const link of chain) if (link.type === "CallExpression") factories.add(link);
+    calls.push({ kind, name, modifier: sourceOf(text, callee) });
   }
-  return names;
+  return calls;
 }

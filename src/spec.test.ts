@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { importsOf, testNamesOf } from "./syntax.test-support";
+import { importsOf, type TestCall, testCallsOf } from "./syntax.test-support";
 
 const ROOT = join(import.meta.dir, "..");
 
@@ -71,12 +71,18 @@ function undefinedMentions(spec: string, defined: readonly Defined[]): readonly 
     .map((id) => `${id} is mentioned but not defined`);
 }
 
-function testCitations(criteria: readonly string[], names: readonly (string | null)[]): readonly string[] {
+function testCitations(criteria: readonly string[], tests: readonly TestCall[]): readonly string[] {
   const problems: string[] = [];
   const proven = new Set<string>();
-  for (const name of names) {
+  for (const { kind, name, modifier } of tests) {
     if (name === null) {
-      problems.push("an acceptance test's name is not a string literal");
+      problems.push(`an acceptance ${kind}'s name is not a string literal`);
+      continue;
+    }
+    if (modifier !== null) {
+      problems.push(
+        `acceptance ${kind} "${name}" is called as ${modifier}; only a plain test proves a criterion`,
+      );
       continue;
     }
     const cited = NAMED_CRITERIA.exec(name)?.[0].trim().split(" ") ?? [];
@@ -89,24 +95,24 @@ function testCitations(criteria: readonly string[], names: readonly (string | nu
   }
   return [
     ...problems,
-    ...criteria.filter((id) => !proven.has(id)).map((id) => `${id} has no acceptance test or todo`),
+    ...criteria.filter((id) => !proven.has(id)).map((id) => `${id} has no acceptance test`),
   ];
 }
 
 function citationProblems(spec: string, sources: readonly string[]): readonly string[] {
   const defined = definedIn(spec);
-  const names = sources.flatMap(testNamesOf);
+  const tests = sources.flatMap(testCallsOf);
   const criteria = defined.filter(({ id }) => familyOf(id) === "AC").map(({ id }) => id);
   const empty = [
     ...(criteria.length === 0 ? ["the spec defines no acceptance criterion"] : []),
-    ...(names.length === 0 ? ["the acceptance suite holds no test"] : []),
+    ...(tests.length === 0 ? ["the acceptance suite holds no test"] : []),
   ];
   if (empty.length > 0) return empty;
   return [
     ...numbering(defined.map(({ id }) => id)),
     ...criteriaCitations(defined),
     ...undefinedMentions(spec, defined),
-    ...testCitations(criteria, names),
+    ...testCitations(criteria, tests),
   ];
 }
 
@@ -128,7 +134,7 @@ const SPEC = `
 
 const PROVEN = `test("AC-1 it does one thing", () => {});`;
 
-const TESTS = [PROVEN, `test.todo("AC-2 it does another");`];
+const TESTS = [PROVEN, `test("AC-2 it does another", () => {});`];
 
 describe("the spec and the acceptance suite", () => {
   test("cite each other completely", () => {
@@ -183,7 +189,7 @@ describe("the citation check", () => {
   });
 
   test("flags a test citing a criterion the spec does not define", () => {
-    expect(citationProblems(SPEC, [...TESTS, `test.todo("AC-1 AC-9 it does more");`])).toEqual([
+    expect(citationProblems(SPEC, [...TESTS, `test("AC-1 AC-9 it does more", () => {});`])).toEqual([
       'acceptance test "AC-1 AC-9 it does more" cites AC-9, which the spec does not define',
     ]);
   });
@@ -194,8 +200,53 @@ describe("the citation check", () => {
     ]);
   });
 
-  test("flags a criterion with neither a test nor a todo", () => {
-    expect(citationProblems(SPEC, [PROVEN])).toEqual(["AC-2 has no acceptance test or todo"]);
+  test("flags a criterion with no test", () => {
+    expect(citationProblems(SPEC, [PROVEN])).toEqual(["AC-2 has no acceptance test"]);
+  });
+
+  test("flags a todo, a skipped or a focused test as not proving its criterion", () => {
+    expect(citationProblems(SPEC, [PROVEN, `test.todo("AC-2 it does another");`])).toEqual([
+      'acceptance test "AC-2 it does another" is called as test.todo; only a plain test proves a criterion',
+      "AC-2 has no acceptance test",
+    ]);
+    expect(citationProblems(SPEC, [PROVEN, `test.skip("AC-2 it does another", () => {});`])).toEqual([
+      'acceptance test "AC-2 it does another" is called as test.skip; only a plain test proves a criterion',
+      "AC-2 has no acceptance test",
+    ]);
+    expect(citationProblems(SPEC, [PROVEN, `test["only"]("AC-2 it does another", () => {});`])).toEqual([
+      'acceptance test "AC-2 it does another" is called as test["only"]; only a plain test proves a criterion',
+      "AC-2 has no acceptance test",
+    ]);
+    expect(
+      citationProblems(SPEC, [PROVEN, `test.skip.each([[1]])("AC-2 it does another", () => {});`]),
+    ).toEqual([
+      'acceptance test "AC-2 it does another" is called as test.skip.each([[1]]); only a plain test proves a criterion',
+      "AC-2 has no acceptance test",
+    ]);
+  });
+
+  test("flags a test inside a skipped suite as not proving its criterion", () => {
+    const skipped = `describe.skip("again", () => { test("AC-2 it does another", () => {}); });`;
+    expect(citationProblems(SPEC, [PROVEN, skipped])).toEqual([
+      'acceptance suite "again" is called as describe.skip; only a plain test proves a criterion',
+    ]);
+    const conditional = `describe.if(false)("again", () => { test("AC-2 it does another", () => {}); });`;
+    expect(citationProblems(SPEC, [PROVEN, conditional])).toEqual([
+      'acceptance suite "again" is called as describe.if(false); only a plain test proves a criterion',
+    ]);
+    const chained = `describe.skip.only("again", () => { test("AC-2 it does another", () => {}); });`;
+    expect(citationProblems(SPEC, [PROVEN, chained])).toEqual([
+      'acceptance suite "again" is called as describe.skip.only; only a plain test proves a criterion',
+    ]);
+    const table = `describe.skip.each([[1]])("again", () => { test("AC-2 it does another", () => {}); });`;
+    expect(citationProblems(SPEC, [PROVEN, table])).toEqual([
+      'acceptance suite "again" is called as describe.skip.each([[1]]); only a plain test proves a criterion',
+    ]);
+  });
+
+  test("passes a test inside a plain suite", () => {
+    const suite = `describe("again", () => { test("AC-2 it does another", () => {}); });`;
+    expect(citationProblems(SPEC, [PROVEN, suite])).toEqual([]);
   });
 
   test("flags an id that is not a family and a whole number", () => {
