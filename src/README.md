@@ -21,11 +21,12 @@ Only an entry, such as `cli.ts`, reads the environment; it passes what a module 
 | --- | --- |
 | `cli` | Dispatch a command and print its result or error as JSON |
 | `install` | The `install` command |
-| `doctor` | Report the installed gates' health: their files, the hooks path, `prepare`, the format command, the commit prefixes, the project's own hook steps no workflow runs, the comments tracked files already hold, and the secrets they hold that `.no-secrets-allow` does not name |
+| `doctor` | Report the installed gates' health: their files, the hooks path, `prepare`, the format command, the commit prefixes, the project's own hook steps no workflow runs, the comments tracked files already hold, the secrets they hold that `.no-secrets-allow` does not name, and the unpinned actions their workflow and action files hold |
 | `gates` | The registry of gate files, their text embedded in the build, the commands and prefixes install writes into them, and installing them into a project |
-| `gate` | Gate names and parts, the marker an installed file carries, and bundling the `no-comments` and `no-secrets` scanners into `gates/` |
+| `gate` | Gate names and parts, the marker an installed file carries, and bundling the `no-comments`, `no-secrets` and `pinned-actions` scanners into `gates/` |
 | `no-comments` | The scanner a `no-comments` gate runs: route a file to its language, read its comments, judge a change and report findings |
 | `no-secrets` | The scanner a `no-secrets` gate runs: gitleaks' rules translated for Node's RegExp, the matcher, the allow file's fingerprints, reading a change and judging what it adds |
+| `pinned-actions` | The scanner a `pinned-actions` gate runs: read each `uses:` of a changed workflow or action file, judge whether its reference is pinned and report the rest |
 | `scanner` | What every scanner shares: reading the staged, pushed or whole change out of git, the call (`--format github`, `--all`, a base and a head), its usage error, the reply's capping and GitHub annotations, and running a scanner's main to the process's streams and exit code |
 | `package-manifest` | The `prepare` script in a project's `package.json` |
 | `git` | Run git and read its output |
@@ -36,5 +37,5 @@ Only an entry, such as `cli.ts`, reads the environment; it passes what a module 
 
 - `cli-commands.ts` lists the commands; `cli-contract.ts` is what one is.
 - `gates-contract.ts` lists every gate's files, their versions and hashes; `gates.ts` installs them, from the text `gates-sources.ts` reads out of `gates/` when the code is bundled, so a compiled binary carries every gate file.
-- `no-comments-main.ts` is the no-comments scanner's entry, and `no-comments-<language>.ts` each language's adapter; `no-secrets-main.ts` is the no-secrets scanner's; `gate-bundles.ts` bundles them into `gates/`.
+- `no-comments-main.ts` is the no-comments scanner's entry, and `no-comments-<language>.ts` each language's adapter; `no-secrets-main.ts` is the no-secrets scanner's and `pinned-actions-main.ts` the pinned-actions scanner's; `gate-bundles.ts` bundles them into `gates/`.
 - Read a module's `.test.ts` before changing its contract.

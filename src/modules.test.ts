@@ -25,12 +25,18 @@ const PUBLIC_FILES: Readonly<Record<string, readonly string[]>> = {
   ],
   "no-secrets": ["no-secrets-change", "no-secrets-judge", "no-secrets-report", "no-secrets-rules"],
   "package-manifest": ["package-manifest"],
+  "pinned-actions": ["pinned-actions-judge", "pinned-actions-report"],
   scanner: ["scanner-call", "scanner-change", "scanner-report"],
 };
 
 const TEST_SUPPORT = ".test-support";
 
-const ENTRIES: readonly string[] = ["cli.ts", "no-comments-main.ts", "no-secrets-main.ts"];
+const ENTRIES: readonly string[] = [
+  "cli.ts",
+  "no-comments-main.ts",
+  "no-secrets-main.ts",
+  "pinned-actions-main.ts",
+];
 
 const LOCAL_FILE = /^\.\/([a-z.-]+?)(?:\.ts)?$/;
 

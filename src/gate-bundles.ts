@@ -1,7 +1,13 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { invariant } from "./assert";
-import { ADAPTER_FILES, type GateFile, NO_SECRETS_SCANNER, SCANNER_FILE } from "./gates-contract";
+import {
+  ADAPTER_FILES,
+  type GateFile,
+  NO_SECRETS_SCANNER,
+  PINNED_ACTIONS_SCANNER,
+  SCANNER_FILE,
+} from "./gates-contract";
 import { SOURCE_DIR } from "./gates-sources";
 import { LANGUAGE_NAMES } from "./no-comments-languages";
 import { GITLEAKS, gitleaksLicense } from "./no-secrets-rules";
@@ -26,6 +32,7 @@ const GATE_BUNDLES: readonly Bundle[] = [
     notice: null,
   })),
   { entry: "no-secrets-main.ts", file: NO_SECRETS_SCANNER, notice: GITLEAKS_NOTICE },
+  { entry: "pinned-actions-main.ts", file: PINNED_ACTIONS_SCANNER, notice: null },
 ];
 
 const LINTERS_LEAVE_IT_ALONE = [

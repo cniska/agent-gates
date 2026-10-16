@@ -220,7 +220,7 @@ test("AC-57 judges a push before it leaves and again in CI, annotating findings 
     status: 2,
     stdout: "",
     stderr:
-      "judge-push: nope is no gate that judges a push; name commit-subject, no-comments or no-secrets\n",
+      "judge-push: nope is no gate that judges a push; name commit-subject, no-comments, no-secrets or pinned-actions\n",
   });
 });
 

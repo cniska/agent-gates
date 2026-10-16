@@ -1,5 +1,5 @@
 #!/bin/sh
-# agent-gate:githooks:2
+# agent-gate:githooks:3
 set -eu
 
 hooks=$(dirname "$0")
@@ -39,7 +39,8 @@ judge() {
     commit-subject) judge_subjects "$base" "$3" ;;
     no-comments) judge_scan no-comments "the push's comments" "$base" "$3" ;;
     no-secrets) judge_scan no-secrets "the push's secrets" "$base" "$3" ;;
-    *) echo "judge-push: $1 is no gate that judges a push; name commit-subject, no-comments or no-secrets" >&2; exit 2 ;;
+    pinned-actions) judge_scan pinned-actions "the push's actions" "$base" "$3" ;;
+    *) echo "judge-push: $1 is no gate that judges a push; name commit-subject, no-comments, no-secrets or pinned-actions" >&2; exit 2 ;;
   esac
 }
 

@@ -8,7 +8,7 @@ Each command prints one JSON line. An error goes to stderr and exits 2 for `usag
 | --- | --- |
 | `agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>]` | Install the named gate, update the installed ones, and report each file's state before acting, the format command and the commit prefixes |
 | `agent-gates --version` | Print the version alone on one line, the one output that is not JSON |
-| `agent-gates doctor` | Check each gate file, `core.hooksPath`, the `prepare` script and the format command, and report the commit prefixes; report each tracked language without its no-comments gate, each installed language with no files left to read, each of the project's own steps in `.githooks/pre-commit.d` or `pre-push.d` that no workflow runs, the comment count and the count of secrets `.no-secrets-allow` does not name; exit 1 on a failure |
+| `agent-gates doctor` | Check each gate file, `core.hooksPath`, the `prepare` script and the format command, and report the commit prefixes; report each tracked language without its no-comments gate, each installed language with no files left to read, each of the project's own steps in `.githooks/pre-commit.d` or `pre-push.d` that no workflow runs, the comment count, the count of secrets `.no-secrets-allow` does not name and the count of unpinned actions; exit 1 on a failure |
 
 ## Gate file states
 

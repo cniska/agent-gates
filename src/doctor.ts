@@ -26,6 +26,7 @@ import {
   NO_FILLS,
   NO_SECRETS_SCANNER,
   nameTheFill,
+  PINNED_ACTIONS_SCANNER,
   REINSTALL,
   SCANNER_FILE,
   WORKFLOWS_DIR,
@@ -38,6 +39,8 @@ import { trackedLanguages, trackedPerLanguage } from "./no-comments-tracked";
 import { secretsAdded } from "./no-secrets-judge";
 import { countsOf as secretCountsOf } from "./no-secrets-report";
 import { type PrepareState, prepareState } from "./package-manifest";
+import { unpinnedIn } from "./pinned-actions-judge";
+import { countsOf as unpinnedCountsOf } from "./pinned-actions-report";
 import { SWEEP_ALL } from "./scanner-call";
 
 type Health = {
@@ -240,6 +243,16 @@ function secretsHealth(root: string, gates: readonly GateName[], planned: readon
   ];
 }
 
+function actionsHealth(root: string, gates: readonly GateName[], planned: readonly PlannedFile[]): Health[] {
+  if (!gates.includes("pinned-actions")) return [];
+  return [
+    backlogOf("pinned-actions backlog", PINNED_ACTIONS_SCANNER, [], planned, () => {
+      const found = unpinnedIn(root, { kind: "all" });
+      return { detail: unpinnedCountsOf(found, "tracked"), clean: found.length === 0 };
+    }),
+  ];
+}
+
 const STEPS_CHECK = "hook steps";
 
 function stepsHealth({ steps, unchecked }: StepsState): Health[] {
@@ -329,6 +342,7 @@ function judged(root: string): Health[] {
     ...languagesHealth(root, languages),
     ...backlogHealth(root, languages, planned),
     ...secretsHealth(root, gates, planned),
+    ...actionsHealth(root, gates, planned),
   ];
 }
 

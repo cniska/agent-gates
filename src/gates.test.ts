@@ -120,6 +120,10 @@ describe("this repo", () => {
       ".githooks/pre-push.d/no-secrets",
       ".githooks/no-secrets/scan.cjs",
       ".github/workflows/no-secrets.yml",
+      ".githooks/pre-commit.d/pinned-actions",
+      ".githooks/pre-push.d/pinned-actions",
+      ".githooks/pinned-actions/scan.cjs",
+      ".github/workflows/pinned-actions.yml",
       "hooksPath",
       "prepare",
       "format command",
@@ -128,6 +132,7 @@ describe("this repo", () => {
       "no-comments languages",
       "no-comments backlog",
       "no-secrets backlog",
+      "pinned-actions backlog",
     ]);
   });
 });
@@ -376,7 +381,7 @@ describe("doctor", () => {
           name: "gates",
           state: "warn",
           detail: "no gate is installed",
-          fix: "agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-secrets, no-comments (each language the tracked files hold)",
+          fix: "agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-secrets, pinned-actions, no-comments (each language the tracked files hold)",
         },
       ],
       failing: 0,

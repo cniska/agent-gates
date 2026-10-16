@@ -11,7 +11,7 @@ bin/agent-gates doctor
 
 - `mise install` sets up the clone as the [README](../README.md#from-a-clone) says, and the `bun install` its postinstall runs calls the `prepare` script, which points `core.hooksPath` at `.githooks/`. Only in the clone, never in a worktree, does it link `agent-gates` into `~/.bun/bin`, so removing a worktree never leaves the command pointing at a deleted checkout.
 - `.worktree-hooks/setup` sets up a task worktree the same way, without linking the CLI.
-- `.githooks/` holds the commit-subject, format, no-comments and no-secrets gates this repo installs on itself, and `bin/agent-gates doctor` reports their health; `.no-secrets-allow` names the rule patterns and placeholders of its own that the no-secrets gate matches.
+- `.githooks/` holds the commit-subject, format, no-comments, no-secrets and pinned-actions gates this repo installs on itself, and `bin/agent-gates doctor` reports their health; `.no-secrets-allow` names the rule patterns and placeholders of its own that the no-secrets gate matches.
 
 ## Checks
 
@@ -22,8 +22,8 @@ bin/agent-gates doctor
 - `scripts/build-compiled.sh <outfile>` compiles the CLI into one executable with every gate file inside it, the binary a release ships.
 - `scripts/smoke.sh <executable> <version>` is the release's smoke test: the executable prints the version, installs `commit-subject` into a scratch repository and passes `doctor` there; the release runs it on each build and on each registry install.
 - `scripts/release.sh patch|minor|major` bumps the version and tags it; `.github/workflows/release.yml` builds the tag into an attested GitHub release, published only once every file is attached, the npm packages with provenance and a Homebrew repin, as [Releasing](releasing.md) says.
-- `bun run gates:bundle` bundles `gates/no-comments/*.cjs` and `gates/no-secrets/scan.cjs` from `src/`; the tests also run the bundled scanners under Node.
-- `.github/workflows/check.yml` runs [actionlint](https://github.com/rhysd/actionlint) over the workflows, at the version `mise.toml` pins, then the check and the acceptance suite on each push and pull request, and `commits.yml`, `no-comments.yml` and `no-secrets.yml` run the gates.
+- `bun run gates:bundle` bundles `gates/no-comments/*.cjs`, `gates/no-secrets/scan.cjs` and `gates/pinned-actions/scan.cjs` from `src/`; the tests also run the bundled scanners under Node.
+- `.github/workflows/check.yml` runs [actionlint](https://github.com/rhysd/actionlint) over the workflows, at the version `mise.toml` pins, then the check and the acceptance suite on each push and pull request, and `commits.yml`, `no-comments.yml`, `no-secrets.yml` and `pinned-actions.yml` run the gates.
 
 ## Layout
 

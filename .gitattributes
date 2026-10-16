@@ -1,2 +1,3 @@
 gates/no-comments/*.cjs linguist-generated
 gates/no-secrets/*.cjs linguist-generated
+gates/pinned-actions/*.cjs linguist-generated

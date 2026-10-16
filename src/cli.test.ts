@@ -23,7 +23,7 @@ describe("the cli", () => {
     expect(cli("doctor")).toEqual({
       status: 0,
       stdout:
-        '{"command":"doctor","ok":true,"result":{"checks":[{"name":"gates","state":"warn","detail":"no gate is installed","fix":"agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-secrets, no-comments (each language the tracked files hold)"}],"failing":0}}\n',
+        '{"command":"doctor","ok":true,"result":{"checks":[{"name":"gates","state":"warn","detail":"no gate is installed","fix":"agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-secrets, pinned-actions, no-comments (each language the tracked files hold)"}],"failing":0}}\n',
       stderr: "",
     });
     const installed = cli("install", "commit-subject");
@@ -123,10 +123,10 @@ describe("the cli", () => {
         meta: {
           names: ["lint-free"],
           usage:
-            "agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-secrets, no-comments (each language the tracked files hold)",
+            "agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-secrets, pinned-actions, no-comments (each language the tracked files hold)",
         },
         resolve:
-          "agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-secrets, no-comments (each language the tracked files hold)",
+          "agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-secrets, pinned-actions, no-comments (each language the tracked files hold)",
       },
     });
     expect(cli("doctor").stdout).toBe(before);
