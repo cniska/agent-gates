@@ -4,8 +4,6 @@
 
 This document states what must hold, not how. [`README.md`](README.md) lists every gate with a summary of what it refuses, [`docs/`](docs/) states those refusals in full, says how the gates judge and holds the commands, and [`src/README.md`](src/README.md) maps the modules that meet these requirements.
 
-**Status: reverse-engineered from the code at `db5b96e`, unverified.** Each requirement states behavior the code shows today. None is contract until the owner confirms it. §9 lists the open questions.
-
 ## 1. Purpose & context
 
 A coding agent excuses a workaround in a comment, writes a commit message nobody can scan, or commits unformatted code that fails the project's check, and a reviewer reading the diff tends to accept all of it. agent-gates installs gates that git hooks enforce on commit and push, for every developer: the commit subject, the format and no added comments, and the hooks run the project's own check steps, which `doctor` holds CI to running. GitHub workflows enforce the commit subject and no added comments again in CI. The format gate formats, so it runs only where code is written, on commit and after an agent's edit, and never in CI, where the project's own check refuses unformatted code. The gates are files committed with the project, so contributors and CI are gated without installing agent-gates; agent-gates installs them, brings them up to date, and judges their health. The optional `cniska-gates` Claude Code plugin optimizes the agent's loop: it formats each edit with the project's own command and shows the agent the comments the edit added, before a gate refuses the commit, denies a git command that skips the gates, and tells the agent at session start which gates the checkout installs and how each refuses.
@@ -306,9 +304,3 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - A missing or unexecutable gate file fails `doctor`; a file that differs from this release only warns, since the gate still runs (FR-30).
 - An executable gate file without a marker is refused rather than set aside, since it is the project's own hook or step; an unmarked file that is not executable is set aside (FR-19).
 - The `commit-msg` hook lets an autosquash commit through, since a local fixup is fine until pushed; the pre-push step and the commits workflow refuse it, so it is squashed before it leaves (FR-43, FR-47, FR-109).
-
-## 9. Open questions and known gaps
-
-Each requirement still needs the owner's confirmation before it is contract.
-
-- **Not every criterion is proven yet.** A criterion with a passing test in the acceptance suite is proven; the rest are todos there. `src/spec.test.ts` ties the suite to this spec.
