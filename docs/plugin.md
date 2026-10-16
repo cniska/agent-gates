@@ -11,10 +11,10 @@ After each `Edit`, `Write` or `MultiEdit`, the plugin formats the edit, then jud
 
 ## At session start
 
-When a session starts, the plugin tells the agent which gates the checkout installs, so it learns them before its first commit rather than from a refusal. It reads each gate from its marker alone: `format` from `.githooks/pre-commit.d/format`, each `no-comments-<language>` from its `.githooks/no-comments/<language>.cjs`, `commit-subject` from `.githooks/commit-msg` and `no-secrets` from `.githooks/no-secrets/scan.cjs`. It never looks at the project's own scripts.
+When a session starts, the plugin tells the agent which gates the checkout installs, so it learns them before its first commit rather than from a refusal. It reads each gate from its marker alone: `format` from `.githooks/pre-commit.d/format`, each `no-comments-<language>` from its `.githooks/no-comments/<language>.cjs`, `commit-subject` from `.githooks/commit-msg`, `no-secrets` from `.githooks/no-secrets/scan.cjs` and `pinned-actions` from `.githooks/pinned-actions/scan.cjs`. It never looks at the project's own scripts.
 
 - The note names the format command and the commit prefixes as the installed hooks hold them.
-- For each gate it says what the gate refuses at commit, and the note ends by saying that a refusal names what to fix. For `commit-subject`, the no-comments gates and `no-secrets` it also says whether a push is judged, which needs the gate's `.githooks/pre-push.d/` step installed. For `format` and the no-comments gates it says what the plugin does after an edit, or that it does nothing until `agent-gates install` updates a format hook or scanner too old for the plugin to use.
+- For each gate it says what the gate refuses at commit, and the note ends by saying that a refusal names what to fix. For `commit-subject`, the no-comments gates, `no-secrets` and `pinned-actions` it also says whether a push is judged, which needs the gate's `.githooks/pre-push.d/` step installed. For `format` and the no-comments gates it says what the plugin does after an edit, or that it does nothing until `agent-gates install` updates a format hook or scanner too old for the plugin to use.
 - The gates run only while `core.hooksPath` resolves to `.githooks`. In a clone where it does not, the note names no refusal and says instead that the gates do not run until `core.hooksPath` is `.githooks`.
 - In a checkout without the gates, or outside one, it says nothing. Without `jq` it leaves only a note on stderr.
 

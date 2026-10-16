@@ -439,6 +439,11 @@ const SECRETS_AT_COMMIT =
 
 const SECRETS_AT_PUSH = "At push it judges the pushed commits the same way.";
 
+const ACTIONS_AT_COMMIT =
+  "at commit it refuses a workflow or `action.yml` whose `uses:` names an action, reusable workflow or `docker://` image by anything but a full commit SHA or image digest. Pin each to the commit SHA of its release, with the version as a trailing comment (`owner/repo@<40 hex> # vX.Y.Z`); a `./` or `$/` path to the repository's own action passes.";
+
+const ACTIONS_AT_PUSH = "At push it judges the pushed commits the same way.";
+
 test("AC-51 tells the agent at session start which gates the checkout installs and how each refuses", () => {
   const dir = checkout({ "src/a.ts": "export const a = 1;\n", "run.sh": "echo hi\n" });
   install(dir, ["no-comments-javascript"]);
@@ -446,6 +451,7 @@ test("AC-51 tells the agent at session start which gates the checkout installs a
   install(dir, ["format", "--command", "node 'fmt.cjs'"]);
   install(dir, ["commit-subject", "--prefixes", "feat,fix"]);
   install(dir, ["no-secrets"]);
+  install(dir, ["pinned-actions"]);
   const tools = bare(["bash", "git", "jq"]);
 
   expect(sessionStarted(join(dir, "src"), tools)).toEqual(
@@ -454,6 +460,7 @@ test("AC-51 tells the agent at session start which gates the checkout installs a
       `${NO_COMMENTS_GATES} At commit and at push, a change that adds a comment is refused: ${REMOVE_COMMENTS}`,
       `- commit-subject, allowing the types feat, fix: ${SUBJECT_AT_COMMIT} ${SUBJECT_AT_PUSH}`,
       `- no-secrets: ${SECRETS_AT_COMMIT} ${SECRETS_AT_PUSH}`,
+      `- pinned-actions: ${ACTIONS_AT_COMMIT} ${ACTIONS_AT_PUSH}`,
     ]),
   );
 
@@ -461,16 +468,19 @@ test("AC-51 tells the agent at session start which gates the checkout installs a
   writeFiles(dir, { ".githooks/commit-msg": "#!/bin/sh\nexit 0\n" });
   rmSync(join(dir, ".githooks/pre-push.d/no-comments"));
   rmSync(join(dir, ".githooks/pre-push.d/no-secrets"));
+  rmSync(join(dir, ".githooks/pre-push.d/pinned-actions"));
   expect(sessionStarted(dir, tools)).toEqual(
     noted([
       `- format runs \`make fmt\`: the plugin does not run it after an edit until \`agent-gates install\` updates the hook; ${AT_COMMIT_FORMATS}`,
       `${NO_COMMENTS_GATES} At commit, a change that adds a comment is refused: ${REMOVE_COMMENTS} ${PUSH_UNJUDGED}`,
       `- no-secrets: ${SECRETS_AT_COMMIT} ${PUSH_UNJUDGED}`,
+      `- pinned-actions: ${ACTIONS_AT_COMMIT} ${PUSH_UNJUDGED}`,
     ]),
   );
 
   writeFiles(dir, { ".githooks/no-comments/scan.cjs": "// agent-gate:no-comments:28\n" });
   writeFiles(dir, { ".githooks/no-secrets/scan.cjs": "module.exports = {};\n" });
+  writeFiles(dir, { ".githooks/pinned-actions/scan.cjs": "module.exports = {};\n" });
   expect(sessionStarted(dir, tools)).toEqual(
     noted([
       `- format runs \`make fmt\`: the plugin does not run it after an edit until \`agent-gates install\` updates the hook; ${AT_COMMIT_FORMATS}`,
@@ -495,6 +505,7 @@ test("AC-53 names no refusal at session start while core.hooksPath does not reso
   install(dir, ["format", "--command", "node 'fmt.cjs'"]);
   install(dir, ["commit-subject", "--prefixes", "feat,fix"]);
   install(dir, ["no-secrets"]);
+  install(dir, ["pinned-actions"]);
   const tools = bare(["bash", "git", "jq"]);
   const unwired = noted(
     [
@@ -502,6 +513,7 @@ test("AC-53 names no refusal at session start while core.hooksPath does not reso
       NO_COMMENTS_GATES,
       "- commit-subject, allowing the types feat, fix.",
       "- no-secrets.",
+      "- pinned-actions.",
     ],
     UNWIRED,
   );
@@ -518,6 +530,7 @@ test("AC-53 names no refusal at session start while core.hooksPath does not reso
       `${NO_COMMENTS_GATES} At commit and at push, a change that adds a comment is refused: ${REMOVE_COMMENTS}`,
       `- commit-subject, allowing the types feat, fix: ${SUBJECT_AT_COMMIT} ${SUBJECT_AT_PUSH}`,
       `- no-secrets: ${SECRETS_AT_COMMIT} ${SECRETS_AT_PUSH}`,
+      `- pinned-actions: ${ACTIONS_AT_COMMIT} ${ACTIONS_AT_PUSH}`,
     ]),
   );
 });

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
+readonly PUSH_JUDGED="At push it judges the pushed commits the same way"
 readonly PUSH_UNJUDGED="a push is not judged until \`agent-gates install\` adds its step"
 readonly UNREAD="so the session was not told which gates are installed"
 readonly HEADING="cniska-gates: the gates installed in this checkout:"
@@ -12,6 +13,15 @@ source "${BASH_SOURCE[0]%/*}/installed.sh"
 source "${BASH_SOURCE[0]%/*}/note.sh"
 
 lines=()
+
+push_sentence() {
+  local step="$1" part="$2" judged="$3"
+  if marker_version "$step" "$part" >/dev/null; then
+    printf '%s' "$judged"
+    return 0
+  fi
+  printf '%s' "As installed, $PUSH_UNJUDGED."
+}
 
 format_line() {
   local root="$1" running="$2" hook="$1/$FORMAT_HOOK"
@@ -66,10 +76,8 @@ commit_subject_line() {
     lines+=("- commit-subject$allowed.")
     return 0
   fi
-  local at_push="At push it judges the pushed commits the same way and also refuses a fixup!, squash! or amend! commit: squash it into the commit it names."
-  if ! marker_version "$root/$COMMIT_SUBJECT_PUSH_STEP" commit-subject >/dev/null; then
-    at_push="As installed, $PUSH_UNJUDGED."
-  fi
+  local at_push
+  at_push="$(push_sentence "$root/$COMMIT_SUBJECT_PUSH_STEP" commit-subject "$PUSH_JUDGED and also refuses a fixup!, squash! or amend! commit: squash it into the commit it names.")"
   lines+=("- commit-subject$allowed: at commit it refuses a subject that is not a Conventional Commit \`type(scope): description\` of an allowed type, is over 50 characters or is not ASCII, and a message with a body. $at_push")
 }
 
@@ -80,11 +88,21 @@ no_secrets_line() {
     lines+=("- no-secrets.")
     return 0
   fi
-  local at_push="At push it judges the pushed commits the same way."
-  if ! marker_version "$root/$NO_SECRETS_PUSH_STEP" no-secrets >/dev/null; then
-    at_push="As installed, $PUSH_UNJUDGED."
-  fi
+  local at_push
+  at_push="$(push_sentence "$root/$NO_SECRETS_PUSH_STEP" no-secrets "$PUSH_JUDGED.")"
   lines+=("- no-secrets: at commit it refuses a change that adds a secret: a key, token or private key one of gitleaks' rules matches, or a literal value assigned to a \`*_TOKEN\` or \`*_SECRET\` name. Remove it, rotate it if it was ever pushed, or allow a reviewed false positive in \`.no-secrets-allow\`. $at_push")
+}
+
+pinned_actions_line() {
+  local root="$1" running="$2"
+  marker_version "$root/$PINNED_ACTIONS_SCANNER" pinned-actions >/dev/null || return 0
+  if [ "$running" = no ]; then
+    lines+=("- pinned-actions.")
+    return 0
+  fi
+  local at_push
+  at_push="$(push_sentence "$root/$PINNED_ACTIONS_PUSH_STEP" pinned-actions "$PUSH_JUDGED.")"
+  lines+=("- pinned-actions: at commit it refuses a workflow or \`action.yml\` whose \`uses:\` names an action, reusable workflow or \`docker://\` image by anything but a full commit SHA or image digest. Pin each to the commit SHA of its release, with the version as a trailing comment (\`owner/repo@<40 hex> # vX.Y.Z\`); a \`./\` or \`\$/\` path to the repository's own action passes. $at_push")
 }
 
 main() {
@@ -113,6 +131,7 @@ main() {
   no_comments_line "$root" "$running"
   commit_subject_line "$root" "$running"
   no_secrets_line "$root" "$running"
+  pinned_actions_line "$root" "$running"
   [ "${#lines[@]}" -gt 0 ] || return 0
   local context
   context="$(printf '%s\n' "$HEADING" "${lines[@]}" "$closing")"
