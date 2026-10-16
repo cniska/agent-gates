@@ -1,18 +1,31 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { invariant } from "./assert";
-import { ADAPTER_FILES, type GateFile, SCANNER_FILE } from "./gates-contract";
+import { ADAPTER_FILES, type GateFile, NO_SECRETS_SCANNER, SCANNER_FILE } from "./gates-contract";
 import { SOURCE_DIR } from "./gates-sources";
 import { LANGUAGE_NAMES } from "./no-comments-languages";
+import { GITLEAKS, gitleaksLicense } from "./no-secrets-rules";
 
 const SRC = import.meta.dir;
 
-const GATE_BUNDLES: readonly { readonly entry: string; readonly file: GateFile }[] = [
-  { entry: "no-comments-main.ts", file: SCANNER_FILE },
+type Bundle = { readonly entry: string; readonly file: GateFile; readonly notice: string | null };
+
+const GITLEAKS_NOTICE = [
+  "/*",
+  `The rules this file matches come from gitleaks ${GITLEAKS.tag} (https://github.com/gitleaks/gitleaks), used under its MIT License:`,
+  "",
+  gitleaksLicense().trimEnd(),
+  "*/",
+].join("\n");
+
+const GATE_BUNDLES: readonly Bundle[] = [
+  { entry: "no-comments-main.ts", file: SCANNER_FILE, notice: null },
   ...LANGUAGE_NAMES.map((language) => ({
     entry: `no-comments-${language}.ts`,
     file: ADAPTER_FILES[language],
+    notice: null,
   })),
+  { entry: "no-secrets-main.ts", file: NO_SECRETS_SCANNER, notice: GITLEAKS_NOTICE },
 ];
 
 const LINTERS_LEAVE_IT_ALONE = [
@@ -29,13 +42,13 @@ function markerFor(file: GateFile): string {
 
 export async function bundled(): Promise<Record<string, string>> {
   const built: Record<string, string> = {};
-  for (const { entry, file } of GATE_BUNDLES) {
+  for (const { entry, file, notice } of GATE_BUNDLES) {
     const output = await Bun.build({
       entrypoints: [join(SRC, entry)],
       target: "node",
       format: "cjs",
       minify: true,
-      banner: [...LINTERS_LEAVE_IT_ALONE, markerFor(file)].join("\n"),
+      banner: [...LINTERS_LEAVE_IT_ALONE, markerFor(file), ...(notice === null ? [] : [notice])].join("\n"),
     });
     invariant(output.success, `bundling ${entry} succeeds: ${output.logs.join("\n")}`);
     const [artifact] = output.outputs;

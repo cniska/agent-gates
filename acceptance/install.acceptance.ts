@@ -122,7 +122,7 @@ test("AC-5 refuses an install that names no gate where none is installed, or nam
     message: `${dir} has no gates installed and none were named, so there is nothing to install`,
     meta: { root: dir },
     resolve:
-      "stop and ask the owner which gates the project runs, then agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments (each language the tracked files hold)",
+      "stop and ask the owner which gates the project runs, then agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-secrets, no-comments (each language the tracked files hold)",
   });
   expect(readdirSync(dir)).toEqual([".git"]);
   expect(hooksPath(dir)).toBe("");

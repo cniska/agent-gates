@@ -1010,6 +1010,7 @@ describe("the bundles", () => {
     expect(Object.keys(built)).toEqual([
       "no-comments/scan.cjs",
       ...LANGUAGE_NAMES.map((language) => `no-comments/${language}.cjs`),
+      "no-secrets/scan.cjs",
     ]);
     for (const [source, text] of Object.entries(built)) {
       expect([source, readFileSync(join(SOURCE_DIR, source), "utf8") === text]).toEqual([source, true]);

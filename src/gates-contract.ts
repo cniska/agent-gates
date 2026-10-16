@@ -128,7 +128,10 @@ const JUDGE_PUSH: GateFile = {
   target: `${HOOKS_DIR}/judge-push`,
   executable: false,
   fills: null,
-  versions: [{ version: 1, sha256: "96729bf4e237ca325315e1fe8f456d03b2b2705c501a4488fe7976b178f535eb" }],
+  versions: [
+    { version: 1, sha256: "96729bf4e237ca325315e1fe8f456d03b2b2705c501a4488fe7976b178f535eb" },
+    { version: 2, sha256: "620f7d269ad6f3659d8f8ed8c83bdd639141b50a627ab4e6341467318b6f73dd" },
+  ],
 };
 
 export const SCANNER_FILE: GateFile = {
@@ -240,6 +243,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 19, sha256: "f6e877cc5eb4c4e4b543043b25901688a63c6f48fab5492915395c2c7c4710ad" },
     { version: 20, sha256: "d319a53d948bce7a70b52fec227c47c95e97b85ab2fad691f4c84d5dfcd178be" },
     { version: 21, sha256: "bb79226d4ab84d42b8652ad730fa9c6ec25ae60274f3991dcc0a13d63e109a07" },
+    { version: 22, sha256: "792d88973ce2aa147deab471f74b7bbfcdde03262ea650c35275fb1272898cc5" },
   ]),
   dart: adapterFile("dart", [
     { version: 1, sha256: "25cc760fcd6ef317da0c52457e79e84926f4b87f81e67630b40dfd666f0feb2a" },
@@ -267,6 +271,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 23, sha256: "48db2e6b5edadc1c1450d069c1054ed0481520ea1b5c6b1e1efd5278e503759d" },
     { version: 24, sha256: "15ecd8dd8aade2868122ea923d991168c846d8967c5a5ada55822f5628c7f94b" },
     { version: 25, sha256: "db3aee68ded72f0c25a44d19639927c0f51f70a8ffc3d648880c21243adde9e2" },
+    { version: 26, sha256: "5dfe642be73be4d56a124e42cd8720b6a8ad9d0e213e8ffb0b42bac9b8c99460" },
   ]),
   sql: adapterFile("sql", [
     { version: 1, sha256: "261cd8dc159c4222234bd5bc2796723b803ecf0cf448a7d417471faea8c3ef13" },
@@ -292,6 +297,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 21, sha256: "95e2f7b64741f667c3187ed8ea8efed6756127f18def3cfd53f431f330b19caa" },
     { version: 22, sha256: "65e12512a44fe086d0438398b6eaa3524346afbc3c3615ff940b89186e932a47" },
     { version: 23, sha256: "4d793b0a2594f01799f817e31f9909e384b475bdd9e5ece85a737a74ff03c3e5" },
+    { version: 24, sha256: "76a8b638e92893548b58ee7f587f33733fdcb8fec94df7a7cd3e436e6d54cf1a" },
   ]),
   shell: adapterFile("shell", [
     { version: 1, sha256: "89a9bdde90915a96d5110890ac7dd715a098676cf44976c0bc2301b4012ab1b2" },
@@ -319,6 +325,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 23, sha256: "8c79b16e593b9065634c1cc7e1a2ad1f642d9f4a467178e46a49e61a4c2c54eb" },
     { version: 24, sha256: "0f9d795b4ad2f71db6e5a3b1486a9b7729538698bf204785c16bc6ba7a22f44a" },
     { version: 25, sha256: "2fe12b12e07092303fe57405faea198670f807e0679f91ae0b3a48c4197109d6" },
+    { version: 26, sha256: "64559a93d1fa4bb054508e2048642bb410d49ce2f9b05239a3cc34263ce45993" },
   ]),
   rust: adapterFile("rust", [
     { version: 1, sha256: "f7d0dd77af2f515cca76525640e20f72984a24e995031360b190b31478634daa" },
@@ -345,6 +352,7 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 22, sha256: "876fdeb06ffb37ffab1bf1306d31522324517f1ef9da982a7b55d8520349af82" },
     { version: 23, sha256: "94bb4f4b5ceee5abc706b6359e8532a8becc5344dc6ff7fd29cdb3d1d569b124" },
     { version: 24, sha256: "6332a2e791e78ec1474d7aaab4cd018f29ab4a8aea7b3cc6a7a8e2ec37c96819" },
+    { version: 25, sha256: "cbb9b5aa9dd7c65e35a6fb19971d6d3e8d5642f3c002ba3f550a868d1cf4ab21" },
   ]),
   python: adapterFile("python", [
     { version: 1, sha256: "0a9e1622e9cbb6d697e50947de8488666247a3ba7505c986eff90bdb63e08152" },
@@ -368,8 +376,50 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
     { version: 19, sha256: "6214b0daf7ac833a243a1ebfa80311ad6f8e72f4fefd243a1183463ec2274092" },
     { version: 20, sha256: "954b7f0325fc67ee84a5db52f44a1e532720a1d7a46f1f245e756f2f7644229d" },
     { version: 21, sha256: "3df112082176292836dc3a3ff861bb492f1d78c5babc013b077850c5e006482d" },
+    { version: 22, sha256: "865076364af3c99e147b2d788794b78ad155ea6947d3227ee53c3a1ce0acae77" },
   ]),
 };
+
+export const NO_SECRETS_SCANNER: GateFile = {
+  part: "no-secrets",
+  source: "no-secrets/scan.cjs",
+  target: `${HOOKS_DIR}/no-secrets/scan.cjs`,
+  executable: false,
+  fills: null,
+  versions: [{ version: 1, sha256: "54ab03a3e26aaabf319d6748ac135a2ab336265a439b68e1353e28d7fa1fe821" }],
+};
+
+const NO_SECRETS_FILES: readonly GateFile[] = [
+  GITATTRIBUTES,
+  PRE_COMMIT,
+  PRE_PUSH,
+  {
+    part: "no-secrets",
+    source: "no-secrets/pre-commit",
+    target: `${PRE_COMMIT_STEPS}/no-secrets`,
+    executable: true,
+    fills: null,
+    versions: [{ version: 1, sha256: "81a38b031c8ca267d651e1f647e25c9cc72d685c6b8a6e0f6af9a61214a877c1" }],
+  },
+  {
+    part: "no-secrets",
+    source: "no-secrets/pre-push",
+    target: `${PRE_PUSH_STEPS}/no-secrets`,
+    executable: true,
+    fills: null,
+    versions: [{ version: 1, sha256: "a19cb8ac14b231b624d51653bef81b4a23d2475c11fc0e71ee5a175ee9918282" }],
+  },
+  NO_SECRETS_SCANNER,
+  {
+    part: "no-secrets",
+    source: "no-secrets.yml",
+    target: `${WORKFLOWS_DIR}/no-secrets.yml`,
+    executable: false,
+    fills: null,
+    versions: [{ version: 1, sha256: "08b8f010ec98a913fda1ae66590dfe581af4ede474c42d4a8bc8e74122998afd" }],
+  },
+  JUDGE_PUSH,
+];
 
 function noCommentsFiles(language: Language): readonly GateFile[] {
   return [GITATTRIBUTES, PRE_COMMIT, PRE_PUSH, ...NO_COMMENTS_SHARED, JUDGE_PUSH, ADAPTER_FILES[language]];
@@ -436,6 +486,7 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
   "no-comments-shell": noCommentsFiles("shell"),
   "no-comments-rust": noCommentsFiles("rust"),
   "no-comments-python": noCommentsFiles("python"),
+  "no-secrets": NO_SECRETS_FILES,
 };
 
 export const EACH_TRACKED_LANGUAGE = "no-comments";

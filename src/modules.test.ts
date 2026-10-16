@@ -23,13 +23,19 @@ const PUBLIC_FILES: Readonly<Record<string, readonly string[]>> = {
     "no-comments-scan",
     "no-comments-tracked",
   ],
-  "no-secrets": ["no-secrets-allow", "no-secrets-match", "no-secrets-rules"],
+  "no-secrets": [
+    "no-secrets-allow",
+    "no-secrets-change",
+    "no-secrets-judge",
+    "no-secrets-match",
+    "no-secrets-rules",
+  ],
   "package-manifest": ["package-manifest"],
 };
 
 const TEST_SUPPORT = ".test-support";
 
-const ENTRIES: readonly string[] = ["cli.ts", "no-comments-main.ts"];
+const ENTRIES: readonly string[] = ["cli.ts", "no-comments-main.ts", "no-secrets-main.ts"];
 
 const LOCAL_FILE = /^\.\/([a-z.-]+?)(?:\.ts)?$/;
 

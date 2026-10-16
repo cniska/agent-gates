@@ -1,6 +1,6 @@
 # Gates
 
-The files `agent-gates install` writes, how the hooks and workflows run them, and the `commit-subject` and `format` gates in detail; the [README](../README.md#gates) lists every gate with a summary of what it refuses, which this page states in full for `commit-subject` and `format`, and [No comments](no-comments.md) for the no-comments gates.
+The files `agent-gates install` writes, how the hooks and workflows run them, and the `commit-subject` and `format` gates in detail; the [README](../README.md#gates) lists every gate with a summary of what it refuses, which this page states in full for `commit-subject` and `format`, [No comments](no-comments.md) for the no-comments gates and [No secrets](no-secrets.md) for `no-secrets`.
 
 ## Installed files
 
@@ -9,6 +9,7 @@ The files `agent-gates install` writes, how the hooks and workflows run them, an
 | `commit-subject` | `commit-msg`, `pre-push`, `pre-push.d/commit-subject`, `judge-push` | `commits.yml` |
 | `format` | `pre-commit`, `pre-commit.d/format` | none |
 | `no-comments-<language>` | `pre-commit`, `pre-commit.d/no-comments`, `pre-push`, `pre-push.d/no-comments`, `judge-push`, `no-comments/scan.cjs`, `no-comments/<language>.cjs` | `no-comments.yml` |
+| `no-secrets` | `pre-commit`, `pre-commit.d/no-secrets`, `pre-push`, `pre-push.d/no-secrets`, `judge-push`, `no-secrets/scan.cjs` | `no-secrets.yml` |
 
 Every gate also installs `.githooks/.gitattributes`. A file two gates list is installed once and shared.
 
@@ -23,7 +24,7 @@ Install also points `core.hooksPath` at `.githooks` in the current clone, and `.
 
 - **Pre-commit:** `.githooks/pre-commit` runs the `format` step first, then each other executable in `.githooks/pre-commit.d/` in name order, and stops at the first failure. Your own pre-commit step belongs there, and judges the formatted change.
 - **Pre-push:** `.githooks/pre-push` runs each executable in `.githooks/pre-push.d/` in name order, handing each git's arguments and pushed refs, and stops at the first failure. Your own pre-push step belongs there.
-- **Push and CI alike:** the `commit-subject` and `no-comments` steps judge each pushed ref with `.githooks/judge-push`, the script their workflows run in CI, so a push the workflows would refuse never leaves. The range starts at the remote's tip, or, for a new branch, at the remote's default branch.
+- **Push and CI alike:** the `commit-subject`, `no-comments` and `no-secrets` steps judge each pushed ref with `.githooks/judge-push`, the script their workflows run in CI, so a push the workflows would refuse never leaves. The range starts at the remote's tip, or, for a new branch, at the remote's default branch.
 - **Merges:** no gate judges a merge commit locally.
 
 ## Commit subjects

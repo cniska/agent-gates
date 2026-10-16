@@ -12,6 +12,8 @@ const VENDOR_DIR = resolve(import.meta.dir, "..", "vendor", "gitleaks");
 
 const RULES_FILE = join(VENDOR_DIR, "gitleaks.toml");
 
+const LICENSE_FILE = join(VENDOR_DIR, "LICENSE");
+
 export type Condition = "OR" | "AND";
 
 export type AllowTarget = "secret" | "match" | "line";
@@ -196,4 +198,8 @@ export function shippedRules(): RuleTable {
     dropped: translated.flatMap((each) => (each.kind === "dropped" ? [each.id] : [])),
     global: allowlistOf(tableAt(config.allowlist, "allowlist"), "allowlist"),
   };
+}
+
+export function gitleaksLicense(): string {
+  return readFileSync(LICENSE_FILE, "utf8");
 }

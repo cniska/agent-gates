@@ -23,9 +23,9 @@ Only an entry, such as `cli.ts`, reads the environment; it passes what a module 
 | `install` | The `install` command |
 | `doctor` | Report the installed gates' health: their files, the hooks path, `prepare`, the format command, the commit prefixes, the project's own hook steps no workflow runs, and the comments tracked files already hold |
 | `gates` | The registry of gate files, their text embedded in the build, the commands and prefixes install writes into them, and installing them into a project |
-| `gate` | Gate names and parts, the marker an installed file carries, and bundling the `no-comments` scanner into `gates/` |
+| `gate` | Gate names and parts, the marker an installed file carries, and bundling the `no-comments` and `no-secrets` scanners into `gates/` |
 | `no-comments` | The scanner a `no-comments` gate runs: route a file to its language, read its comments, judge a change and report findings |
-| `no-secrets` | The rules a `no-secrets` gate matches: gitleaks' table translated for Node's RegExp, the matcher, and the allow file's fingerprints |
+| `no-secrets` | The scanner a `no-secrets` gate runs: gitleaks' rules translated for Node's RegExp, the matcher, the allow file's fingerprints, reading a change and judging what it adds |
 | `package-manifest` | The `prepare` script in a project's `package.json` |
 | `git` | Run git and read its output |
 | `file-backup` | Copy a file aside before install replaces it |
@@ -35,5 +35,5 @@ Only an entry, such as `cli.ts`, reads the environment; it passes what a module 
 
 - `cli-commands.ts` lists the commands; `cli-contract.ts` is what one is.
 - `gates-contract.ts` lists every gate's files, their versions and hashes; `gates.ts` installs them, from the text `gates-sources.ts` reads out of `gates/` when the code is bundled, so a compiled binary carries every gate file.
-- `no-comments-main.ts` is the scanner's entry, and `no-comments-<language>.ts` each language's adapter; `gate-bundles.ts` bundles them into `gates/no-comments/`.
+- `no-comments-main.ts` is the no-comments scanner's entry, and `no-comments-<language>.ts` each language's adapter; `no-secrets-main.ts` is the no-secrets scanner's; `gate-bundles.ts` bundles them into `gates/`.
 - Read a module's `.test.ts` before changing its contract.

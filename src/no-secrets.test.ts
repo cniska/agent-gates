@@ -1,12 +1,17 @@
 import { describe, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { bundled } from "./gate-bundles";
 import { ALLOW_FILE, fingerprintOf, parsedAllow } from "./no-secrets-allow";
+import { allowTextOf, judgedChange, rootRelative } from "./no-secrets-change";
+import { type Found, secretsAdded } from "./no-secrets-judge";
 import { compiled, secretsIn } from "./no-secrets-match";
 import { allowPattern, rulePattern } from "./no-secrets-pattern";
-import { GITLEAKS, shippedRules } from "./no-secrets-rules";
-import { refusalOf } from "./repo.test-support";
+import { annotations, reply } from "./no-secrets-report";
+import { GITLEAKS, gitleaksLicense, shippedRules } from "./no-secrets-rules";
+import { commitPastHooks, NO_COMMIT, refusalOf, repo, writeFiles } from "./repo.test-support";
 
 describe("the pattern translation", () => {
   test("moves a leading (?i) into the i flag", () => {
@@ -249,5 +254,191 @@ describe("the allow file", () => {
     expect(
       refusalOf(() => parsedAllow(`${fingerprintOf("a", "b", "c".repeat(64))}\nnot a fingerprint\n`)),
     ).toBe("malformed_allow_line");
+  });
+});
+
+function stagedRepo(files: Record<string, string>): string {
+  const dir = repo(files);
+  execFileSync("git", ["-C", dir, "add", "-A"]);
+  return dir;
+}
+
+describe("the judged change", () => {
+  test("reads each staged text file's head and base, and skips a binary file", () => {
+    const dir = repo({ "a.txt": "old\n", "b.bin": "\u0000\u0001" });
+    commitPastHooks(dir, "chore: start");
+    writeFiles(dir, { "a.txt": "new\n", "b.bin": "\u0000\u0002", "c.txt": "added\n" });
+    execFileSync("git", ["-C", dir, "add", "-A"]);
+    expect(judgedChange(dir, { kind: "staged" })).toEqual({
+      heads: [
+        { path: "a.txt", text: "new\n" },
+        { path: "c.txt", text: "added\n" },
+      ],
+      bases: [{ path: "a.txt", text: "old\n" }],
+    });
+  });
+
+  test("reads a pushed range against its merge base, and every tracked file under --all", () => {
+    const dir = repo({ "a.txt": "one\n" });
+    const base = commitPastHooks(dir, "chore: one");
+    writeFiles(dir, { "a.txt": "two\n" });
+    const head = commitPastHooks(dir, "chore: two");
+    expect(judgedChange(dir, { kind: "pushed", base, head })).toEqual({
+      heads: [{ path: "a.txt", text: "two\n" }],
+      bases: [{ path: "a.txt", text: "one\n" }],
+    });
+    expect(judgedChange(dir, { kind: "all" })).toEqual({
+      heads: [{ path: "a.txt", text: "two\n" }],
+      bases: [],
+    });
+  });
+
+  test("reads the allow file from the index for a commit and from the head for a push", () => {
+    const dir = stagedRepo({ [ALLOW_FILE]: "staged\n" });
+    expect(allowTextOf(dir, { kind: "staged" })).toBe("staged\n");
+    const head = commitPastHooks(dir, "chore: allow");
+    writeFiles(dir, { [ALLOW_FILE]: "unstaged\n" });
+    expect(allowTextOf(dir, { kind: "staged" })).toBe("staged\n");
+    expect(allowTextOf(dir, { kind: "pushed", base: NO_COMMIT, head })).toBe("staged\n");
+    expect(allowTextOf(repo(), { kind: "staged" })).toBeNull();
+  });
+
+  test("names a path inside the root relative to it, and nothing for one outside", () => {
+    const dir = repo({ "a/b.txt": "" });
+    expect(rootRelative(dir, join(dir, "a", "b.txt"))).toEqual({ inRoot: join("a", "b.txt") });
+    expect(rootRelative(dir, dir)).toEqual({ inRoot: "" });
+    expect(rootRelative(dir, dirname(dir))).toBeNull();
+  });
+});
+
+const awsFound = (path: string, line: number): Found => ({
+  rule: "aws-access-token",
+  line,
+  shown: "AKIA",
+  hash: sha256(AWS_KEY),
+  fingerprint: fingerprintOf("aws-access-token", path, sha256(AWS_KEY)),
+});
+
+describe("the judgment", () => {
+  test("reports a secret a head adds and not one a base of the change already held, in any file", () => {
+    const dir = repo({ "src/old.ts": `key = "${PRIVATE_KEY}"\n` });
+    commitPastHooks(dir, "chore: start");
+    writeFiles(dir, {
+      "src/aws.ts": `const key = "${AWS_KEY}";\n`,
+      "src/old.ts": `const key = "${PRIVATE_KEY}";\n`,
+      "src/copy.ts": `key: |\n${PRIVATE_KEY}\n`,
+    });
+    execFileSync("git", ["-C", dir, "add", "-A"]);
+    expect(secretsAdded(dir, { kind: "staged" }, [])).toEqual([
+      { path: "src/aws.ts", secrets: [awsFound("src/aws.ts", 1)] },
+    ]);
+  });
+
+  test("skips a path the skipped list names or contains and a finding the allow file names, in code unit order", () => {
+    const text = `const key = "${AWS_KEY}";\n`;
+    const dir = stagedRepo({
+      ".githooks/no-secrets/scan.cjs": text,
+      "src/aws.ts": text,
+      "src/b.ts": text,
+      "src/Z.ts": text,
+      [ALLOW_FILE]: `${fingerprintOf("aws-access-token", "src/b.ts", sha256(AWS_KEY))}\n`,
+    });
+    expect(secretsAdded(dir, { kind: "staged" }, [{ inRoot: ".githooks/no-secrets" }])).toEqual([
+      { path: "src/Z.ts", secrets: [awsFound("src/Z.ts", 1)] },
+      { path: "src/aws.ts", secrets: [awsFound("src/aws.ts", 1)] },
+    ]);
+  });
+
+  test("judges a staged change against the index's allow file and skips its own gate files", () => {
+    const dir = stagedRepo({
+      ".githooks/no-secrets/scan.cjs": `x="${AWS_KEY}"\n`,
+      "src/aws.ts": `const key = "${AWS_KEY}";\n`,
+    });
+    expect(secretsAdded(dir, { kind: "staged" }, [{ inRoot: ".githooks/no-secrets" }])).toEqual([
+      { path: "src/aws.ts", secrets: [awsFound("src/aws.ts", 1)] },
+    ]);
+    writeFiles(dir, {
+      [ALLOW_FILE]: `${fingerprintOf("aws-access-token", "src/aws.ts", sha256(AWS_KEY))}\n`,
+    });
+    const own = [{ inRoot: ".githooks/no-secrets" }];
+    expect(secretsAdded(dir, { kind: "staged" }, own)).toHaveLength(1);
+    execFileSync("git", ["-C", dir, "add", ALLOW_FILE]);
+    expect(secretsAdded(dir, { kind: "staged" }, own)).toEqual([]);
+  });
+});
+
+describe("the reply", () => {
+  const found = [
+    { path: "src/aws.ts", secrets: [awsFound("src/aws.ts", 2)] satisfies [Found, ...Found[]] },
+    {
+      path: "src/b.ts",
+      secrets: [awsFound("src/b.ts", 1), awsFound("src/b.ts", 3)] satisfies [Found, ...Found[]],
+    },
+  ];
+
+  test("names each secret by file, line and rule with its first characters and fingerprint", () => {
+    const fingerprint = awsFound("src/aws.ts", 2).fingerprint;
+    expect(reply(found, "change", null)).toBe(
+      [
+        "no-secrets: this change adds 3 secrets. Remove each secret, rotate it if it was ever pushed, or allow a reviewed false positive in .no-secrets-allow.",
+        "src/aws.ts",
+        `  2  aws-access-token: AKIA…  allow: ${fingerprint}`,
+        "src/b.ts",
+        `  1  aws-access-token: AKIA…  allow: ${awsFound("src/b.ts", 1).fingerprint}`,
+        `  3  aws-access-token: AKIA…  allow: ${awsFound("src/b.ts", 3).fingerprint}`,
+        "",
+      ].join("\n"),
+    );
+    expect(reply(found, "tracked", null)).toStartWith("no-secrets: the tracked files hold 3 secrets.");
+    expect(reply([], "change", null)).toBe("");
+  });
+
+  test("stops before the line that passes the byte cap and counts the rest", () => {
+    const whole = reply(found, "change", null);
+    const [header = "", ...listing] = whole.split("\n");
+    const nearly = reply(found, "change", Buffer.byteLength(whole) - 1);
+    expect(nearly.split("\n")).toEqual([header, ...listing.slice(0, 4), "… 1 more finding in 1 file", ""]);
+    expect(Buffer.byteLength(nearly)).toBeLessThanOrEqual(Buffer.byteLength(whole) - 1);
+    expect(reply(found, "change", Buffer.byteLength(header)).split("\n")).toEqual([
+      header,
+      "… 3 more findings in 2 files",
+      "",
+    ]);
+  });
+
+  test("prints a GitHub annotation per finding, escaped, capped at ten per step", () => {
+    expect(annotations([{ path: "a,b.ts", secrets: [awsFound("a,b.ts", 2)] }])).toBe(
+      `::error file=a%2Cb.ts,line=2::aws-access-token: AKIA…  allow: ${awsFound("a,b.ts", 2).fingerprint}\n`,
+    );
+    const first = awsFound("a.ts", 1);
+    const rest = Array.from({ length: 10 }, (_, index) => awsFound("a.ts", index + 2));
+    const lines = annotations([{ path: "a.ts", secrets: [first, ...rest] }])
+      .trimEnd()
+      .split("\n");
+    expect(lines).toHaveLength(10);
+    expect(lines.at(-1)).toBe("::error::no-secrets: 2 more findings; the step's log lists them all");
+  });
+});
+
+describe("the bundle", () => {
+  test("carries gitleaks' MIT notice after its marker, naming the pinned tag", async () => {
+    const text = (await bundled())["no-secrets/scan.cjs"] ?? "";
+    expect(text).toStartWith(
+      [
+        "// biome-ignore-all lint: generated by agent-gates, installed whole and never edited",
+        "// biome-ignore-all format: generated by agent-gates, installed whole and never edited",
+        "/* eslint-disable */",
+        "// agent-gate:no-secrets:1",
+        "/*",
+        "The rules this file matches come from gitleaks v8.30.1 (https://github.com/gitleaks/gitleaks), used under its MIT License:",
+        "",
+        "MIT License",
+        "",
+        "Copyright (c) 2019 Zachary Rice",
+        "",
+      ].join("\n"),
+    );
+    expect(text).toContain(`${gitleaksLicense().trimEnd()}\n*/\n`);
+    expect(gitleaksLicense()).toContain("Permission is hereby granted, free of charge");
   });
 });
