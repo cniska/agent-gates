@@ -386,7 +386,10 @@ export const NO_SECRETS_SCANNER: GateFile = {
   target: `${HOOKS_DIR}/no-secrets/scan.cjs`,
   executable: false,
   fills: null,
-  versions: [{ version: 1, sha256: "54ab03a3e26aaabf319d6748ac135a2ab336265a439b68e1353e28d7fa1fe821" }],
+  versions: [
+    { version: 1, sha256: "54ab03a3e26aaabf319d6748ac135a2ab336265a439b68e1353e28d7fa1fe821" },
+    { version: 2, sha256: "981be0e5a81d118d253673eafb119a81d92ca99fa33963c859c77b325e4f3605" },
+  ],
 };
 
 const NO_SECRETS_FILES: readonly GateFile[] = [

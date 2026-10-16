@@ -434,12 +434,18 @@ const SUBJECT_AT_PUSH =
 
 const PUSH_UNJUDGED = "As installed, a push is not judged until `agent-gates install` adds its step.";
 
+const SECRETS_AT_COMMIT =
+  "at commit it refuses a change that adds a secret: a key, token or private key one of gitleaks' rules matches, or a literal value assigned to a `*_TOKEN` or `*_SECRET` name. Remove it, rotate it if it was ever pushed, or allow a reviewed false positive in `.no-secrets-allow`.";
+
+const SECRETS_AT_PUSH = "At push it judges the pushed commits the same way.";
+
 test("AC-51 tells the agent at session start which gates the checkout installs and how each refuses", () => {
   const dir = checkout({ "src/a.ts": "export const a = 1;\n", "run.sh": "echo hi\n" });
   install(dir, ["no-comments-javascript"]);
   install(dir, ["no-comments-shell"]);
   install(dir, ["format", "--command", "node 'fmt.cjs'"]);
   install(dir, ["commit-subject", "--prefixes", "feat,fix"]);
+  install(dir, ["no-secrets"]);
   const tools = bare(["bash", "git", "jq"]);
 
   expect(sessionStarted(join(dir, "src"), tools)).toEqual(
@@ -447,20 +453,24 @@ test("AC-51 tells the agent at session start which gates the checkout installs a
       `- format runs \`node 'fmt.cjs'\`: the plugin runs it after each edit, and ${AT_COMMIT_FORMATS}`,
       `${NO_COMMENTS_GATES} At commit and at push, a change that adds a comment is refused: ${REMOVE_COMMENTS}`,
       `- commit-subject, allowing the types feat, fix: ${SUBJECT_AT_COMMIT} ${SUBJECT_AT_PUSH}`,
+      `- no-secrets: ${SECRETS_AT_COMMIT} ${SECRETS_AT_PUSH}`,
     ]),
   );
 
   writeFiles(dir, { [FORMAT_HOOK]: FORMAT_HOOK_V2.replace("command=''", "command='make fmt'") });
   writeFiles(dir, { ".githooks/commit-msg": "#!/bin/sh\nexit 0\n" });
   rmSync(join(dir, ".githooks/pre-push.d/no-comments"));
+  rmSync(join(dir, ".githooks/pre-push.d/no-secrets"));
   expect(sessionStarted(dir, tools)).toEqual(
     noted([
       `- format runs \`make fmt\`: the plugin does not run it after an edit until \`agent-gates install\` updates the hook; ${AT_COMMIT_FORMATS}`,
       `${NO_COMMENTS_GATES} At commit, a change that adds a comment is refused: ${REMOVE_COMMENTS} ${PUSH_UNJUDGED}`,
+      `- no-secrets: ${SECRETS_AT_COMMIT} ${PUSH_UNJUDGED}`,
     ]),
   );
 
   writeFiles(dir, { ".githooks/no-comments/scan.cjs": "// agent-gate:no-comments:28\n" });
+  writeFiles(dir, { ".githooks/no-secrets/scan.cjs": "module.exports = {};\n" });
   expect(sessionStarted(dir, tools)).toEqual(
     noted([
       `- format runs \`make fmt\`: the plugin does not run it after an edit until \`agent-gates install\` updates the hook; ${AT_COMMIT_FORMATS}`,
@@ -484,12 +494,14 @@ test("AC-53 names no refusal at session start while core.hooksPath does not reso
   install(dir, ["no-comments-shell"]);
   install(dir, ["format", "--command", "node 'fmt.cjs'"]);
   install(dir, ["commit-subject", "--prefixes", "feat,fix"]);
+  install(dir, ["no-secrets"]);
   const tools = bare(["bash", "git", "jq"]);
   const unwired = noted(
     [
       "- format runs `node 'fmt.cjs'`: the plugin runs it after each edit.",
       NO_COMMENTS_GATES,
       "- commit-subject, allowing the types feat, fix.",
+      "- no-secrets.",
     ],
     UNWIRED,
   );
@@ -505,6 +517,7 @@ test("AC-53 names no refusal at session start while core.hooksPath does not reso
       `- format runs \`node 'fmt.cjs'\`: the plugin runs it after each edit, and ${AT_COMMIT_FORMATS}`,
       `${NO_COMMENTS_GATES} At commit and at push, a change that adds a comment is refused: ${REMOVE_COMMENTS}`,
       `- commit-subject, allowing the types feat, fix: ${SUBJECT_AT_COMMIT} ${SUBJECT_AT_PUSH}`,
+      `- no-secrets: ${SECRETS_AT_COMMIT} ${SECRETS_AT_PUSH}`,
     ]),
   );
 });

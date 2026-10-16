@@ -4,6 +4,8 @@ import { invariant, unreachable } from "./assert";
 import { blobsOf, gitOutput, mergeBase, nulFields } from "./git";
 import { ALLOW_FILE } from "./no-secrets-allow";
 
+export const SWEEP_ALL = "--all";
+
 export type Judged =
   | { readonly kind: "staged" }
   | { readonly kind: "pushed"; readonly base: string; readonly head: string }

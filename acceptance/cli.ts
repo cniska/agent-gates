@@ -1,5 +1,6 @@
 import { expect } from "bun:test";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   mkdirSync,
@@ -336,4 +337,10 @@ export function commitFiles(dir: string, files: Readonly<Record<string, string>>
 
 export function lines(texts: readonly string[]): string {
   return texts.map((text) => `${text}\n`).join("");
+}
+
+export const AWS_KEY = ["AKIA", "Q7MZ", "P2XK", "V4LT", "W6RB"].join("");
+
+export function fingerprint(rule: string, path: string, secret: string): string {
+  return `${rule}:${path}:${createHash("sha256").update(secret).digest("hex").slice(0, 16)}`;
 }

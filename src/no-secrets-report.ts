@@ -40,8 +40,14 @@ function secretCount(found: readonly FileSecrets[]): number {
   return found.reduce((sum, { secrets }) => sum + secrets.length, 0);
 }
 
+export function countsOf(found: readonly FileSecrets[], scope: Scope): string {
+  const count = secretCount(found);
+  if (count === 0) return `${SUBJECT[scope]} no secret`;
+  return `${SUBJECT[scope]} ${counted(count, "secret", "secrets")}`;
+}
+
 function headerOf(found: readonly FileSecrets[], scope: Scope): string {
-  return `no-secrets: ${SUBJECT[scope]} ${counted(secretCount(found), "secret", "secrets")}. ${FIX}`;
+  return `no-secrets: ${countsOf(found, scope)}. ${FIX}`;
 }
 
 function shownFinding({ rule, shown, fingerprint }: Found): string {

@@ -3,13 +3,11 @@ import { dirname } from "node:path";
 import { invariant, unreachable } from "./assert";
 import { EXIT_STATUS, recordOf, usageErrors } from "./coded-error";
 import { checkoutRoot } from "./git";
-import { type Judged, rootRelative } from "./no-secrets-change";
+import { type Judged, rootRelative, SWEEP_ALL } from "./no-secrets-change";
 import { secretsAdded } from "./no-secrets-judge";
 import { annotations, REPLY_BYTES, reply, type Scope } from "./no-secrets-report";
 
 const FORMAT = "--format";
-
-const SWEEP_ALL = "--all";
 
 const GITHUB = "github";
 

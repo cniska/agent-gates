@@ -1,14 +1,15 @@
 import { afterEach, expect, test } from "bun:test";
-import { createHash } from "node:crypto";
 import { appendFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  AWS_KEY,
   COMMIT_SUBJECT_FILES,
   checkout,
   commitAs,
   commitFiles,
   commitStaged,
   each,
+  fingerprint,
   gated,
   git,
   githubStep,
@@ -45,8 +46,6 @@ const NO_SECRETS_FILES = [
 const FIX =
   "Remove each secret, rotate it if it was ever pushed, or allow a reviewed false positive in .no-secrets-allow.";
 
-const AWS_KEY = ["AKIA", "Q7MZ", "P2XK", "V4LT", "W6RB"].join("");
-
 const PRIVATE_KEY = [
   ["-----BEGIN", "RSA PRIVATE", "KEY-----"].join(" "),
   "MIIEowIBAAKCAQEAx7fake".repeat(4),
@@ -58,10 +57,6 @@ const TOKEN_VALUE = ["ab", "12", "cd", "34"].join("");
 const TOKEN_LINE = ["FOO_TOKEN", "=", TOKEN_VALUE].join("");
 
 type Finding = readonly [line: number, rule: string, secret: string];
-
-function fingerprint(rule: string, path: string, secret: string): string {
-  return `${rule}:${path}:${createHash("sha256").update(secret).digest("hex").slice(0, 16)}`;
-}
 
 function shown(path: string, [, rule, secret]: Finding): string {
   return `${rule}: ${secret.slice(0, 4)}…  allow: ${fingerprint(rule, path, secret)}`;

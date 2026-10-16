@@ -127,6 +127,7 @@ describe("this repo", () => {
       "hook steps",
       "no-comments languages",
       "no-comments backlog",
+      "no-secrets backlog",
     ]);
   });
 });

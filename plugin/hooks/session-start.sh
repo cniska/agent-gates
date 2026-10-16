@@ -73,6 +73,20 @@ commit_subject_line() {
   lines+=("- commit-subject$allowed: at commit it refuses a subject that is not a Conventional Commit \`type(scope): description\` of an allowed type, is over 50 characters or is not ASCII, and a message with a body. $at_push")
 }
 
+no_secrets_line() {
+  local root="$1" running="$2"
+  marker_version "$root/$NO_SECRETS_SCANNER" no-secrets >/dev/null || return 0
+  if [ "$running" = no ]; then
+    lines+=("- no-secrets.")
+    return 0
+  fi
+  local at_push="At push it judges the pushed commits the same way."
+  if ! marker_version "$root/$NO_SECRETS_PUSH_STEP" no-secrets >/dev/null; then
+    at_push="As installed, $PUSH_UNJUDGED."
+  fi
+  lines+=("- no-secrets: at commit it refuses a change that adds a secret: a key, token or private key one of gitleaks' rules matches, or a literal value assigned to a \`*_TOKEN\` or \`*_SECRET\` name. Remove it, rotate it if it was ever pushed, or allow a reviewed false positive in \`.no-secrets-allow\`. $at_push")
+}
+
 main() {
   if ! jq --version >/dev/null 2>&1; then
     note "jq is not on PATH, $UNREAD"
@@ -98,6 +112,7 @@ main() {
   format_line "$root" "$running"
   no_comments_line "$root" "$running"
   commit_subject_line "$root" "$running"
+  no_secrets_line "$root" "$running"
   [ "${#lines[@]}" -gt 0 ] || return 0
   local context
   context="$(printf '%s\n' "$HEADING" "${lines[@]}" "$closing")"

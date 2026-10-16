@@ -23,6 +23,7 @@ import {
   HOOKS_DIR,
   INSTALL_GATES,
   NO_FILLS,
+  NO_SECRETS_SCANNER,
   nameTheFill,
   REINSTALL,
   SCANNER_FILE,
@@ -33,6 +34,9 @@ import { LANGUAGE_NAMES, type Language } from "./no-comments-languages";
 import { countsOf } from "./no-comments-report";
 import { findings, judgedChange } from "./no-comments-scan";
 import { trackedLanguages, trackedPerLanguage } from "./no-comments-tracked";
+import { SWEEP_ALL as SWEEP_SECRETS } from "./no-secrets-change";
+import { secretsAdded } from "./no-secrets-judge";
+import { countsOf as secretCountsOf } from "./no-secrets-report";
 import { type PrepareState, prepareState } from "./package-manifest";
 
 type Health = {
@@ -221,6 +225,33 @@ function backlogHealth(
   ];
 }
 
+const SECRETS_CHECK = "no-secrets backlog";
+
+function secretsHealth(root: string, gates: readonly GateName[], planned: readonly PlannedFile[]): Health[] {
+  if (!gates.includes("no-secrets")) return [];
+  const scanner = NO_SECRETS_SCANNER.target;
+  if (planned.some(({ target, state }) => target === scanner && state !== "installed"))
+    return [
+      {
+        name: SECRETS_CHECK,
+        state: "warn",
+        detail: `not counted while this differs from this agent-gates, since the count runs it: ${scanner}`,
+        fix: REINSTALL,
+      },
+    ];
+  const found = secretsAdded(root, { kind: "all" }, [{ inRoot: dirname(scanner) }]);
+  const detail = secretCountsOf(found, "tracked");
+  if (found.length === 0) return [{ name: SECRETS_CHECK, state: "ok", detail, fix: null }];
+  return [
+    {
+      name: SECRETS_CHECK,
+      state: "warn",
+      detail,
+      fix: `node ${scanner} ${SWEEP_SECRETS} lists each one`,
+    },
+  ];
+}
+
 const STEPS_CHECK = "hook steps";
 
 function stepsHealth({ steps, unchecked }: StepsState): Health[] {
@@ -309,6 +340,7 @@ function judged(root: string): Health[] {
     ...stepsHealth(stepsState(root, planned)),
     ...languagesHealth(root, languages),
     ...backlogHealth(root, languages, planned),
+    ...secretsHealth(root, gates, planned),
   ];
 }
 

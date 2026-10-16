@@ -2,11 +2,13 @@ import { afterEach, expect, test } from "bun:test";
 import { chmodSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import {
+  AWS_KEY,
   agentGates,
   type Check,
   check,
   checkout,
   each,
+  fingerprint,
   git,
   hooksPath,
   install,
@@ -205,5 +207,32 @@ test("AC-38 warns of the project's own hook steps no workflow runs", () => {
     state: "ok",
     detail: `a workflow runs ${steps}`,
     fix: null,
+  });
+});
+
+test("AC-59 counts the secrets tracked files hold that the allow file does not name", () => {
+  const dir = checkout({ "src/aws.ts": `const key = "${AWS_KEY}";\n` });
+  install(dir, ["no-secrets"]);
+  git(dir, ["add", "-A"]);
+  expect(check(dir, "no-secrets backlog")).toEqual({
+    name: "no-secrets backlog",
+    state: "warn",
+    detail: "the tracked files hold 1 secret",
+    fix: "node .githooks/no-secrets/scan.cjs --all lists each one",
+  });
+
+  writeFiles(dir, { ".no-secrets-allow": `${fingerprint("aws-access-token", "src/aws.ts", AWS_KEY)}\n` });
+  git(dir, ["add", "-A"]);
+  expect(check(dir, "no-secrets backlog")).toEqual(
+    passing("no-secrets backlog", "the tracked files hold no secret"),
+  );
+
+  writeFiles(dir, { ".githooks/no-secrets/scan.cjs": "// agent-gate:no-secrets:1\n" });
+  expect(check(dir, "no-secrets backlog")).toEqual({
+    name: "no-secrets backlog",
+    state: "warn",
+    detail:
+      "not counted while this differs from this agent-gates, since the count runs it: .githooks/no-secrets/scan.cjs",
+    fix: "agent-gates install",
   });
 });
