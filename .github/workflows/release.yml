@@ -117,7 +117,7 @@ jobs:
 
       - name: Attest build provenance
         if: startsWith(github.ref, 'refs/tags/') && steps.existing.outputs.published == 'false'
-        uses: actions/attest-build-provenance@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
             artifacts/agent-gates-darwin-arm64.tar.gz
