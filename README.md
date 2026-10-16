@@ -16,7 +16,7 @@ brew install cniska/tap/agent-gates
 npm install -g @cniska/agent-gates
 ```
 
-The curl line installs `~/.local/bin/agent-gates`; put that directory on your `PATH`. Each channel updates the way it installed: `brew upgrade agent-gates`, `npm update -g @cniska/agent-gates`, or the curl line run again.
+The curl line installs `~/.local/bin/agent-gates` and, when that directory is not on your `PATH`, adds it to `~/.zshrc` for zsh or to an existing `~/.bashrc` or `~/.bash_profile` for bash, and otherwise asks you to add it. Each channel updates the way it installed: `brew upgrade agent-gates`, `npm update -g @cniska/agent-gates`, or the curl line run again.
 
 ### From a clone
 
