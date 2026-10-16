@@ -389,6 +389,7 @@ export const NO_SECRETS_SCANNER: GateFile = {
   versions: [
     { version: 1, sha256: "54ab03a3e26aaabf319d6748ac135a2ab336265a439b68e1353e28d7fa1fe821" },
     { version: 2, sha256: "981be0e5a81d118d253673eafb119a81d92ca99fa33963c859c77b325e4f3605" },
+    { version: 3, sha256: "8ea572f418a386b6bcf56abf160d11434d53a4888822bcd8f3d77b446107c2fe" },
   ],
 };
 

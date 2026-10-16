@@ -23,14 +23,7 @@ const PUBLIC_FILES: Readonly<Record<string, readonly string[]>> = {
     "no-comments-scan",
     "no-comments-tracked",
   ],
-  "no-secrets": [
-    "no-secrets-allow",
-    "no-secrets-change",
-    "no-secrets-judge",
-    "no-secrets-match",
-    "no-secrets-report",
-    "no-secrets-rules",
-  ],
+  "no-secrets": ["no-secrets-change", "no-secrets-judge", "no-secrets-report", "no-secrets-rules"],
   "package-manifest": ["package-manifest"],
 };
 

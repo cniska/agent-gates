@@ -62,7 +62,7 @@ const ASSIGNMENT_RULE: Rule = {
   id: ASSIGNMENT_RULE_ID,
   pattern: {
     source:
-      "\\b[A-Z][A-Z0-9_]*_(?:TOKEN|SECRET)[ \\t]*=[ \\t]*(?:\"([^\"\\n]+)\"|'([^'\\n]+)'|([^\\s\"'][^\\n]*?)[ \\t]*[;,]?[ \\t]*(?=\\r?\\n|$|#|//))",
+      "\\b[A-Z][A-Z0-9_]*_(?:TOKEN|SECRET)[ \\t]*=[ \\t]*(?:\"([^\"\\n]+)\"|'([^'\\n]+)'|(<[^>\\n]*>)|([^\\s\"'][^\\n]*?)[ \\t]*[;,]?[ \\t]*(?=\\r?\\n|$|#|//))",
     flags: "",
   },
   path: null,
