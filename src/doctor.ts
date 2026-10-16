@@ -20,6 +20,7 @@ import {
   FILLS,
   type Fill,
   type Fills,
+  type GateFile,
   HOOKS_DIR,
   INSTALL_GATES,
   NO_FILLS,
@@ -184,15 +185,32 @@ function languagesHealth(root: string, installed: readonly Language[]): Health[]
   ];
 }
 
-const BACKLOG_CHECK = "no-comments backlog";
+type Counted = { readonly detail: string; readonly clean: boolean };
 
-function staleSweepFiles(installed: readonly Language[], planned: readonly PlannedFile[]): string[] {
-  const sweep = [SCANNER_FILE, ...installed.map((language) => ADAPTER_FILES[language])].map(
-    ({ target }) => target,
-  );
+function staleOf(runs: readonly GateFile[], planned: readonly PlannedFile[]): string[] {
   return planned
-    .filter(({ target, state }) => sweep.includes(target) && state !== "installed")
+    .filter(({ target, state }) => runs.some((file) => file.target === target) && state !== "installed")
     .map(({ target }) => target);
+}
+
+function notCounted(runs: readonly GateFile[], stale: readonly string[]): string {
+  const [these, them] = runs.length === 1 ? ["this differs", "it"] : ["these differ", "them"];
+  return `not counted while ${these} from this agent-gates, since the count runs ${them}: ${stale.join(", ")}`;
+}
+
+function backlogOf(
+  name: string,
+  scanner: GateFile,
+  alsoRuns: readonly GateFile[],
+  planned: readonly PlannedFile[],
+  counted: () => Counted,
+): Health {
+  const runs = [scanner, ...alsoRuns];
+  const stale = staleOf(runs, planned);
+  if (stale.length > 0) return { name, state: "warn", detail: notCounted(runs, stale), fix: REINSTALL };
+  const { detail, clean } = counted();
+  if (clean) return { name, state: "ok", detail, fix: null };
+  return { name, state: "warn", detail, fix: `node ${scanner.target} ${SWEEP_ALL} lists each one` };
 }
 
 function backlogHealth(
@@ -201,54 +219,24 @@ function backlogHealth(
   planned: readonly PlannedFile[],
 ): Health[] {
   if (installed.length === 0) return [];
-  const stale = staleSweepFiles(installed, planned);
-  if (stale.length > 0)
-    return [
-      {
-        name: BACKLOG_CHECK,
-        state: "warn",
-        detail: `not counted while these differ from this agent-gates, since the count runs them: ${stale.join(", ")}`,
-        fix: REINSTALL,
-      },
-    ];
-  const adapters = adaptersBeside(join(root, dirname(SCANNER_FILE.target)));
-  const found = findings(judgedChange(root, { kind: "all" }), adapters);
-  const detail = countsOf(found, "tracked");
-  if (found.length === 0) return [{ name: BACKLOG_CHECK, state: "ok", detail, fix: null }];
+  const adapterFiles = installed.map((language) => ADAPTER_FILES[language]);
   return [
-    {
-      name: BACKLOG_CHECK,
-      state: "warn",
-      detail,
-      fix: `node ${SCANNER_FILE.target} ${SWEEP_ALL} lists each one`,
-    },
+    backlogOf("no-comments backlog", SCANNER_FILE, adapterFiles, planned, () => {
+      const adapters = adaptersBeside(join(root, dirname(SCANNER_FILE.target)));
+      const found = findings(judgedChange(root, { kind: "all" }), adapters);
+      return { detail: countsOf(found, "tracked"), clean: found.length === 0 };
+    }),
   ];
 }
 
-const SECRETS_CHECK = "no-secrets backlog";
-
 function secretsHealth(root: string, gates: readonly GateName[], planned: readonly PlannedFile[]): Health[] {
   if (!gates.includes("no-secrets")) return [];
-  const scanner = NO_SECRETS_SCANNER.target;
-  if (planned.some(({ target, state }) => target === scanner && state !== "installed"))
-    return [
-      {
-        name: SECRETS_CHECK,
-        state: "warn",
-        detail: `not counted while this differs from this agent-gates, since the count runs it: ${scanner}`,
-        fix: REINSTALL,
-      },
-    ];
-  const found = secretsAdded(root, { kind: "all" }, [{ inRoot: dirname(scanner) }]);
-  const detail = secretCountsOf(found, "tracked");
-  if (found.length === 0) return [{ name: SECRETS_CHECK, state: "ok", detail, fix: null }];
   return [
-    {
-      name: SECRETS_CHECK,
-      state: "warn",
-      detail,
-      fix: `node ${scanner} ${SWEEP_ALL} lists each one`,
-    },
+    backlogOf("no-secrets backlog", NO_SECRETS_SCANNER, [], planned, () => {
+      const skipped = [{ inRoot: dirname(NO_SECRETS_SCANNER.target) }];
+      const found = secretsAdded(root, { kind: "all" }, skipped);
+      return { detail: secretCountsOf(found, "tracked"), clean: found.length === 0 };
+    }),
   ];
 }
 
