@@ -95,7 +95,7 @@ describe("the repo stands alone", () => {
     expect(paths).toContain("docs/plugin.md");
     expect(paths).toContain("gates/commits.yml");
     expect(paths).toContain("bin/agent-gates");
-    expect(paths).toContain("npm/agent-gates.cjs");
+    expect(paths).toContain("npm/agent-gates");
     expect(paths).toContain("scripts/install.sh");
     expect(paths).toContain(".github/workflows/release.yml");
     expect(paths).toContain(".github/workflows/commits.yml");

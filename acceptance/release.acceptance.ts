@@ -1,14 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import {
-  chmodSync,
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
   checkout,
@@ -22,6 +13,7 @@ import {
   run,
   SYSTEM_PATH,
   scratchDir,
+  shell,
 } from "./cli";
 
 afterEach(removeScratch);
@@ -38,6 +30,14 @@ const OTHER_TARGET = TARGET === "darwin-arm64" ? "linux-x64" : "darwin-arm64";
 
 function installing(home: string, curl: string): ReturnType<typeof run> {
   return run("/bin/sh", [INSTALL], home, { HOME: home, PATH: `${curl}:${SYSTEM_PATH}`, SHELL: "/bin/zsh" });
+}
+
+function unameSaying(system: string, machine: string): string {
+  const dir = scratchDir();
+  const uname = join(dir, "uname");
+  writeFileSync(uname, `#!/bin/sh\ncase "$1" in -s) echo '${system}' ;; -m) echo '${machine}' ;; esac\n`);
+  chmodSync(uname, 0o755);
+  return dir;
 }
 
 function fakeBuild(dir: string, printed: string): string {
@@ -123,7 +123,7 @@ test(
 );
 
 test(
-  "AC-47 the npm package runs its platform's binary, and refuses on another platform and when the platform package is missing or cannot start",
+  "AC-47 the npm package runs its platform's binary with no runtime on PATH, and refuses on another platform and when the platform package is missing or cannot start",
   () => {
     const dir = scratchDir();
     const assets = releaseAssets(join(dir, "assets"), compiledBinary(join(dir, "build")), TARGET);
@@ -137,27 +137,21 @@ test(
     cpSync(join(tree, "agent-gates"), join(modules, "agent-gates"), { recursive: true });
     const bin = join(dir, "prefix", "bin");
     mkdirSync(bin);
-    symlinkSync(join(modules, "agent-gates", "bin", "agent-gates.cjs"), join(bin, "agent-gates"));
-    const path = `${bin}:${pathOf(["node", "git"])}`;
+    symlinkSync(join(modules, "agent-gates", "bin", "agent-gates"), join(bin, "agent-gates"));
+    const path = `${bin}:${pathOf(["git"])}:${SYSTEM_PATH}`;
     const project = checkout({ "notes.txt": "made-up content\n" });
+    for (const runtime of ["node", "bun"])
+      expect(shell(project, `command -v ${runtime}`, { PATH: path }).status).not.toBe(0);
 
-    const manifest = join(modules, "agent-gates", "package.json");
-    const shipped = readFileSync(manifest, "utf8");
-    writeFileSync(
-      manifest,
-      JSON.stringify({
-        ...JSON.parse(shipped),
-        optionalDependencies: { "@cniska/agent-gates-plan9-mips": "9.9.9" },
-      }),
-    );
-    const unsupported = run("agent-gates", ["--version"], project, { PATH: path });
+    const unsupported = run("agent-gates", ["--version"], project, {
+      PATH: `${unameSaying("Plan9", "mips")}:${path}`,
+    });
     expect([unsupported.status, unsupported.stdout]).toEqual([1, ""]);
     expect(jsonLine(unsupported.stderr)).toMatchObject({
       command: "agent-gates",
       ok: false,
       error: { kind: "refusal", code: "no_build_for_platform" },
     });
-    writeFileSync(manifest, shipped);
 
     const missing = run("agent-gates", ["--version"], project, { PATH: path });
     expect([missing.status, missing.stdout]).toEqual([1, ""]);
@@ -167,8 +161,9 @@ test(
       error: { kind: "refusal", code: "platform_package_missing" },
     });
 
-    cpSync(join(tree, TARGET), join(modules, `agent-gates-${TARGET}`), { recursive: true });
-    const platformBinary = join(modules, `agent-gates-${TARGET}`, "agent-gates");
+    const nested = join(modules, "agent-gates", "node_modules", "@cniska", `agent-gates-${TARGET}`);
+    cpSync(join(tree, TARGET), nested, { recursive: true });
+    const platformBinary = join(nested, "agent-gates");
     chmodSync(platformBinary, 0o644);
     const unstartable = run("agent-gates", ["--version"], project, { PATH: path });
     expect([unstartable.status, unstartable.stdout]).toEqual([1, ""]);
