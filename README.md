@@ -48,6 +48,7 @@ In the project you want to gate, install each gate on its own line:
 agent-gates install commit-subject
 agent-gates install no-comments
 agent-gates install format --command "npm run lint:fix"
+agent-gates install no-secrets
 agent-gates doctor
 ```
 
