@@ -16,7 +16,7 @@ bin/agent-gates doctor
 ## Checks
 
 - `bun run check` runs lint, typecheck, knip (an export, file or dependency nothing uses) and tests, and `.githooks/pre-commit.d/check` runs it before each commit.
-- `bun run acceptance` proves the criteria in [`SPEC.md`](../SPEC.md) through the CLI, the files it installs, and the release's binary, `install.sh` and npm packages alone, as the spec's D-4 says; each test in `acceptance/` is named for the criteria it proves, and `src/spec.test.ts`, in the check, fails when the tests and the criteria do not cite each other.
+- `bun run acceptance` proves the criteria in [`SPEC.md`](../SPEC.md) through the CLI, the files it installs, and the release's binary, `install.sh` and npm packages alone, as the spec's D-4 says; each test in `acceptance/` is named for the criteria it proves, and `src/spec.test.ts`, in the check, fails when the tests and the criteria do not cite each other. It gives each test 20 seconds instead of Bun's 5, since a test runs git, the hooks and the scanners many times over and the default trips on a loaded machine or runner.
 - `bun run format` formats `src/`, `acceptance/` and `scripts/` with Biome, and the format gate runs it with the linter off before each commit and stages what it changes in the staged files, as [Format](gates.md#format) says.
 - `npm/agent-gates` is the npm package's launcher, a POSIX shell script `scripts/build-npm.ts` fills with the release builds; `scripts/launcher.test.ts`, in the check, runs it over the layouts `npm` and `bun` install, with no runtime on `PATH`.
 - `scripts/build-compiled.sh <outfile>` compiles the CLI into one executable with every gate file inside it, the binary a release ships.
