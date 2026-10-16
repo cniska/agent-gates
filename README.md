@@ -19,6 +19,15 @@ bun add -g @cniska/agent-gates
 
 The curl line installs `~/.local/bin/agent-gates` and, when that directory is not on your `PATH`, adds it to `~/.zshrc` for zsh or to an existing `~/.bashrc` or `~/.bash_profile` for bash, and otherwise asks you to add it. Each channel updates the way it installed: `brew upgrade agent-gates`, `npm update -g @cniska/agent-gates`, `bun update -g @cniska/agent-gates`, or the curl line run again.
 
+To check a release file you downloaded, with [`gh`](https://cli.github.com):
+
+```bash
+gh attestation verify <file> -R cniska/agent-gates --signer-workflow cniska/agent-gates/.github/workflows/release.yml --source-ref refs/tags/<tag>
+gh release verify-asset <tag> <file> -R cniska/agent-gates
+```
+
+The first proves `release.yml` built the file from the tagged commit; the second proves the file is unchanged since the release was published, for a release published with release immutability on. [What a release guarantees](docs/releasing.md#what-a-release-guarantees) says which files each covers.
+
 ### From a clone
 
 To run agent-gates from source instead, clone it. It runs on [Bun](https://bun.sh), which [mise](https://mise.jdx.dev) installs:

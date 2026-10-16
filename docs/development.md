@@ -21,7 +21,7 @@ bin/agent-gates doctor
 - `npm/agent-gates` is the npm package's launcher, a POSIX shell script `scripts/build-npm.ts` fills with the release builds; `scripts/launcher.test.ts`, in the check, runs it over the layouts `npm` and `bun` install, with no runtime on `PATH`.
 - `scripts/build-compiled.sh <outfile>` compiles the CLI into one executable with every gate file inside it, the binary a release ships.
 - `scripts/smoke.sh <executable> <version>` is the release's smoke test: the executable prints the version, installs `commit-subject` into a scratch repository and passes `doctor` there; the release runs it on each build and on each registry install.
-- `scripts/release.sh patch|minor|major` bumps the version and tags it; `.github/workflows/release.yml` builds the tag into a GitHub release, the npm packages and a Homebrew repin, as [Releasing](releasing.md) says.
+- `scripts/release.sh patch|minor|major` bumps the version and tags it; `.github/workflows/release.yml` builds the tag into an attested GitHub release, published only once every file is attached, the npm packages with provenance and a Homebrew repin, as [Releasing](releasing.md) says.
 - `bun run gates:bundle` bundles `gates/no-comments/*.cjs` from `src/`; the tests also run the bundled scanner under Node.
 - `.github/workflows/check.yml` runs the check and the acceptance suite on each push and pull request, and `commits.yml` and `no-comments.yml` run the gates.
 

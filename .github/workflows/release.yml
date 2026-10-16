@@ -79,6 +79,12 @@ jobs:
 
     permissions:
       contents: write
+      id-token: write
+      attestations: write
+
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
 
     steps:
       - name: Checkout
@@ -96,12 +102,48 @@ jobs:
       - name: Generate checksums
         run: cd artifacts && sha256sum -- *.tar.gz install.sh > SHA256SUMS.txt
 
-      - name: Publish GitHub release
+      - name: Find the tag's published release
+        id: existing
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        run: |
+          published="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '.[] | select(.tag_name == env.TAG and (.draft | not)) | .html_url')"
+          if [ -n "$published" ]; then
+            echo "$TAG is already published at $published"
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Attest build provenance
+        if: startsWith(github.ref, 'refs/tags/') && steps.existing.outputs.published == 'false'
+        uses: actions/attest-build-provenance@v4
         with:
-          files: artifacts/*
-          generate_release_notes: true
+          subject-path: |
+            artifacts/agent-gates-darwin-arm64.tar.gz
+            artifacts/agent-gates-linux-x64.tar.gz
+            artifacts/install.sh
+
+      - name: Create the release as a draft with every file
+        if: startsWith(github.ref, 'refs/tags/') && steps.existing.outputs.published == 'false'
+        run: |
+          drafts="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '.[] | select(.tag_name == env.TAG and .draft) | .id')"
+          for id in $drafts; do
+            echo "Deleting draft release $id, left for $TAG by an earlier run"
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$id"
+          done
+          gh release create "$TAG" --draft --verify-tag --title "$TAG" --generate-notes \
+            artifacts/agent-gates-darwin-arm64.tar.gz \
+            artifacts/agent-gates-darwin-arm64.sha256 \
+            artifacts/agent-gates-linux-x64.tar.gz \
+            artifacts/agent-gates-linux-x64.sha256 \
+            artifacts/install.sh \
+            artifacts/SHA256SUMS.txt
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/') && steps.existing.outputs.published == 'false'
+        run: gh release edit "$TAG" --draft=false
 
       - name: Keep the release files of a dry run
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
