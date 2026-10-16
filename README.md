@@ -8,25 +8,33 @@ Gate your agents' work and save them round trips. A coding agent excuses a worka
 
 ## Install
 
-Install the `agent-gates` command for macOS on Apple silicon or Linux on x64 with one of these lines:
+Install the `agent-gates` command for macOS on Apple silicon or Linux on x64 through one of these channels.
+
+With the release's installer:
 
 ```bash
 curl -fsSL https://github.com/cniska/agent-gates/releases/latest/download/install.sh | sh
+```
+
+With Homebrew:
+
+```bash
 brew install cniska/tap/agent-gates
+```
+
+With npm:
+
+```bash
 npm install -g @cniska/agent-gates
+```
+
+With Bun:
+
+```bash
 bun add -g @cniska/agent-gates
 ```
 
 The curl line installs `~/.local/bin/agent-gates` and, when that directory is not on your `PATH`, adds it to `~/.zshrc` for zsh or to an existing `~/.bashrc` or `~/.bash_profile` for bash, and otherwise asks you to add it. Each channel updates the way it installed: `brew upgrade agent-gates`, `npm update -g @cniska/agent-gates`, `bun update -g @cniska/agent-gates`, or the curl line run again.
-
-To check a release file you downloaded, with [`gh`](https://cli.github.com):
-
-```bash
-gh attestation verify <file> -R cniska/agent-gates --signer-workflow cniska/agent-gates/.github/workflows/release.yml --source-ref refs/tags/<tag>
-gh release verify-asset <tag> <file> -R cniska/agent-gates
-```
-
-The first proves `release.yml` built the file from the tagged commit; the second proves the file is unchanged since the release was published, for a release published with release immutability on. [What a release guarantees](docs/releasing.md#what-a-release-guarantees) says which files each covers.
 
 ### From a clone
 
@@ -91,4 +99,4 @@ The optional [plugin](docs/plugin.md) tells the agent at session start which gat
 - [Commands](docs/commands.md): `install` and `doctor`, their output, and the states of a gate file.
 - [Claude Code plugin](docs/plugin.md): what the plugin does and how to install it.
 - [Development](docs/development.md): setup, checks, layout and adding a language, for working on this repo.
-- [Releasing](docs/releasing.md): the release workflow, the owner's one-time setup and each release's steps.
+- [Releasing](docs/releasing.md): the release workflow, what a release guarantees and how to check a download, the owner's one-time setup and each release's steps.
