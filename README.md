@@ -1,6 +1,6 @@
 # agent-gates
 
-Gate your agents' work and save them round trips. A coding agent excuses a workaround in a comment, writes a commit message nobody can scan, commits unformatted code, or pastes a key into a file, and a reviewer reading the diff tends to accept it. agent-gates installs git hooks that refuse such a commit locally, for every contributor, and GitHub workflows that refuse a bad subject, an added comment or an added secret again in CI. It judges the commit only, and leaves how an agent works, and what it records, to other tools.
+Gate your agents' work and save them round trips. A coding agent excuses a workaround in a comment, writes a commit message nobody can scan, commits unformatted code, pastes a key into a file, or pulls a GitHub action by a tag that can move, and a reviewer reading the diff tends to accept it. agent-gates installs git hooks that refuse such a commit locally, for every contributor, and GitHub workflows that refuse a bad subject, an added comment, an added secret or an unpinned action again in CI. It judges the commit only, and leaves how an agent works, and what it records, to other tools.
 
 - `agent-gates install` writes the gates into the project, which commits them, so contributors and CI are gated without installing agent-gates.
 - `agent-gates doctor` judges their health.
