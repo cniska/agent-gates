@@ -8,7 +8,19 @@ Gate your agents' work and save them round trips. A coding agent excuses a worka
 
 ## Install
 
-agent-gates runs on [Bun](https://bun.sh), which [mise](https://mise.jdx.dev) installs:
+Install the `agent-gates` command for macOS on Apple silicon or Linux on x64 with one of these lines:
+
+```bash
+curl -fsSL https://github.com/cniska/agent-gates/releases/latest/download/install.sh | sh
+brew install cniska/tap/agent-gates
+npm install -g @cniska/agent-gates
+```
+
+The curl line installs `~/.local/bin/agent-gates`; put that directory on your `PATH`. Each channel updates the way it installed: `brew upgrade agent-gates`, `npm update -g @cniska/agent-gates`, or the curl line run again.
+
+### From a clone
+
+To run agent-gates from source instead, clone it. It runs on [Bun](https://bun.sh), which [mise](https://mise.jdx.dev) installs:
 
 ```bash
 git clone https://github.com/cniska/agent-gates.git
@@ -16,7 +28,11 @@ cd agent-gates
 mise trust && mise install
 ```
 
-In the clone, `mise install` links `agent-gates` into `~/.bun/bin`; put that directory on your `PATH`. Then, in the project you want to gate, install each gate on its own line:
+In the clone, `mise install` links `agent-gates` into `~/.bun/bin`; put that directory on your `PATH`.
+
+### Gate a project
+
+In the project you want to gate, install each gate on its own line:
 
 ```bash
 agent-gates install commit-subject

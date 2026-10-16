@@ -9,7 +9,7 @@ mise trust && mise install
 bin/agent-gates doctor
 ```
 
-- `mise install` sets up the clone as the [README](../README.md#install) says, and the `bun install` its postinstall runs calls the `prepare` script, which points `core.hooksPath` at `.githooks/`. Only in the clone, never in a worktree, does it link `agent-gates` into `~/.bun/bin`, so removing a worktree never leaves the command pointing at a deleted checkout.
+- `mise install` sets up the clone as the [README](../README.md#from-a-clone) says, and the `bun install` its postinstall runs calls the `prepare` script, which points `core.hooksPath` at `.githooks/`. Only in the clone, never in a worktree, does it link `agent-gates` into `~/.bun/bin`, so removing a worktree never leaves the command pointing at a deleted checkout.
 - `.worktree-hooks/setup` sets up a task worktree the same way, without linking the CLI.
 - `.githooks/` holds the commit-subject, format and no-comments gates this repo installs on itself, and `bin/agent-gates doctor` reports their health.
 
