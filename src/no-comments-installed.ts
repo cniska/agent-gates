@@ -8,8 +8,6 @@ import type { AdapterOf } from "./no-comments-scan";
 
 const SCANNER = "scan.cjs";
 
-export const SWEEP_ALL = "--all";
-
 function isComment(value: unknown): value is Comment {
   return (
     typeof value === "object" &&

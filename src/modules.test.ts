@@ -25,6 +25,7 @@ const PUBLIC_FILES: Readonly<Record<string, readonly string[]>> = {
   ],
   "no-secrets": ["no-secrets-change", "no-secrets-judge", "no-secrets-report", "no-secrets-rules"],
   "package-manifest": ["package-manifest"],
+  scanner: ["scanner-call", "scanner-change", "scanner-report"],
 };
 
 const TEST_SUPPORT = ".test-support";

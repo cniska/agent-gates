@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { ADAPTERS } from "./no-comments-adapters.test-support";
 import { LANGUAGE_NAMES, type Language } from "./no-comments-languages";
-import { annotations, REPLY_BYTES, reply } from "./no-comments-report";
+import { annotations, reply } from "./no-comments-report";
 import { type FileFindings, keptIn, type Refused } from "./no-comments-scan";
+import { REPLY_BYTES } from "./scanner-report";
 
 function commented(
   path: string,

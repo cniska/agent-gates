@@ -1,7 +1,8 @@
 import { LANGUAGE_NAMES, type Language, languageOf } from "./no-comments-languages";
 import { routeOf } from "./no-comments-route";
-import { changesInTheCode, filesOf } from "./no-comments-scan";
+import { changesInTheCode } from "./no-comments-scan";
 import { firstLine } from "./no-comments-spans";
+import { filesOf } from "./scanner-change";
 
 export function trackedPerLanguage(root: string): ReadonlyMap<Language, number> {
   const tracked = changesInTheCode(root, { kind: "all" }).map(({ head }) => head);

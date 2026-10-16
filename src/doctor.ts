@@ -29,15 +29,15 @@ import {
   SCANNER_FILE,
   WORKFLOWS_DIR,
 } from "./gates-contract";
-import { adaptersBeside, SWEEP_ALL } from "./no-comments-installed";
+import { adaptersBeside } from "./no-comments-installed";
 import { LANGUAGE_NAMES, type Language } from "./no-comments-languages";
 import { countsOf } from "./no-comments-report";
 import { findings, judgedChange } from "./no-comments-scan";
 import { trackedLanguages, trackedPerLanguage } from "./no-comments-tracked";
-import { SWEEP_ALL as SWEEP_SECRETS } from "./no-secrets-change";
 import { secretsAdded } from "./no-secrets-judge";
 import { countsOf as secretCountsOf } from "./no-secrets-report";
 import { type PrepareState, prepareState } from "./package-manifest";
+import { SWEEP_ALL } from "./scanner-call";
 
 type Health = {
   readonly name: string;
@@ -247,7 +247,7 @@ function secretsHealth(root: string, gates: readonly GateName[], planned: readon
       name: SECRETS_CHECK,
       state: "warn",
       detail,
-      fix: `node ${scanner} ${SWEEP_SECRETS} lists each one`,
+      fix: `node ${scanner} ${SWEEP_ALL} lists each one`,
     },
   ];
 }

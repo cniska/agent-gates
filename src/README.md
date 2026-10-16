@@ -26,6 +26,7 @@ Only an entry, such as `cli.ts`, reads the environment; it passes what a module 
 | `gate` | Gate names and parts, the marker an installed file carries, and bundling the `no-comments` and `no-secrets` scanners into `gates/` |
 | `no-comments` | The scanner a `no-comments` gate runs: route a file to its language, read its comments, judge a change and report findings |
 | `no-secrets` | The scanner a `no-secrets` gate runs: gitleaks' rules translated for Node's RegExp, the matcher, the allow file's fingerprints, reading a change and judging what it adds |
+| `scanner` | What every scanner shares: reading the staged, pushed or whole change out of git, the call (`--format github`, `--all`, a base and a head), its usage error, the reply's capping and GitHub annotations, and running a scanner's main to the process's streams and exit code |
 | `package-manifest` | The `prepare` script in a project's `package.json` |
 | `git` | Run git and read its output |
 | `file-backup` | Copy a file aside before install replaces it |

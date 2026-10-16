@@ -2,8 +2,9 @@ import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { usageErrors } from "./coded-error";
 import { diffOutput, gitOutput, isCommit, nulFields } from "./git";
-import { binaryPaths, filesOf, isRegularFileMode, type JudgedChange } from "./no-comments-scan";
+import type { JudgedChange } from "./no-comments-scan";
 import { outsideTheCode } from "./no-comments-skips";
+import { binaryPaths, filesOf, isRegularFileMode } from "./scanner-change";
 
 const fileUsageError = usageErrors<{
   readonly outside_checkout: { readonly path: string; readonly root: string };
