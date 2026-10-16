@@ -111,7 +111,7 @@ export function curlServing(bin: string, assets: string): string {
   const curl = join(bin, "curl");
   writeFileSync(
     curl,
-    [
+    lines([
       "#!/bin/sh",
       "url=; out=",
       'while [ "$#" -gt 0 ]; do case "$1" in -o) out="$2"; shift ;; https://*) url="$1" ;; esac; shift; done',
@@ -119,17 +119,16 @@ export function curlServing(bin: string, assets: string): string {
       `case "$url" in ${RELEASE_DOWNLOADS}/*) ;; *) exit 22 ;; esac`,
       '[ -f "$file" ] || exit 22',
       'cp "$file" "$out"',
-      "",
-    ].join("\n"),
+    ]),
   );
   chmodSync(curl, 0o755);
   return bin;
 }
 
 export function jsonLine(text: string): unknown {
-  const lines = text.split("\n");
-  if (lines.length !== 2 || lines[1] !== "") throw new Error(`expected one JSON line, got: ${text}`);
-  return JSON.parse(lines[0] ?? "");
+  const split = text.split("\n");
+  if (split.length !== 2 || split[1] !== "") throw new Error(`expected one JSON line, got: ${text}`);
+  return JSON.parse(split[0] ?? "");
 }
 
 function field(value: unknown, key: string): unknown {
@@ -309,4 +308,32 @@ export function checkout(files: Readonly<Record<string, string>> = {}): string {
   git(dir, ["init", "-q"]);
   writeFiles(dir, files);
   return dir;
+}
+
+export function gated(gates: readonly string[], files: Readonly<Record<string, string>> = {}): string {
+  const dir = checkout(files);
+  for (const gate of gates) install(dir, [gate]);
+  git(dir, ["add", "-A"]);
+  commitAs(dir, "chore: start");
+  return dir;
+}
+
+export function commitStaged(dir: string, paths: readonly string[] = [], env: Env = {}): Outcome {
+  return committing(dir, ["-q", "-m", "feat: change things", ...paths], env);
+}
+
+export function restart(dir: string, to = "HEAD"): string {
+  git(dir, ["reset", "-q", "--hard", to]);
+  git(dir, ["clean", "-q", "-f", "-d"]);
+  return dir;
+}
+
+export function commitFiles(dir: string, files: Readonly<Record<string, string>>): Outcome {
+  writeFiles(dir, files);
+  git(dir, ["add", "-A"]);
+  return commitStaged(dir);
+}
+
+export function lines(texts: readonly string[]): string {
+  return texts.map((text) => `${text}\n`).join("");
 }

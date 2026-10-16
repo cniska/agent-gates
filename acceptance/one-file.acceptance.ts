@@ -1,8 +1,8 @@
 import { afterEach, expect, test } from "bun:test";
 import { mkdirSync, readlinkSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
-import { git, readText, removeScratch, scratchDir, shell, writeFiles } from "./cli";
-import { commentReply, gated, KEPT_JAVASCRIPT } from "./no-comments";
+import { gated, git, readText, removeScratch, scratchDir, shell, writeFiles } from "./cli";
+import { commentReply, KEPT_JAVASCRIPT } from "./no-comments";
 
 afterEach(removeScratch);
 

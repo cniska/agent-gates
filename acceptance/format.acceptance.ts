@@ -6,6 +6,7 @@ import {
   check,
   checkout,
   commitAs,
+  commitStaged,
   committing,
   doctor,
   each,
@@ -41,10 +42,6 @@ function formatted(files: Readonly<Record<string, string>> = {}): string {
   git(dir, ["add", "-A"]);
   commitAs(dir, "chore: start");
   return dir;
-}
-
-function commitStaged(dir: string) {
-  return committing(dir, ["-q", "-m", "feat: change"]);
 }
 
 test("AC-30 refuses format without --command, which then installs a working gate", () => {

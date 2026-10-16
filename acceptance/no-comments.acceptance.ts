@@ -4,8 +4,12 @@ import { join } from "node:path";
 import {
   cloneOf,
   commitAs,
+  commitFiles,
+  commitStaged,
+  gated,
   git,
   githubStep,
+  lines,
   NO_COMMIT,
   type Outcome,
   PASSED,
@@ -13,6 +17,7 @@ import {
   readText,
   refusedWith,
   removeScratch,
+  restart,
   scratchDir,
   shell,
   stepScript,
@@ -21,16 +26,11 @@ import {
 import {
   ALL_LANGUAGES,
   commentReply,
-  commitFiles,
-  commitStaged,
   FIX_SYNTAX,
-  gated,
   javascriptRefusal,
   KEPT_JAVASCRIPT,
   KEPT_PYTHON,
-  lines,
   REMOVE,
-  restart,
 } from "./no-comments";
 
 afterEach(removeScratch);

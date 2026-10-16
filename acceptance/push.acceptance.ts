@@ -5,16 +5,18 @@ import {
   bypassing,
   commitAs,
   committing,
+  gated,
   git,
   gitRan,
   PASSED,
   readText,
   removeScratch,
+  restart,
   scratchDir,
   shell,
   writeFiles,
 } from "./cli";
-import { commentReply, gated, KEPT_JAVASCRIPT } from "./no-comments";
+import { commentReply, KEPT_JAVASCRIPT } from "./no-comments";
 
 afterEach(removeScratch);
 
@@ -96,17 +98,17 @@ test("AC-40 judges each pushed ref's subjects and comments before the push leave
     `${fixupSha} is an autosquash commit left in the range; squash it into the commit it names.\n`,
   );
 
-  git(clone, ["reset", "-q", "--hard", start]);
+  restart(clone, start);
   commitAs(clone, "Add a new thing");
   pushRefused(clone, remote, "HEAD:main", `commit-msg: ${NOT_CONVENTIONAL}\n  got: Add a new thing\n`);
 
-  git(clone, ["reset", "-q", "--hard", start]);
+  restart(clone, start);
   writeFiles(clone, { "new.ts": "export const fresh = 1; // why\n" });
   git(clone, ["add", "-A"]);
   commitAs(clone, "feat: add a new thing");
   pushRefused(clone, remote, "HEAD:main", commentReply([KEPT_JAVASCRIPT], [["new.ts", ["1  // why"]]]));
 
-  git(clone, ["reset", "-q", "--hard", start]);
+  restart(clone, start);
   writeFiles(clone, { "new.ts": "export const fresh = 1;\n" });
   git(clone, ["add", "-A"]);
   commitAs(clone, "feat: add a new thing");
@@ -118,7 +120,7 @@ test("AC-40 judges each pushed ref's subjects and comments before the push leave
   commitAs(clone, "Add a branch thing");
   pushRefused(clone, remote, "HEAD:feature", `commit-msg: ${NOT_CONVENTIONAL}\n  got: Add a branch thing\n`);
 
-  git(clone, ["reset", "-q", "--hard", "HEAD~1"]);
+  restart(clone, "HEAD~1");
   commitAs(clone, "feat: add another thing");
   bypassing(clone, ["push", "-q", "origin", "HEAD:refs/heads/other"]);
   pushes(clone, remote, ":other");

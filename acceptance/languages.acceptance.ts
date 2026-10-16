@@ -1,28 +1,29 @@
 import { afterEach, expect, test } from "bun:test";
 import {
   commitAs,
+  commitFiles,
+  commitStaged,
   committing,
+  gated,
   git,
   install,
+  lines,
   PASSED,
   pathOf,
   refusedWith,
   removeScratch,
+  restart,
   writeFiles,
 } from "./cli";
 import {
   ALL_LANGUAGES,
   commentReply,
-  commitFiles,
-  commitStaged,
-  gated,
   KEPT_DART,
   KEPT_JAVASCRIPT,
   KEPT_PYTHON,
   KEPT_RUST,
   KEPT_SHELL,
   KEPT_SQL,
-  restart,
 } from "./no-comments";
 
 afterEach(removeScratch);
@@ -45,7 +46,7 @@ test("AC-26 keeps only the forms a tool reads, alone in their comment", () => {
 
   expect(
     commitFiles(restart(dir), {
-      "r.ts": [
+      "r.ts": lines([
         "#!/usr/bin/env node # runs it",
         '/// <reference types="node" /> for the types',
         "// agent-gate:no-comments:1 kept",
@@ -57,8 +58,7 @@ test("AC-26 keeps only the forms a tool reads, alone in their comment", () => {
         "// @ts-ignore",
         "// prettier-ignore",
         "export const b = 2;",
-        "",
-      ].join("\n"),
+      ]),
       "r.dart": "#!/usr/bin/env dart \\c\n/// The entry.\n// ignore: unused_local_variable\nvoid main() {}\n",
       "r.sql": "--> statement-breakpoint here\nselect 1;\n-- sqlfluff:noqa\nselect 2;\n",
       "r.sh": "#!/bin/sh # strict\n# shellcheck disable=SC2034\necho hi\n",
@@ -99,16 +99,15 @@ test("AC-27 reads comments where each language's tokenizer does", () => {
   const dir = gated(ALL_LANGUAGES);
   expect(
     commitFiles(dir, {
-      "t.ts": [
+      "t.ts": lines([
         'export const s = "// not a comment";',
         `export const t = \`/* nor \${s} this */\`;`,
         "declare function dec(target: unknown): void;",
         "@dec export class A {}",
         "export @dec class B {}",
-        "",
-      ].join("\n"),
+      ]),
       "t.dart": "void main() {\n  var s = '// not';\n  var r = r'/* nor */';\n}\n",
-      "t.sh": [
+      "t.sh": lines([
         'echo "# not a comment"',
         "echo it#s",
         `x="\${HOME#/}"`,
@@ -116,8 +115,7 @@ test("AC-27 reads comments where each language's tokenizer does", () => {
         "cat <<EOF",
         "# inside a heredoc",
         "EOF",
-        "",
-      ].join("\n"),
+      ]),
       "t.sql": "select '-- not a comment';\nselect $$ (an aside -- text $$;\n",
       "t.rs":
         'fn main() {\n    let s = "// not";\n    let r = r#"/* nor */"#;\n}\n#[doc(hidden)]\nfn hidden() {}\n',

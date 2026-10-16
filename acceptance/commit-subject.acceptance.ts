@@ -9,6 +9,7 @@ import {
   commitAs,
   committing,
   each,
+  gated,
   git,
   githubStep,
   gitRan,
@@ -20,6 +21,7 @@ import {
   readText,
   refusedWith,
   removeScratch,
+  restart,
   scratchDir,
   shell,
   stepScript,
@@ -43,13 +45,6 @@ function notListed(prefixes: string): string {
 }
 
 const SCISSORS = "# ------------------------ >8 ------------------------";
-
-function gated(): string {
-  const dir = checkout();
-  install(dir, ["commit-subject"]);
-  commitAs(dir, "chore: start");
-  return dir;
-}
 
 function commitMessage(dir: string, message: string, cleanup = "strip"): Outcome {
   const file = join(scratchDir(), "message");
@@ -98,7 +93,7 @@ test("AC-14 runs format first, then each other executable pre-commit step in nam
 });
 
 test("AC-15 refuses a subject that breaks a rule, naming the reason", () => {
-  const dir = gated();
+  const dir = gated(["commit-subject"]);
   for (const type of TYPES) passes(dir, `${type}: change a thing\n`);
   passes(dir, "fix(cli-2): change a thing\n");
   passes(dir, "feat!: drop a thing\n");
@@ -136,7 +131,7 @@ test("AC-15 refuses a subject that breaks a rule, naming the reason", () => {
 });
 
 test("AC-16 judges the message git keeps, and an autosquash by the subject it carries", () => {
-  const dir = gated();
+  const dir = gated(["commit-subject"]);
   passes(dir, "feat: add a thing\n# Please enter the commit message\n\n#\tmodified: a.ts\n");
   passes(dir, `feat: add a thing\n${SCISSORS}\ndiff --git a/a.ts b/a.ts\n+const a = 1;\n`, "scissors");
   passes(dir, "feat: add a thing\r\n\r\n", "verbatim");
@@ -151,11 +146,7 @@ test("AC-16 judges the message git keeps, and an autosquash by the subject it ca
 });
 
 test("AC-17 lets a merge commit through", () => {
-  const dir = checkout({ "a.ts": "export const a = 1;\n" });
-  install(dir, ["commit-subject"]);
-  install(dir, ["no-comments-javascript"]);
-  git(dir, ["add", "-A"]);
-  git(dir, ["commit", "-q", "-m", "chore: start"]);
+  const dir = gated(["commit-subject", "no-comments-javascript"], { "a.ts": "export const a = 1;\n" });
   git(dir, ["checkout", "-q", "-b", "side"]);
   writeFiles(dir, { "a.ts": "export const a = 2;\n" });
   git(dir, ["commit", "-q", "-am", "fix: set a to two"]);
@@ -191,10 +182,7 @@ function runWorkflow(dir: string, push: Push): Judged {
 }
 
 function upstream(): string {
-  const dir = checkout();
-  install(dir, ["commit-subject"]);
-  git(dir, ["add", "-A"]);
-  commitAs(dir, "chore: start");
+  const dir = gated(["commit-subject"]);
   commitAs(dir, "Add an old thing");
   return dir;
 }
@@ -225,7 +213,7 @@ test("AC-18 judges every commit the pushed range holds in CI", () => {
     status: 1,
     stderr: autosquashRefusal(fixup),
   });
-  git(clone, ["reset", "-q", "--hard", head]);
+  restart(clone, head);
   const badHead = commitAs(clone, "Add a new thing");
   expect(runWorkflow(clone, { ...toDefault, head: badHead })).toEqual({
     status: 1,
@@ -243,7 +231,7 @@ test("AC-18 judges every commit the pushed range holds in CI", () => {
     stderr: "",
   });
   for (const squash of ["squash! feat: add a branch thing", "amend! feat: add a branch thing"]) {
-    git(branch, ["reset", "-q", "--hard", branchHead]);
+    restart(branch, branchHead);
     const sha = commitAs(branch, `${squash}\n\nfeat: add a branch thing`);
     expect(runWorkflow(branch, { ...opening, head: sha })).toEqual({
       status: 1,

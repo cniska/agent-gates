@@ -1,14 +1,4 @@
-import {
-  checkout,
-  commitAs,
-  committing,
-  type Env,
-  git,
-  install,
-  type Outcome,
-  refusedWith,
-  writeFiles,
-} from "./cli";
+import { lines, type Outcome, refusedWith } from "./cli";
 
 export const LANGUAGES = ["javascript", "dart", "sql", "shell", "rust", "python"];
 
@@ -34,34 +24,6 @@ export const KEPT_SHELL = `kept in shell: ${SHEBANG}; a gate marker on a line of
 export const KEPT_RUST = `kept in Rust: ${SHEBANG}; a gate marker on a line of its own`;
 
 type Findings = readonly (readonly [path: string, lines: readonly string[]])[];
-
-export function gated(gates: readonly string[], files: Readonly<Record<string, string>> = {}): string {
-  const dir = checkout(files);
-  for (const gate of gates) install(dir, [gate]);
-  git(dir, ["add", "-A"]);
-  commitAs(dir, "chore: start");
-  return dir;
-}
-
-export function commitStaged(dir: string, paths: readonly string[] = [], env: Env = {}): Outcome {
-  return committing(dir, ["-q", "-m", "feat: change things", ...paths], env);
-}
-
-export function restart(dir: string, to = "HEAD"): string {
-  git(dir, ["reset", "-q", "--hard", to]);
-  git(dir, ["clean", "-q", "-f", "-d"]);
-  return dir;
-}
-
-export function commitFiles(dir: string, files: Readonly<Record<string, string>>): Outcome {
-  writeFiles(dir, files);
-  git(dir, ["add", "-A"]);
-  return commitStaged(dir);
-}
-
-export function lines(texts: readonly string[]): string {
-  return texts.map((text) => `${text}\n`).join("");
-}
 
 export function commentReply(kept: readonly string[], findings: Findings, lead = "this change adds"): string {
   const count = findings.reduce((total, [, found]) => total + found.length, 0);

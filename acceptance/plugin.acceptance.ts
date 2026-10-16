@@ -5,8 +5,10 @@ import { join } from "node:path";
 import {
   checkout,
   type Env,
+  gated,
   git,
   install,
+  lines,
   pathOf,
   readText,
   removeScratch,
@@ -14,7 +16,7 @@ import {
   shell,
   writeFiles,
 } from "./cli";
-import { commentReply, gated, KEPT_JAVASCRIPT } from "./no-comments";
+import { commentReply, KEPT_JAVASCRIPT } from "./no-comments";
 
 afterEach(removeScratch);
 
@@ -133,12 +135,11 @@ test("AC-37 leaves only a note when it cannot judge the edit", () => {
   });
 });
 
-const STRIP_WHY = [
+const STRIP_WHY = lines([
   'const fs = require("node:fs");',
   'for (const file of fs.readdirSync(".").filter((name) => name.endsWith(".ts")))',
   '  fs.writeFileSync(file, fs.readFileSync(file, "utf8").replaceAll(" // why", ""));',
-  "",
-].join("\n");
+]);
 
 const FORMAT_HOOK = ".githooks/pre-commit.d/format";
 
