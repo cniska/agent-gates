@@ -205,6 +205,7 @@ const NO_COMMENTS_SHARED: readonly GateFile[] = [
       { version: 2, sha256: "3b83b0cbd4e92e31034e16bbc5d80bd285d41c0612c6ad3fb81239ffc99eb9a1" },
       { version: 3, sha256: "e226a011a732f4af4a218046de9df61ab64920ab242251e61a5dd889b1fa4246" },
       { version: 4, sha256: "a76f92319ca5213895528ab08cf71b4574b8be2146af931d65b412daef4214c5" },
+      { version: 5, sha256: "a5656aa573a97a56a438eb70638f738e1cfde68382330db1b6f7ec5a13ed3865" },
     ],
   },
 ];
@@ -420,7 +421,10 @@ const NO_SECRETS_FILES: readonly GateFile[] = [
     target: `${WORKFLOWS_DIR}/no-secrets.yml`,
     executable: false,
     fills: null,
-    versions: [{ version: 1, sha256: "08b8f010ec98a913fda1ae66590dfe581af4ede474c42d4a8bc8e74122998afd" }],
+    versions: [
+      { version: 1, sha256: "08b8f010ec98a913fda1ae66590dfe581af4ede474c42d4a8bc8e74122998afd" },
+      { version: 2, sha256: "2494f520e20a1e70c30a9a3eb8dacbd5aebfa6994a1312e2f395195148ac0bf9" },
+    ],
   },
   JUDGE_PUSH,
 ];
@@ -454,6 +458,7 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
         { version: 2, sha256: "f5863ec0ebb55f68779bd8f5693406178e5adbfb1dfbe09db12550286487656f" },
         { version: 3, sha256: "f28727dbb2e815970fe0e9233c753274cf66c04ae8ac608da31d433e97c3df87" },
         { version: 4, sha256: "b9cfeeffce066c96a0982c4d29f7832ff9148f5527349ae16602e5f484d59d8d" },
+        { version: 5, sha256: "b84455c6e3b1681ee0cc4819804413ccb29c876bf82b8a7e15cd9bfa7e6afb19" },
       ],
     },
     GITATTRIBUTES,
