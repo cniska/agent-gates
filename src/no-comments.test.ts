@@ -1299,6 +1299,16 @@ describe("the one-file scan", () => {
     expect(fileScan(dir, "src/a.ts")).toEqual({ status: 0, stderr: "" });
   });
 
+  test("judges a file named through a symlink to the checkout as the file it resolves to", () => {
+    const dir = gated({ "src/a.ts": "export const a = 1; // why\n" });
+    const link = join(scratchDir(), "link");
+    symlinkSync(dir, link);
+    expect(fileScan(dir, join(link, "src/a.ts"))).toEqual({
+      status: 1,
+      stderr: refusalText(["src/a.ts", "  1  // why"]),
+    });
+  });
+
   test("judges a file HEAD lacks whole, in a checkout with no commit too", () => {
     const dir = gated({ "new.ts": "// why\nexport {};\n" });
     expect(fileScan(dir, "new.ts")).toEqual({ status: 1, stderr: refusalText(["new.ts", "  1  // why"]) });
