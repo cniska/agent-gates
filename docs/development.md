@@ -4,12 +4,16 @@ Setup, checks, layout and adding a language, for working on this repo.
 
 ## Setup
 
+agent-gates runs on [Bun](https://bun.sh), which [mise](https://mise.jdx.dev) installs for it. With mise installed:
+
 ```bash
+git clone https://github.com/cniska/agent-gates.git
+cd agent-gates
 mise trust && mise install
 bin/agent-gates doctor
 ```
 
-- `mise install` sets up the clone as the [README](../README.md#from-a-clone) says, and the `bun install` its postinstall runs calls the `prepare` script, which points `core.hooksPath` at `.githooks/`. Only in the clone, never in a worktree, does it link `agent-gates` into `~/.bun/bin`, so removing a worktree never leaves the command pointing at a deleted checkout.
+- `mise install` installs Bun and the dependencies, and the `bun install` its postinstall runs calls the `prepare` script, which points `core.hooksPath` at `.githooks/`. Only in the clone, never in a worktree, does it link `agent-gates` into `~/.bun/bin`, so removing a worktree never leaves the command pointing at a deleted checkout. Add `~/.bun/bin` to your `PATH` if it is not there yet.
 - `.worktree-hooks/setup` sets up a task worktree the same way, without linking the CLI.
 - `.githooks/` holds the commit-subject, format, no-comments, no-secrets and pinned-actions gates this repo installs on itself, and `bin/agent-gates doctor` reports their health; `.no-secrets-allow` names the rule patterns and placeholders of its own that the no-secrets gate matches.
 
