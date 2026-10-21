@@ -16,7 +16,7 @@ import {
   pathOf,
   readText,
   refusedWith,
-  removeScratch,
+  removeScratchDirs,
   restart,
   scratchDir,
   shell,
@@ -33,7 +33,7 @@ import {
   REMOVE,
 } from "./no-comments";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 function unparsedRefusal(path: string, line: number, reason: string): Outcome {
   return refusedWith(

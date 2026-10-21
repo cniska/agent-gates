@@ -20,7 +20,7 @@ import {
   PASSED,
   readText,
   refusedWith,
-  removeScratch,
+  removeScratchDirs,
   restart,
   scratchDir,
   shell,
@@ -29,7 +29,7 @@ import {
   writeFiles,
 } from "./cli";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const TYPES = ["build", "chore", "ci", "docs", "feat", "fix", "perf", "refactor", "revert", "style", "test"];
 

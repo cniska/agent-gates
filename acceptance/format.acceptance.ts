@@ -17,13 +17,13 @@ import {
   installs,
   readText,
   refuses,
-  removeScratch,
+  removeScratchDirs,
   shell,
   usageCode,
   writeFiles,
 } from "./cli";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const UPPERCASE = 'for f in *.txt; do tr a-z A-Z < "$f" > "$f.tmp" && mv "$f.tmp" "$f"; done\n';
 

@@ -10,7 +10,7 @@ import {
   gitRan,
   PASSED,
   readText,
-  removeScratch,
+  removeScratchDirs,
   restart,
   scratchDir,
   shell,
@@ -18,7 +18,7 @@ import {
 } from "./cli";
 import { commentReply, KEPT_JAVASCRIPT } from "./no-comments";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const NOT_CONVENTIONAL =
   "subject is not a Conventional Commit (type(scope): what changed); types: build,chore,ci,docs,feat,fix,perf,refactor,revert,style,test.";

@@ -11,7 +11,7 @@ import {
   PASSED,
   pathOf,
   refusedWith,
-  removeScratch,
+  removeScratchDirs,
   restart,
   writeFiles,
 } from "./cli";
@@ -26,7 +26,7 @@ import {
   KEPT_SQL,
 } from "./no-comments";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const ALL_KEPT = [KEPT_JAVASCRIPT, KEPT_DART, KEPT_SQL, KEPT_SHELL, KEPT_RUST, KEPT_PYTHON];
 

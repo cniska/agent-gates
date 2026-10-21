@@ -15,11 +15,11 @@ import {
   installs,
   jsonLine,
   refuses,
-  removeScratch,
+  removeScratchDirs,
   writeFiles,
 } from "./cli";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const INSTALL_USAGE =
   "agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-secrets, pinned-actions, no-comments (each language the tracked files hold)";

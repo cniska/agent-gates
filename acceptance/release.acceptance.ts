@@ -9,14 +9,14 @@ import {
   packageVersion,
   pathOf,
   releaseAssets,
-  removeScratch,
+  removeScratchDirs,
   run,
   SYSTEM_PATH,
   scratchDir,
   shell,
 } from "./cli";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const BUILD_TIMEOUT_MS = 60_000;
 

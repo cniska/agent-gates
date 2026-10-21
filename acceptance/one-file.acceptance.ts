@@ -1,10 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
 import { mkdirSync, readlinkSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
-import { gated, git, readText, removeScratch, scratchDir, shell, writeFiles } from "./cli";
+import { gated, git, readText, removeScratchDirs, scratchDir, shell, writeFiles } from "./cli";
 import { commentReply, KEPT_JAVASCRIPT } from "./no-comments";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const SCAN = ".githooks/no-comments/scan.cjs";
 

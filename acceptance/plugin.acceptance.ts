@@ -11,14 +11,14 @@ import {
   lines,
   pathOf,
   readText,
-  removeScratch,
+  removeScratchDirs,
   scratchDir,
   shell,
   writeFiles,
 } from "./cli";
 import { commentReply, KEPT_JAVASCRIPT } from "./no-comments";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const PLUGIN = join(import.meta.dir, "..", "plugin");
 

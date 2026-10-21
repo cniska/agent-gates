@@ -55,7 +55,7 @@ export function scratchDir(): string {
   return dir;
 }
 
-export function removeScratch(): void {
+export function removeScratchDirs(): void {
   home = null;
   for (const dir of scratchDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 }

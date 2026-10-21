@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { CodedError } from "./coded-error";
@@ -11,7 +11,7 @@ export const IDENTITY = ["-c", "user.name=T", "-c", "user.email=t@example.com"];
 const scratchDirs: string[] = [];
 
 export function scratchDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), "agent-gates-"));
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "agent-gates-")));
   scratchDirs.push(dir);
   return dir;
 }

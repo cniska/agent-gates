@@ -18,7 +18,7 @@ import {
   modeOf,
   readText,
   refuses,
-  removeScratch,
+  removeScratchDirs,
   scratchDir,
   shell,
   usageCode,
@@ -26,7 +26,7 @@ import {
 } from "./cli";
 import { ALL_LANGUAGES, LANGUAGES } from "./no-comments";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const PREPARE = "! git rev-parse --git-dir >/dev/null 2>&1 || git config core.hooksPath .githooks";
 

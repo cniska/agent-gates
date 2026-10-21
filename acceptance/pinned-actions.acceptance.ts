@@ -19,7 +19,7 @@ import {
   pathOf,
   readText,
   refusedWith,
-  removeScratch,
+  removeScratchDirs,
   restart,
   scratchDir,
   shell,
@@ -27,7 +27,7 @@ import {
   writeFiles,
 } from "./cli";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const PINNED_ACTIONS_FILES = [
   ".githooks/.gitattributes",

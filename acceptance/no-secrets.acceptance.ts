@@ -22,7 +22,7 @@ import {
   pathOf,
   readText,
   refusedWith,
-  removeScratch,
+  removeScratchDirs,
   restart,
   scratchDir,
   shell,
@@ -30,7 +30,7 @@ import {
   writeFiles,
 } from "./cli";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const NO_SECRETS_FILES = [
   ".githooks/.gitattributes",
