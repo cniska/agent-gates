@@ -15,9 +15,11 @@ import { bundled } from "./gate-bundles";
 import { installGates } from "./gates";
 import { ADAPTER_FILES, NO_FILLS, SCANNER_FILE } from "./gates-contract";
 import { SOURCE_DIR } from "./gates-sources";
-import { type Comment, type Reading, SHARED_SHOWN } from "./no-comments-adapter";
+import type { Comment, Reading } from "./no-comments-adapter";
 import { ADAPTERS } from "./no-comments-adapters.test-support";
-import { LANGUAGE_NAMES, LANGUAGES, type Language, languageOf } from "./no-comments-languages";
+import { isKept, KEEP_FILE, withInstallLines } from "./no-comments-keep";
+import { keepOf } from "./no-comments-keep.test-support";
+import { LANGUAGE_NAMES, LANGUAGES, languageOf } from "./no-comments-languages";
 import {
   commit,
   commitPastHooks,
@@ -50,19 +52,16 @@ function unparsed(line: number, reason: string): Reading {
   return { kind: "unparsed", line, reason };
 }
 
-const KEPT_IN_JAVASCRIPT =
-  "kept in JavaScript and TypeScript: the first-line shebang, with no `#` word or `\\c` after `#!`; a leading `/// <reference …/>` holding only its attributes; a gate marker on a line of its own";
+const KEPT_IN_JAVASCRIPT = "kept in JavaScript and TypeScript: none";
 
-const KEPT_IN_RUST =
-  "kept in Rust: the first-line shebang, with no `#` word or `\\c` after `#!`; a gate marker on a line of its own";
+const KEPT_IN_RUST = "kept in Rust: none";
 
-const KEPT_IN_PYTHON =
-  "kept in Python: the first-line shebang, with no `#` word or `\\c` after `#!`; a gate marker on a line of its own";
+const KEPT_IN_PYTHON = "kept in Python: none";
 
 function refusalText(listing: readonly string[], kept: readonly string[] = [KEPT_IN_JAVASCRIPT]): string {
   const count = listing.filter((line) => line.startsWith("  ")).length;
   const total = count === 1 ? "1 comment" : `${count} comments`;
-  const header = `no-comments: this change adds ${total}. Remove each comment; a why belongs in a name, a test or the docs.`;
+  const header = `no-comments: this change adds ${total}. Remove each comment; a why belongs in a name, a test or the docs. Keep a comment a tool reads in .no-comments-keep.`;
   return [header, ...kept, ...listing, ""].join("\n");
 }
 
@@ -176,16 +175,6 @@ describe("the javascript adapter", () => {
     expect(comments("a.ts", 'const s = "\u2028";\rconst = ;\n')).toMatchObject({ kind: "unparsed", line: 1 });
   });
 
-  test("keeps an exact leading `/// <reference`", () => {
-    const text = [
-      '/// <reference types="bun" />',
-      "/// <reference lib='dom' />",
-      '/// <reference types="node" resolution-mode="import" />',
-      "g();",
-    ].join("\n");
-    expect(comments("a.ts", `${text}\n`)).toEqual(read([]));
-  });
-
   test("refuses every suppression, tool setting and formatter hint, and a directive that spans lines", () => {
     const refused = [
       "// @ts-expect-error",
@@ -224,24 +213,18 @@ describe("the javascript adapter", () => {
     );
   });
 
-  test("keeps `/// <reference` only in the leading line comments TypeScript reads it from, and only with its attributes", () => {
+  test("reads every `/// <reference` as a comment, leading or not", () => {
     expect(
       comments(
         "a.js",
         '/// <reference types="bun" />\n"use strict";\nf();\n/// <reference types="node" />\n',
       ),
-    ).toEqual(read([{ line: 4, text: '/// <reference types="node" />' }]));
-    for (const reference of [
-      '/// <reference types="node" /> for Buffer',
-      '/// <reference types="node" because="Buffer" />',
-      "/// <reference types=node />",
-      '// / <reference types="bun" />',
-      '/* <reference types="bun" /> */',
-    ])
-      expect([reference, comments("a.ts", `${reference}\nf();\n`)]).toEqual([
-        reference,
-        read([{ line: 1, text: reference }]),
-      ]);
+    ).toEqual(
+      read([
+        { line: 1, text: '/// <reference types="bun" />' },
+        { line: 4, text: '/// <reference types="node" />' },
+      ]),
+    );
   });
 
   test("refuses JSDoc type blocks, in plain JavaScript too", () => {
@@ -408,15 +391,9 @@ describe("the sql adapter", () => {
     expect(sqlComments("a.sql", "select a$b$c from t;")).toEqual(read([]));
   });
 
-  test("keeps drizzle's statement breakpoint, and only that exact comment", () => {
+  test("reads drizzle's statement breakpoint as a comment", () => {
     const text = "create table a (id int);\n--> statement-breakpoint\ncreate table b (id int);\n";
-    expect(sqlComments("a.sql", text)).toEqual(read([]));
-    expect(sqlComments("a.sql", "--> statement-breakpoint and why\n-- statement-breakpoint\n")).toEqual(
-      read([
-        { line: 1, text: "--> statement-breakpoint and why" },
-        { line: 2, text: "-- statement-breakpoint" },
-      ]),
-    );
+    expect(sqlComments("a.sql", text)).toEqual(read([{ line: 2, text: "--> statement-breakpoint" }]));
   });
 
   test("reads letters beyond ASCII in identifiers and dollar quote tags as Postgres does", () => {
@@ -977,19 +954,21 @@ describe("the python adapter", () => {
 });
 
 describe("the no-comments doc", () => {
-  test("lists the forms each adapter keeps, and those every language keeps", () => {
-    const cell = (forms: readonly string[]) => (forms.length === 0 ? "none" : forms.join("; "));
+  test("shows keep lines that each keep the comment beside them, install's lines among them", () => {
     const doc = readFileSync(join(import.meta.dir, "../docs/no-comments.md"), "utf8");
-    const own = (language: Language) => {
-      const { kept } = ADAPTERS[language];
-      expect(kept.slice(kept.length - SHARED_SHOWN.length)).toEqual([...SHARED_SHOWN]);
-      return kept.slice(0, kept.length - SHARED_SHOWN.length);
-    };
-    const rows = [
-      ...LANGUAGE_NAMES.map((language) => `| ${LANGUAGES[language].shown} | ${cell(own(language))} |`),
-      `| Every language | ${cell(SHARED_SHOWN)} |`,
-    ];
-    expect(doc).toContain(["| Language | Kept comments |", "| --- | --- |", ...rows].join("\n"));
+    const header = "| A comment a tool reads | Its line in `.no-comments-keep` |\n| --- | --- |\n";
+    const table = doc.slice(doc.indexOf(header) + header.length).split("\n\n")[0] ?? "";
+    const rows = table.split("\n").map((row) => /^\| `(.+)` \| `(.+)` \|$/.exec(row));
+    expect(doc).toContain(header);
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      const [, comment = "", line = ""] = row ?? [];
+      const language = LANGUAGE_NAMES.find((known) => line.startsWith(`${known} `)) ?? null;
+      expect([line, language !== null && isKept(keepOf(line), language, comment)]).toEqual([line, true]);
+    }
+    const lines = rows.map((row) => row?.[2]);
+    for (const line of (withInstallLines(null) ?? "").split("\n").filter((installed) => installed !== ""))
+      expect(lines).toContain(line);
   });
 });
 
@@ -1115,20 +1094,57 @@ describe("the pre-commit hook", () => {
     });
   });
 
-  test("keeps an agent-gate marker in any language, and only the whole marker", () => {
-    const dir = gated({ "a.ts": "// agent-gate:no-comments:1\nexport {};\n" });
+  test("keeps a comment a staged keep pattern of its language matches whole, and names the patterns", () => {
+    const dir = gated();
+    const keep = readFileSync(join(dir, KEEP_FILE), "utf8");
+    writeFiles(dir, {
+      [KEEP_FILE]: `${keep}javascript // [a-z]+-gate:[0-9]+\njavascript /// <reference types="bun" />\n`,
+      "a.ts": '/// <reference types="bun" />\n// dim-gate:1\nexport {}; // dim-gate:2\n',
+    });
     expect(commit(dir)).toEqual({ status: 0, stderr: "" });
-    writeFiles(dir, { "a.ts": "// agent-gate:no-comments:1 and more\nexport {};\n" });
-    expect(commit(dir).stderr).toBe(refusalText(["a.ts", "  1  // agent-gate:no-comments:1 and more"]));
-    writeFiles(dir, { "a.ts": "export {}; // agent-gate:no-comments:1\n" });
-    expect(commit(dir).stderr).toBe(refusalText(["a.ts", "  1  // agent-gate:no-comments:1"]));
+    writeFiles(dir, { "a.ts": "// dim-gate:1 and more\nexport {};\n" });
+    expect(commit(dir).stderr).toBe(
+      refusalText(
+        ["a.ts", "  1  // dim-gate:1 and more"],
+        ['kept in JavaScript and TypeScript: `// [a-z]+-gate:[0-9]+`, `/// <reference types="bun" />`'],
+      ),
+    );
   });
 
-  test("keeps another tool's gate marker, with or without a part", () => {
-    const dir = gated({ "a.ts": "// dim-gate:1\n// othertool-gate:lint:12\nexport {};\n" });
-    expect(commit(dir)).toEqual({ status: 0, stderr: "" });
-    writeFiles(dir, { "a.ts": "// dim-gate:one\nexport {};\n" });
-    expect(commit(dir).stderr).toBe(refusalText(["a.ts", "  1  // dim-gate:one"]));
+  test("refuses the comments a toolchain reads while no keep file lists them", () => {
+    const dir = repo();
+    installGates(dir, ["no-comments-javascript", "no-comments-sql", "no-comments-shell"], NO_FILLS);
+    rmSync(join(dir, KEEP_FILE));
+    commitPastHooks(dir, "chore: gates");
+    writeFiles(dir, {
+      "a.ts": '/// <reference types="bun" />\nexport {};\n',
+      "a.sql": "select 1;\n--> statement-breakpoint\nselect 2;\n",
+      "a.sh": "# agent-gate:x:1\necho\n",
+    });
+    expect(commit(dir)).toEqual({
+      status: 1,
+      stderr: refusalText(
+        [
+          "a.sh",
+          "  1  # agent-gate:x:1",
+          "a.sql",
+          "  2  --> statement-breakpoint",
+          "a.ts",
+          '  1  /// <reference types="bun" />',
+        ],
+        [KEPT_IN_JAVASCRIPT, "kept in SQL: none", "kept in shell: none"],
+      ),
+    });
+  });
+
+  test("refuses a malformed keep file, naming its line", () => {
+    const dir = gated();
+    writeFiles(dir, { [KEEP_FILE]: "shell # x\n\ncobol # y\n", "a.ts": "export {};\n" });
+    expect(commit(dir)).toEqual({
+      status: 1,
+      stderr:
+        "no-comments: .no-comments-keep line 3 names no language the gates read: cobol # y; write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python), one space and a regex that compiles, blank lines aside\n",
+    });
   });
 
   test("judges each language with the adapter installed for it", () => {
@@ -1162,9 +1178,9 @@ describe("the pre-commit hook", () => {
           '  1  #[doc = "why"]',
         ],
         [
-          "kept in Dart: the first-line shebang, with no `#` word or `\\c` after `#!`; a gate marker on a line of its own",
-          "kept in SQL: drizzle's `--> statement-breakpoint`; a gate marker on a line of its own",
-          "kept in shell: the first-line shebang, with no `#` word or `\\c` after `#!`; a gate marker on a line of its own",
+          "kept in Dart: none",
+          "kept in SQL: none",
+          "kept in shell: `# agent-gate:[a-z-]+:[0-9]+`",
           KEPT_IN_RUST,
           KEPT_IN_PYTHON,
         ],
@@ -1249,10 +1265,6 @@ describe("the pre-commit hook", () => {
     writeFileSync(adapter, "exports.comments = () => [];\n");
     writeFiles(dir, { "a.ts": "// why\n" });
     git(dir, ["add", "a.ts"]);
-    const unkept = scan(dir, []);
-    expect(unkept.status).toBe(3);
-    expect(unkept.stderr).toContain("javascript.cjs exports the comment forms it keeps");
-    writeFileSync(adapter, "exports.comments = () => [];\nexports.kept = [];\n");
     const run = scan(dir, []);
     expect(run.status).toBe(3);
     expect(run.stderr).toContain(
@@ -1297,6 +1309,16 @@ describe("the one-file scan", () => {
     git(dir, ["add", "src/a.ts"]);
     writeFiles(dir, { "src/a.ts": "// old\nexport const a = 2;\n" });
     expect(fileScan(dir, "src/a.ts")).toEqual({ status: 0, stderr: "" });
+  });
+
+  test("keeps a comment only through a keep pattern the index holds, as a commit does", () => {
+    const dir = gated({ "a.ts": "// dim-gate:1\nexport {};\n" });
+    const keep = readFileSync(join(dir, KEEP_FILE), "utf8");
+    git(dir, ["add", KEEP_FILE]);
+    writeFiles(dir, { [KEEP_FILE]: `${keep}javascript // dim-gate:[0-9]+\n` });
+    expect(fileScan(dir, "a.ts")).toEqual({ status: 1, stderr: refusalText(["a.ts", "  1  // dim-gate:1"]) });
+    git(dir, ["add", KEEP_FILE]);
+    expect(fileScan(dir, "a.ts")).toEqual({ status: 0, stderr: "" });
   });
 
   test("judges a file named through a symlink to the checkout as the file it resolves to", () => {
@@ -1537,7 +1559,7 @@ describe("the no-comments workflow", () => {
     expect(scan(dir, ["--all"])).toEqual({
       status: 1,
       stderr: [
-        "no-comments: the tracked files hold 2 comments. Remove each comment; a why belongs in a name, a test or the docs.",
+        "no-comments: the tracked files hold 2 comments. Remove each comment; a why belongs in a name, a test or the docs. Keep a comment a tool reads in .no-comments-keep.",
         KEPT_IN_JAVASCRIPT,
         "a.ts",
         "  1  // old",
@@ -1661,6 +1683,43 @@ describe("install and doctor", () => {
       detail: "the tracked files hold no comment",
       fix: null,
     });
+  });
+
+  test("doctor counts no comment a keep pattern keeps, and fails on a malformed keep line", () => {
+    const dir = gated({ "a.ts": "// old\n// dim-gate:1\nexport {};\n" });
+    const keep = readFileSync(join(dir, KEEP_FILE), "utf8");
+    writeFiles(dir, { [KEEP_FILE]: `${keep}javascript // dim-gate:[0-9]+\n` });
+    commitPastHooks(dir, "feat: start");
+    expect(doctorCheck(dir, "no-comments backlog")?.detail).toBe("the tracked files hold 1 comment");
+    writeFiles(dir, { [KEEP_FILE]: `${keep}javascript (\n` });
+    git(dir, ["add", KEEP_FILE]);
+    expect(doctorCheck(dir, "no-comments backlog")).toEqual({
+      name: "no-comments backlog",
+      state: "fail",
+      detail: ".no-comments-keep line 2 holds a regex that does not compile: javascript (",
+      fix: "write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python), one space and a regex that compiles, blank lines aside",
+    });
+  });
+
+  test("install appends only the keep lines a project's keep file lacks, and a reinstall changes nothing", () => {
+    const dir = repo({ [KEEP_FILE]: "javascript // own\nsql -- own" });
+    const installed = installGates(dir, ["no-comments-javascript"], NO_FILLS);
+    expect(installed.files.find(({ target }) => target === KEEP_FILE)).toEqual({
+      target: KEEP_FILE,
+      state: "behind",
+      backup: null,
+    });
+    const merged = "javascript // own\nsql -- own\nshell # agent-gate:[a-z-]+:[0-9]+\n";
+    expect(readFileSync(join(dir, KEEP_FILE), "utf8")).toBe(merged);
+    const again = installGates(dir, [], NO_FILLS);
+    expect(again.files.find(({ target }) => target === KEEP_FILE)?.state).toBe("installed");
+    expect(readFileSync(join(dir, KEEP_FILE), "utf8")).toBe(merged);
+    const fresh = repo();
+    installGates(fresh, ["no-comments-shell"], NO_FILLS);
+    expect(readFileSync(join(fresh, KEEP_FILE), "utf8")).toBe("shell # agent-gate:[a-z-]+:[0-9]+\n");
+    const unkept = repo();
+    installGates(unkept, ["commit-subject"], NO_FILLS);
+    expect(existsSync(join(unkept, KEEP_FILE))).toBe(false);
   });
 
   test("doctor runs no installed gate file that differs from this agent-gates, and still reports", () => {

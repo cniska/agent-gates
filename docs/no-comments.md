@@ -1,6 +1,6 @@
 # No Comments
 
-What the `no-comments-<language>` gates judge, what a refusal holds, the comments each language keeps and how each language is read.
+What the `no-comments-<language>` gates judge, what a refusal holds, the comments a project keeps and how each language is read.
 
 A comment is where a coding agent excuses a workaround instead of fixing it, and a reviewer reading the diff tends to accept it. Without comments, the reason for a choice goes into a name, a test or the docs, and a workaround is fixed or left visibly unfinished. Cursor's [pstack `/no-comments`](https://github.com/cursor/plugins/blob/main/pstack/skills/no-comments/SKILL.md) skill works from the same idea; these gates enforce it on commit, on push and in CI.
 
@@ -17,7 +17,7 @@ The languages are `javascript` (JavaScript and TypeScript), `dart`, `sql` (Postg
 
 ## The refusal
 
-- It starts with the total and the fix, then lists findings by file and line, each comment's first line cut at 120 characters.
+- It starts with the total and the fix, the same with or without a keep file, then the [kept patterns](#kept-comments) of each language it refused a comment in, then lists findings by file and line, each comment's first line cut at 120 characters.
 - It stops at 4,000 bytes.
 - In CI, it also annotates each finding, or the first nine and a count of the rest when there are more than ten. The step's log holds the full reply.
 
@@ -25,22 +25,23 @@ The gates stop the comment count from growing; they do not drive it to zero. `no
 
 ## Kept comments
 
-A comment stays only when a tool reads it, and deleting it changes what that tool does. Even then, only the forms below are kept: every doc comment, suppression, formatter hint, tool setting and test expectation is refused. Fix the code, or put the setting in the tool's config file, where a reason can live.
+A comment stays only when a tool reads it, deleting it changes what that tool does, and the project lists it in `.no-comments-keep` at the checkout root. agent-gates keeps no comment of its own accord: every doc comment, suppression, formatter hint, tool setting and test expectation is refused unless a line of that file keeps it. Fix the code, or put the setting in the tool's config file, where a reason can live.
 
-| Language | Kept comments |
+- **The file:** one pattern per line, `<language> <regex>`: a language from the list above, one space, then a JavaScript regex. Blank lines are skipped; the file has no comment syntax. A line naming another language, with no regex or with a regex that does not compile refuses the scan, naming its line.
+- **Matching:** each regex must match the whole comment, its opener included and its surrounding blanks trimmed, so `shell # v1` keeps `# v1` and not `# v1 why`. A block comment spanning lines is matched whole, so `.` in a pattern stops at its first line break. Where the comment sits on its line is not checked.
+- **The side read:** a commit, `--file` and `--all` read the file as the index holds it, and a push or CI as the pushed head holds it, so a pattern written but not staged keeps nothing.
+- **Without the file**, every comment is refused.
+- **The interpreter line:** a `#!` on line 1, with no `#` word or `\c` after the `#!`, is never judged, since the kernel or `env -S` reads it. A `#!` with such a trailer, or on any other line, is an ordinary comment.
+- **Install** appends any of its own lines the file lacks, creating the file if needed, and never changes a line the project wrote. It writes the line that keeps the markers in the shell hooks it installs.
+
+| A comment a tool reads | Its line in `.no-comments-keep` |
 | --- | --- |
-| JavaScript and TypeScript | the first-line shebang, with no `#` word or `\c` after `#!`; a leading `/// <reference …/>` holding only its attributes |
-| Dart | the first-line shebang, with no `#` word or `\c` after `#!` |
-| SQL | drizzle's `--> statement-breakpoint` |
-| shell | the first-line shebang, with no `#` word or `\c` after `#!` |
-| Rust | the first-line shebang, with no `#` word or `\c` after `#!` |
-| Python | the first-line shebang, with no `#` word or `\c` after `#!` |
-| Every language | a gate marker on a line of its own |
+| `# agent-gate:no-comments:2` | `shell # agent-gate:[a-z-]+:[0-9]+` |
+| `/// <reference types="bun" />` | `javascript /// <reference types="[a-z]+" />` |
+| `--> statement-breakpoint` | `sql --> statement-breakpoint` |
+| `// SPDX-License-Identifier: MIT` | `javascript // SPDX-License-Identifier: MIT` |
 
-- Every kept form stands alone in its comment: no reason, no trailing text. A directive in a block comment that spans lines is refused.
-- Every TypeScript, ESLint and Biome suppression is refused, `@ts-expect-error` included, and so are `prettier-ignore`, `@ts-check` and `@vitest-environment`; their settings belong in `tsconfig.json`, the linter's config, `.prettierignore` and the Vitest config. Every `shellcheck` directive is refused; its settings belong in `.shellcheckrc`. Every Dart `ignore:` and `ignore_for_file:` is refused; the analyzer's settings belong in `analysis_options.yaml`. Tool configuration in a comment is refused too: `eslint-env`, `/* eslint … */`, `/* global */`, Dart's `coverage:`.
-- A gate marker is `agent-gate:<part>:<version>`, where `<part>` is one of agent-gates' parts, or another tool's `<tool>-gate:[<part>:]<version>`, where `<tool>` and `<part>` are each one lowercase word.
-- A refusal lists the kept forms of each language it refused a comment in.
+A refusal names, for each language it refused a comment in, the patterns `.no-comments-keep` holds for it, or `none`.
 
 ## How each language is read
 

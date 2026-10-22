@@ -1,7 +1,5 @@
-import { adapter, type Lexed, SHEBANG, type Span } from "./no-comments-adapter";
+import { adapter, type Lexed, type Span } from "./no-comments-adapter";
 import { lineEnd, type Stopped, unterminated } from "./no-comments-spans";
-
-const OPENER = 1;
 
 const BLANKS = new Set([" ", "\t"]);
 
@@ -45,13 +43,13 @@ type Heredoc = {
 
 type CaseState = "subject" | "in" | "pattern" | "body";
 
-function commentSpans(text: string): Lexed<Span> {
+function commentSpans(text: string): Lexed {
   const spans: Span[] = [];
   const pending: Heredoc[] = [];
   let at = 0;
 
   function lineSpan(start: number, end: number): Span {
-    return { start, end, bodyStart: start + OPENER, bodyEnd: end, style: "line" };
+    return { start, end, style: "line" };
   }
 
   function comment(): void {
@@ -403,7 +401,4 @@ function commentSpans(text: string): Lexed<Span> {
   return code(false) ?? { kind: "lexed", spans };
 }
 
-export const { comments, kept } = adapter({
-  lex: commentSpans,
-  kept: [SHEBANG],
-});
+export const { comments } = adapter(commentSpans);

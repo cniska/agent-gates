@@ -23,4 +23,6 @@ Each command prints one JSON line. An error goes to stderr and exits 2 for `usag
 | `reconfigured` | the current version, holding another command or list than `--command` or `--prefixes` gave | writes it |
 | `occupied` | a hook without an `agent-gate` marker | refuses, writing nothing |
 
+With a `no-comments` gate installed, `install` also reports `.no-comments-keep`: `installed` when it holds every line install writes, `missing` when install creates it, and `behind` when install appends the lines it lacks, leaving the project's own lines as they are ([kept comments](no-comments.md#kept-comments)).
+
 `install` also refuses when `core.hooksPath` or `prepare` already hold something else, when `package.json` does not parse, when no gate is named and none is installed, and, for `format`, when no command is given or installed. `commit-subject` owns `.githooks/commit-msg`.

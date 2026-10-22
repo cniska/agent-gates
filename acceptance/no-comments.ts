@@ -4,24 +4,22 @@ export const LANGUAGES = ["javascript", "dart", "sql", "shell", "rust", "python"
 
 export const ALL_LANGUAGES = LANGUAGES.map((language) => `no-comments-${language}`);
 
-export const REMOVE = "Remove each comment; a why belongs in a name, a test or the docs.";
+export const REMOVE =
+  "Remove each comment; a why belongs in a name, a test or the docs. Keep a comment a tool reads in .no-comments-keep.";
 
 export const FIX_SYNTAX = "Fix the syntax where each file stops parsing.";
 
-const SHEBANG = "the first-line shebang, with no `#` word or `\\c` after `#!`";
+export const KEEP_FILE = ".no-comments-keep";
 
-export const KEPT_JAVASCRIPT = `kept in JavaScript and TypeScript: ${SHEBANG}; a leading \`/// <reference …/>\` holding only its attributes; a gate marker on a line of its own`;
+export const KEPT_JAVASCRIPT = "kept in JavaScript and TypeScript: none";
 
-export const KEPT_PYTHON = `kept in Python: ${SHEBANG}; a gate marker on a line of its own`;
+export const KEPT_PYTHON = "kept in Python: none";
 
-export const KEPT_DART = `kept in Dart: ${SHEBANG}; a gate marker on a line of its own`;
+export const KEPT_DART = "kept in Dart: none";
 
-export const KEPT_SQL =
-  "kept in SQL: drizzle's `--> statement-breakpoint`; a gate marker on a line of its own";
+export const KEPT_SQL = "kept in SQL: none";
 
-export const KEPT_SHELL = `kept in shell: ${SHEBANG}; a gate marker on a line of its own`;
-
-export const KEPT_RUST = `kept in Rust: ${SHEBANG}; a gate marker on a line of its own`;
+export const KEPT_RUST = "kept in Rust: none";
 
 type Findings = readonly (readonly [path: string, lines: readonly string[]])[];
 

@@ -1,7 +1,5 @@
-import { adapter, type Lexed, SHEBANG, type Span } from "./no-comments-adapter";
+import { adapter, type Lexed, type Span } from "./no-comments-adapter";
 import { lineEnd, type Stopped, textStart, unterminated } from "./no-comments-spans";
-
-const OPENER = 1;
 
 const IDENTIFIER_START = /^[\p{L}\p{Nl}_]$/u;
 
@@ -291,23 +289,15 @@ function loneStrings(code: readonly Code[]): Range[] {
   return found;
 }
 
-function commentSpans(text: string): Lexed<Span> {
+function commentSpans(text: string): Lexed {
   const tokenized = tokensOf(text);
   if (tokenized.kind === "stopped") return tokenized;
   const comments = tokenized.comments.map((comment) => ({ ...comment, style: "line" as const }));
   const strings = loneStrings(tokenized.code).map((comment) => ({ ...comment, style: "docstring" as const }));
   const spans = [...comments, ...strings]
     .sort((a, b) => a.start - b.start)
-    .map(
-      ({ start, end, style }): Span => ({
-        start,
-        end,
-        bodyStart: style === "docstring" ? start : start + OPENER,
-        bodyEnd: end,
-        style,
-      }),
-    );
+    .map(({ start, end, style }): Span => ({ start, end, style }));
   return { kind: "lexed", spans };
 }
 
-export const { comments, kept } = adapter({ lex: commentSpans, kept: [SHEBANG] });
+export const { comments } = adapter(commentSpans);

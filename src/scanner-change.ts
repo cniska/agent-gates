@@ -26,6 +26,10 @@ const NUMSTAT_RECORD = /^([^\t]*\t[^\t]*\t)(.*)$/s;
 
 const BINARY = "-\t-\t";
 
+const INDEX_ENTRY = /^\d+ ([0-9a-f]+) 0\t/;
+
+const TREE_ENTRY = /^\d+ blob ([0-9a-f]+)\t/;
+
 export function isRegularFileMode(mode: string): boolean {
   return REGULAR_FILE_MODES.has(mode);
 }
@@ -105,4 +109,30 @@ export function textualChanges(root: string, judged: Judged): Change[] {
   return changesIn(nulFields(gitOutput(root, [...diff, ...CHANGES, "--raw", "--no-abbrev"]))).filter(
     ({ head }) => !binary.has(head.path),
   );
+}
+
+function judgedBlobOf(root: string, judged: Judged, path: string): string | null {
+  switch (judged.kind) {
+    case "staged":
+    case "all": {
+      const [entry] = nulFields(gitOutput(root, ["--literal-pathspecs", "ls-files", "-s", "-z", "--", path]));
+      return INDEX_ENTRY.exec(entry ?? "")?.[1] ?? null;
+    }
+    case "pushed": {
+      const [entry] = nulFields(
+        gitOutput(root, ["--literal-pathspecs", "ls-tree", "-z", judged.head, "--", path]),
+      );
+      return TREE_ENTRY.exec(entry ?? "")?.[1] ?? null;
+    }
+    default:
+      return unreachable(judged);
+  }
+}
+
+export function judgedTextOf(root: string, judged: Judged, path: string): string | null {
+  const blob = judgedBlobOf(root, judged, path);
+  if (blob === null) return null;
+  const [text] = blobsOf(root, [blob]);
+  invariant(text !== undefined, `git cat-file --batch returns the blob of ${path}`);
+  return text.toString();
 }

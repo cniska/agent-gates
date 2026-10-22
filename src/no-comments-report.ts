@@ -1,5 +1,6 @@
 import { invariant, unreachable } from "./assert";
-import { LANGUAGE_NAMES, LANGUAGES, type Language } from "./no-comments-languages";
+import { KEEP_FILE, type Keep, keptShown } from "./no-comments-keep";
+import { LANGUAGE_NAMES, LANGUAGES } from "./no-comments-languages";
 import type { FileFindings } from "./no-comments-scan";
 import type { Scope } from "./scanner-call";
 import {
@@ -16,8 +17,6 @@ import {
   subjectOf,
 } from "./scanner-report";
 
-export type KeptOf = (language: Language) => readonly string[];
-
 type Listing = {
   readonly blocks: readonly Block[];
   readonly findingsFrom: readonly number[];
@@ -30,7 +29,9 @@ const CHANGE_SUBJECT = "this change adds";
 
 const BODY_CHARACTERS = 120;
 
-const COMMENT_FIX = "Remove each comment; a why belongs in a name, a test or the docs.";
+const COMMENT_FIX = `Remove each comment; a why belongs in a name, a test or the docs. Keep a comment a tool reads in ${KEEP_FILE}.`;
+
+const NO_PATTERN = "none";
 
 const SYNTAX_FIX = "Fix the syntax where each file stops parsing.";
 
@@ -61,10 +62,15 @@ function headerOf(found: readonly FileFindings[], scope: Scope): string {
   return `${GATE}: ${countsOf(found, scope)}. ${fixes.join(" ")}`;
 }
 
-function keptLines(found: readonly FileFindings[], keptOf: KeptOf): string[] {
+function keptShownOf(patterns: readonly string[]): string {
+  if (patterns.length === 0) return NO_PATTERN;
+  return patterns.map((pattern) => `\`${pattern}\``).join(", ");
+}
+
+function keptLines(found: readonly FileFindings[], keep: Keep): string[] {
   const refused = new Set(found.flatMap((file) => (file.kind === "comments" ? [file.language] : [])));
   return LANGUAGE_NAMES.filter((language) => refused.has(language)).map(
-    (language) => `kept in ${LANGUAGES[language].shown}: ${keptOf(language).join("; ")}`,
+    (language) => `kept in ${LANGUAGES[language].shown}: ${keptShownOf(keptShown(keep, language))}`,
   );
 }
 
@@ -166,11 +172,11 @@ function capped(header: readonly string[], listing: Listing, maxBytes: number): 
 export function reply(
   found: readonly FileFindings[],
   scope: Scope,
-  keptOf: KeptOf,
+  keep: Keep,
   maxBytes: number | null,
 ): string {
   if (found.length === 0) return "";
-  const header = [headerOf(found, scope), ...keptLines(found, keptOf)];
+  const header = [headerOf(found, scope), ...keptLines(found, keep)];
   const blocks = found.map(reported).map(blockOf);
   const whole = [...header, ...blocks.flatMap(({ path, lines }) => [path, ...lines])];
   const total = whole.reduce((sum, line) => sum + lineBytes(line), 0);

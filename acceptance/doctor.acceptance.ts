@@ -104,9 +104,11 @@ test("AC-12 warns of tracked languages without a gate and gates without a langua
   ]);
 });
 
-test("AC-13 counts the comments tracked files hold, through the installed adapters alone", () => {
+test("AC-13 counts the comments tracked files hold and no pattern keeps, through the installed adapters alone", () => {
   const dir = checkout({
     "a.ts": "export const a = 1; // a\n",
+    "k.ts": "// agent-gate:no-comments:1\nexport const k = 1;\n",
+    ".no-comments-keep": "javascript // agent-gate:[a-z-]+:[0-9]+\n",
     "c.ts": "export const b = 2; /* b */\nexport const c = 3; // c\n",
     "bad.ts": "export const = ;\n",
     "b.py": "x = 1  # read by no installed adapter\n",
@@ -141,6 +143,16 @@ test("AC-13 counts the comments tracked files hold, through the installed adapte
       "not counted while these differ from this agent-gates, since the count runs them: .githooks/no-comments/scan.cjs",
     fix: "agent-gates install",
   });
+
+  install(dir, ["no-comments-javascript"]);
+  writeFiles(dir, { ".no-comments-keep": "javascript // agent-gate:[a-z-]+:[0-9]+\njavascript (\n" });
+  git(dir, ["add", ".no-comments-keep"]);
+  expect(check(dir, "no-comments backlog")).toEqual({
+    name: "no-comments backlog",
+    state: "fail",
+    detail: ".no-comments-keep line 2 holds a regex that does not compile: javascript (",
+    fix: "write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python), one space and a regex that compiles, blank lines aside",
+  });
 });
 
 test("AC-29 installs the gate of each tracked language, and refuses when none is tracked", () => {
@@ -164,6 +176,7 @@ test("AC-29 installs the gate of each tracked language, and refuses when none is
       ".githooks/no-comments/javascript.cjs",
       ".githooks/no-comments/shell.cjs",
       ".githooks/no-comments/python.cjs",
+      ".no-comments-keep",
     ]),
     prepare: "absent",
   });

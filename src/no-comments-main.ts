@@ -4,9 +4,9 @@ import { invariant } from "./assert";
 import { checkoutRoot } from "./git";
 import { fileChange } from "./no-comments-file";
 import { adaptersBeside } from "./no-comments-installed";
-import type { Language } from "./no-comments-languages";
+import { KEEP_FILE, keepRead } from "./no-comments-keep";
 import { annotations, reply } from "./no-comments-report";
-import { findings, type JudgedChange, judgedChange, keptIn } from "./no-comments-scan";
+import { findings, type JudgedChange, judgedChange } from "./no-comments-scan";
 import {
   type Form,
   formatOf,
@@ -17,7 +17,7 @@ import {
   scopeOf,
   usageError,
 } from "./scanner-call";
-import type { Judged } from "./scanner-change";
+import { type Judged, judgedTextOf } from "./scanner-change";
 
 const ONE_FILE = "--file";
 
@@ -39,6 +39,10 @@ function scopeOfTarget(target: Target): Scope {
   return target.kind === "file" ? "change" : scopeOf(target);
 }
 
+function keepSideOf(target: Target): Judged {
+  return target.kind === "file" ? { kind: "staged" } : target;
+}
+
 function changeOf(root: string, target: Target): JudgedChange {
   if (target.kind === "file") return fileChange(root, target.absolute);
   return judgedChange(root, target);
@@ -53,12 +57,14 @@ run("no-comments", () => {
   if (call === null || target === null) throw usageError(FORMS, args);
   const root = checkoutRoot(process.cwd());
   const adapterOf = adaptersBeside(dirname(realpathSync(script)));
-  const found = findings(changeOf(root, target), adapterOf);
-  const keptOf = (language: Language) => keptIn(adapterOf, language);
+  const read = keepRead(judgedTextOf(root, keepSideOf(target), KEEP_FILE));
+  if (read.kind === "malformed") throw read.refusal;
+  const { keep } = read;
+  const found = findings(changeOf(root, target), adapterOf, keep);
   const scope = scopeOfTarget(target);
   return {
     format: call.format,
-    reply: (maxBytes) => reply(found, scope, keptOf, maxBytes),
+    reply: (maxBytes) => reply(found, scope, keep, maxBytes),
     annotations: annotations(found),
     refused: found.length > 0,
   };

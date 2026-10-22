@@ -1,4 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
+import { rmSync } from "node:fs";
+import { join } from "node:path";
 import {
   commitAs,
   commitFiles,
@@ -18,31 +20,51 @@ import {
 import {
   ALL_LANGUAGES,
   commentReply,
+  KEEP_FILE,
   KEPT_DART,
   KEPT_JAVASCRIPT,
   KEPT_PYTHON,
   KEPT_RUST,
-  KEPT_SHELL,
   KEPT_SQL,
 } from "./no-comments";
 
 afterEach(removeScratchDirs);
 
-const ALL_KEPT = [KEPT_JAVASCRIPT, KEPT_DART, KEPT_SQL, KEPT_SHELL, KEPT_RUST, KEPT_PYTHON];
+const ALL_NONE = [KEPT_JAVASCRIPT, KEPT_DART, KEPT_SQL, "kept in shell: none", KEPT_RUST, KEPT_PYTHON];
 
-test("AC-26 keeps only the forms a tool reads, alone in their comment", () => {
+const KEEP = lines([
+  "shell # agent-gate:[a-z-]+:[0-9]+",
+  'javascript /// <reference types="[a-z]+" />',
+  "javascript // agent-gate:[a-z-]+:[0-9]+",
+  "dart // agent-gate:[a-z-]+:[0-9]+",
+  "sql -- agent-gate:[a-z-]+:[0-9]+",
+  "sql --> statement-breakpoint",
+  "rust // agent-gate:[a-z-]+:[0-9]+",
+  "python # agent-gate:[a-z-]+:[0-9]+",
+]);
+
+const KEPT_BY_KEEP = [
+  'kept in JavaScript and TypeScript: `/// <reference types="[a-z]+" />`, `// agent-gate:[a-z-]+:[0-9]+`',
+  "kept in Dart: `// agent-gate:[a-z-]+:[0-9]+`",
+  "kept in SQL: `-- agent-gate:[a-z-]+:[0-9]+`, `--> statement-breakpoint`",
+  "kept in shell: `# agent-gate:[a-z-]+:[0-9]+`",
+  "kept in Rust: `// agent-gate:[a-z-]+:[0-9]+`",
+  "kept in Python: `# agent-gate:[a-z-]+:[0-9]+`",
+];
+
+const KEPT_FILES = {
+  "k.ts":
+    '#!/usr/bin/env node\n/// <reference types="node" />\n// agent-gate:no-comments:1\nexport const a = 1;\n',
+  "k.dart": "#!/usr/bin/env dart\n// agent-gate:no-comments:1\nvoid main() {}\n",
+  "k.sql": "-- agent-gate:no-comments:1\nselect 1;\n--> statement-breakpoint\nselect 2;\n",
+  "k.sh": "#!/bin/sh\n# agent-gate:no-comments:1\necho hi\n",
+  "k.rs": "#!/usr/bin/env rust-script\n// agent-gate:no-comments:1\nfn main() {}\n",
+  "k.py": "#!/usr/bin/env python3\n# agent-gate:no-comments:1\nx = 1\n",
+};
+
+test("AC-26 keeps a comment only through a .no-comments-keep pattern of its language", () => {
   const dir = gated(ALL_LANGUAGES);
-  expect(
-    commitFiles(dir, {
-      "k.ts":
-        '#!/usr/bin/env node\n/// <reference types="node" />\n// agent-gate:no-comments:1\n// tool-gate:part:2\n// tool-gate:3\nexport const a = 1;\n',
-      "k.dart": "#!/usr/bin/env dart\n// agent-gate:no-comments:1\nvoid main() {}\n",
-      "k.sql": "-- agent-gate:no-comments:1\nselect 1;\n--> statement-breakpoint\nselect 2;\n",
-      "k.sh": "#!/bin/sh\n# agent-gate:no-comments:1\necho hi\n",
-      "k.rs": "#!/usr/bin/env rust-script\n// agent-gate:no-comments:1\nfn main() {}\n",
-      "k.py": "#!/usr/bin/env python3\n# agent-gate:no-comments:1\nx = 1\n",
-    }),
-  ).toEqual(PASSED);
+  expect(commitFiles(dir, { [KEEP_FILE]: KEEP, ...KEPT_FILES })).toEqual(PASSED);
 
   expect(
     commitFiles(restart(dir), {
@@ -52,7 +74,6 @@ test("AC-26 keeps only the forms a tool reads, alone in their comment", () => {
         "// agent-gate:no-comments:1 kept",
         "/* agent-gate:no-comments:1",
         "*/",
-        "export const a = 1; // agent-gate:no-comments:1",
         "/** The answer. */",
         "// eslint-disable-next-line no-console",
         "// @ts-ignore",
@@ -67,7 +88,7 @@ test("AC-26 keeps only the forms a tool reads, alone in their comment", () => {
     }),
   ).toEqual(
     refusedWith(
-      commentReply(ALL_KEPT, [
+      commentReply(KEPT_BY_KEEP, [
         [
           "r.dart",
           ["1  #!/usr/bin/env dart \\c", "2  /// The entry.", "3  // ignore: unused_local_variable"],
@@ -83,13 +104,27 @@ test("AC-26 keeps only the forms a tool reads, alone in their comment", () => {
             '2  /// <reference types="node" /> for the types',
             "3  // agent-gate:no-comments:1 kept",
             "4  /* agent-gate:no-comments:1",
-            "6  // agent-gate:no-comments:1",
-            "7  /** The answer. */",
-            "8  // eslint-disable-next-line no-console",
-            "9  // @ts-ignore",
-            "10  // prettier-ignore",
+            "6  /** The answer. */",
+            "7  // eslint-disable-next-line no-console",
+            "8  // @ts-ignore",
+            "9  // prettier-ignore",
           ],
         ],
+      ]),
+    ),
+  );
+
+  restart(dir, "HEAD~1");
+  rmSync(join(dir, KEEP_FILE));
+  expect(commitFiles(dir, KEPT_FILES)).toEqual(
+    refusedWith(
+      commentReply(ALL_NONE, [
+        ["k.dart", ["2  // agent-gate:no-comments:1"]],
+        ["k.py", ["2  # agent-gate:no-comments:1"]],
+        ["k.rs", ["2  // agent-gate:no-comments:1"]],
+        ["k.sh", ["2  # agent-gate:no-comments:1"]],
+        ["k.sql", ["1  -- agent-gate:no-comments:1", "3  --> statement-breakpoint"]],
+        ["k.ts", ['2  /// <reference types="node" />', "3  // agent-gate:no-comments:1"]],
       ]),
     ),
   );

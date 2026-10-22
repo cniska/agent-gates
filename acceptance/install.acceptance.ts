@@ -83,7 +83,7 @@ test("AC-4 installs each no-comments language, and reads the gates back from the
     const files = [".githooks/.gitattributes", ...NO_COMMENTS_FILES, adapter];
     installs(dir, [`no-comments-${language}`], {
       gates: [`no-comments-${language}`],
-      files: each("missing", files),
+      files: [...each("missing", files), { target: ".no-comments-keep", state: "missing", backup: null }],
       prepare: "absent",
     });
     expect(files.map((path) => modeOf(dir, path))).toEqual([
@@ -101,6 +101,7 @@ test("AC-4 installs each no-comments language, and reads the gates back from the
       ...COMMIT_SUBJECT_FILES,
       ...NO_COMMENTS_AFTER_COMMIT_SUBJECT,
       ...LANGUAGES.map((language) => `.githooks/no-comments/${language}.cjs`),
+      ".no-comments-keep",
     ]),
     prepare: "absent",
   });
@@ -188,7 +189,11 @@ test("AC-6 acts on each file's state, keeping a backup of each hand edit", () =>
   ]);
 
   const pushFiles = COMMIT_SUBJECT_FILES.slice(3);
-  const untouched = [...NO_COMMENTS_AFTER_COMMIT_SUBJECT.slice(1), ".githooks/no-comments/javascript.cjs"];
+  const untouched = [
+    ...NO_COMMENTS_AFTER_COMMIT_SUBJECT.slice(1),
+    ".githooks/no-comments/javascript.cjs",
+    ".no-comments-keep",
+  ];
   installs(dir, [], {
     gates,
     files: [

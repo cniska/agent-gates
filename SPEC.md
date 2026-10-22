@@ -53,7 +53,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **FR-31** — An unset `core.hooksPath` fails, and one naming another directory fails with install's refusal.
 - **FR-32** — The `prepare` check passes with no `package.json` or a wired script, warns when the script is missing or an earlier wiring, and fails with install's refusal when it is occupied or the manifest does not parse.
 - **FR-33** — `doctor`, with or without a gate installed, warns in one check about each language the project tracks files of whose `no-comments` gate is not installed, and each installed language the project tracks no file of, with one fix that runs `agent-gates install no-comments` and deletes the second's adapters.
-- **FR-34** — With a `no-comments` gate installed, `doctor` counts the comments the tracked files hold and the tracked files that do not parse, through the installed adapters, and warns while either is above zero, naming `node .githooks/no-comments/scan.cjs --all` as the fix.
+- **FR-34** — With a `no-comments` gate installed, `doctor` counts the comments the tracked files hold that no `.no-comments-keep` pattern keeps, reading the file from the index, and the tracked files that do not parse, through the installed adapters, and warns while either is above zero, naming `node .githooks/no-comments/scan.cjs --all` as the fix. A malformed `.no-comments-keep` line makes the check `fail`, naming the line.
 - **FR-35** — `doctor` does not count while the installed scanner or an installed adapter differs from this agent-gates' release, and warns naming install as the fix.
 
 ### 2.4 Hook wiring
@@ -91,7 +91,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 ### 2.7 No comments: the reply
 
 - **FR-59** — A file that does not parse is refused at the line where it stops parsing, with the reason.
-- **FR-60** — A refusal starts with the counts and the fix, then the kept forms of each language it refused a comment in, then each file in path order with each finding under it as its line and the comment's first line, trimmed.
+- **FR-60** — A refusal starts with the counts and the one fix line of FR-71, the same with or without a keep file, then each refused language's patterns as FR-74 says, then each file in path order with each finding under it as its line and the comment's first line, trimmed.
 - **FR-61** — A comment's first line is shown cut at 120 characters, ending in `…`.
 - **FR-62** — Without `--format github`, a refusal stops at 4,000 bytes, ending with a count of the findings it does not show.
 - **FR-63** — With `--format github`, the scanner annotates each finding at its file and line on stdout, each finding when there are ten or fewer, and otherwise the first nine and one annotation counting the rest, and writes the whole reply, uncut, to stderr.
@@ -100,15 +100,15 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **FR-66** — The scanner exits 3, naming the fault, when an installed adapter does not export or return what the scanner reads.
 - **FR-67** — The `no-comments` hook exits 3, naming the fix, when `node` is not on `PATH`.
 
-### 2.8 No comments: the kept forms
+### 2.8 No comments: the kept comments
 
-- **FR-68** — In every language, a gate marker alone on a line comment at the start of its line is kept: `agent-gate:<part>:<version>` where `<part>` is one of agent-gates' parts, or `<tool>-gate:[<part>:]<version>` where `<tool>` and `<part>` are each one lowercase word.
-- **FR-69** — In JavaScript and TypeScript, Dart, shell, Rust and Python, a shebang on the first line is kept, unless a `#` word or `\c` follows its `#!`.
-- **FR-70** — In JavaScript and TypeScript, a `/// <reference …/>` among the leading line comments, holding only its attributes, is kept.
-- **FR-71** — In SQL, drizzle's `--> statement-breakpoint` is kept.
-- **FR-72** — A kept form with any other text in its comment, or written in a block comment that spans lines, is refused.
-- **FR-73** — Every other comment is refused, doc comments, suppressions, formatter hints and tool settings included.
-- **FR-74** — A refusal names the forms kept in each language it refused a comment in.
+- **FR-68** — A project lists the comments it keeps in `.no-comments-keep` at the checkout root, committed. The scanner reads it as the index holds it on commit, with `--file` and with `--all`, and as the pushed head holds it on push and in CI.
+- **FR-69** — `.no-comments-keep` holds one pattern per line: a language the gates read, one space, then a regex. Blank lines are skipped, and the file has no comment syntax. A line with an unknown language, no regex or a regex that does not compile refuses the scan, naming its line number and text.
+- **FR-70** — A comment is kept when a pattern of its language matches the whole comment, opener included and trimmed, a comment spanning lines tested whole; where it sits on its line is not checked. A `#!` on line 1 with no `#` word or `\c` after it is an interpreter line and is never judged; a line-1 `#!` with such a trailer, or a `#!` on any other line, is an ordinary comment.
+- **FR-71** — With no `.no-comments-keep`, every comment is refused. A refusal's one fix line reads `Remove each comment; a why belongs in a name, a test or the docs. Keep a comment a tool reads in .no-comments-keep.`, the same with or without the file.
+- **FR-72** — Installing any `no-comments-<language>` gate makes sure `.no-comments-keep` holds `shell # agent-gate:[a-z-]+:[0-9]+`, creating the file or appending the line at its end, and never reorders, rewrites or removes a line.
+- **FR-73** — Every other comment is refused, doc comments, suppressions, formatter hints and tool settings included; one passes only when the project lists it.
+- **FR-74** — A refusal names, for each language it refused a comment in, the patterns `.no-comments-keep` holds for it, or `none`.
 
 ### 2.9 No comments: reading each language
 
@@ -233,7 +233,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ## 4. Out of scope
 
-- Configuring a gate: a gate has no options beyond the format command (FR-85) and the commit prefixes (FR-114), and the installed files are the only state; configurable rules belong to the project's own linter.
+- Configuring a gate: a gate has no options beyond the format command (FR-85) and the commit prefixes (FR-114), and its state is the installed files and the project's own `.no-comments-keep` (FR-68); configurable rules belong to the project's own linter.
 - Finding a project's format command, and what its formatting is: the project's formatter owns that, and install is given its command (FR-85).
 - Driving a project's comment count to zero; the project sweeps with `scan.cjs --all`, and the gates stop the count growing (FR-34).
 - Blocking an edit, an installed gate file's included: the plugin formats the edit and reports the comments it added (FR-103, FR-119), and the gates refuse at commit.
@@ -260,7 +260,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **AC-10** — Install where `.github` is a file: refused as `write_failed`, naming the path. (FR-26)
 - **AC-11** — `doctor` in an empty checkout with no gate, then after a clean install of `commit-subject`, `no-comments-javascript` and `no-comments-shell`, which judges the installed hooks, with a tracked TypeScript file: one warning exiting 0, then every check passing in order, exiting 0. (FR-27, FR-28, FR-29)
 - **AC-12** — Install `no-comments-javascript` and `no-comments-rust` where the project tracks TypeScript and Python files and no Rust: `doctor` warns that the gates of Python and of shell, which the installed hooks are written in, are missing and Rust's is unused, in one check whose fix installs the missing and deletes the unused adapter. (FR-33)
-- **AC-13** — With tracked files holding comments and one that does not parse, `doctor` warns with their counts and the sweep as its fix; without them it passes; with the installed scanner edited, it warns that nothing was counted. (FR-34, FR-35)
+- **AC-13** — With tracked files holding comments, a marker a `.no-comments-keep` pattern keeps and a file that does not parse, `doctor` warns with the counts, which leave out the kept marker, and the sweep as its fix; without them it passes; with a malformed `.no-comments-keep` line, its no-comments backlog check fails, naming the line; with the installed scanner edited, it warns that nothing was counted. (FR-34, FR-35)
 - **AC-14** — Steps in `.githooks/pre-commit.d/` named to run in an order, one not executable, one failing with status 7: the executable steps before the failing one run in name order, the rest do not, and the hook exits 7. A step named `format` among them runs first. (FR-36)
 - **AC-15** — Commit with the gate installed: each type of the default set, `revert` among them, a scope and a `!` pass; a type outside it, a subject that is not a Conventional Commit, an uppercase scope, a 51-byte subject, a non-ASCII subject, a body, and an empty or blank subject are each refused, naming the reason and the subject, with no commit made, and the form's refusal names the default set. Installed with `--prefixes`, a type in the list passes, and a default type outside it is refused, naming the list. (FR-37, FR-38, FR-39, FR-40, FR-41, FR-45, FR-114)
 - **AC-16** — Commit messages with `#` lines after the subject, a scissors line with a body below it, and carriage returns pass; `fixup!` and `squash!` of a good subject pass and of a bad one are refused; an `amend!` message passes or is refused by the message after its first line. (FR-40, FR-42, FR-43)
@@ -273,7 +273,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **AC-23** — Commit a comment longer than 120 characters, and comments whose full reply passes 4,000 bytes: the first is cut with `…`, and the reply fits 4,000 bytes and ends counting what it does not show. (FR-61, FR-62)
 - **AC-24** — Run the installed no-comments workflow's step with the environment GitHub gives a push to the default branch, a push that creates a branch, and a branch with no history in common: each judges the files its range changes, or every file. Run the scanner with `--format github` over more than ten findings: nine annotations and a count on stdout, and the whole reply on stderr. (FR-50, FR-63, FR-64)
 - **AC-25** — Run `scan.cjs --all` over tracked files with comments, then with a base and no head, `--all` with a base, and an unknown flag; break an installed adapter; and commit with no `node` on `PATH`: the sweep lists every comment with exit 1, the calls exit 2, the broken adapter exits 3 naming it, and the hook exits 3 naming the fix. (FR-51, FR-64, FR-65, FR-66, FR-67)
-- **AC-26** — Commit, in each language, each form it keeps, then each with trailing text, as a block spanning lines and placed off the start of its line, and a doc comment, a suppression and a tool setting: the kept forms pass, and the rest are refused, the reply naming each refused language's kept forms. (FR-68, FR-69, FR-70, FR-71, FR-72, FR-73, FR-74)
+- **AC-26** — With a committed `.no-comments-keep`, commit, in each language, a comment one of its patterns keeps, then each with trailing text and as a block spanning lines, a doc comment, a suppression and a tool setting: a comment passes only through a pattern of its language, and the rest are refused, the reply naming each refused language's patterns. With no keep file, the same comments are refused, each refused language's line reading `none`. (FR-68, FR-69, FR-70, FR-71, FR-72, FR-73, FR-74)
 - **AC-27** — Commit files whose comment markers sit inside strings, heredocs and expansions; a shell `#` inside a word; a SQL dollar quote holding SQL with a comment and one holding text; a Rust `#[doc(hidden)]` and a `#[cfg_attr(…, doc = …)]`; a Python docstring; and TypeScript in each decorator dialect: only the SQL comment, the doc attribute and the docstring are refused. (FR-75, FR-76, FR-77, FR-78, FR-79, FR-80)
 - **AC-28** — Install every gate, then commit with only git, the shell's utilities and `node` on `PATH`: the hooks judge the commit. (NF-1)
 - **AC-29** — In a checkout tracking TypeScript and Python files with no gate, `doctor` warns that both languages' gates are missing, with `agent-gates install no-comments` as the fix; `install no-comments` then installs `no-comments-javascript`, `no-comments-shell` and `no-comments-python`, and once its files are tracked `doctor` passes the language check. In a checkout tracking neither, `install no-comments` is refused as `no_language_tracked`, writing nothing. (FR-33, FR-83)
@@ -331,7 +331,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 ## 7. Constraints (fixed)
 
 - **C-1** — The CLI is TypeScript on Bun; the installed gates are POSIX shell and CommonJS run by `node`.
-- **C-2** — No config file: the installed files and their markers are the only state.
+- **C-2** — No config file: a gate's state is the installed files with their markers, and the project's own `.no-secrets-allow` and `.no-comments-keep` (FR-68).
 - **C-3** — Every CLI command's output is one JSON line, for agents to read; `--version` alone prints plain text (FR-115).
 
 ## 8. Open decisions (left to the builder)

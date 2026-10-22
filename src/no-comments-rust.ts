@@ -1,4 +1,4 @@
-import { adapter, type Lexed, SHEBANG, type Span, type Style } from "./no-comments-adapter";
+import { adapter, type Lexed, type Span, type Style } from "./no-comments-adapter";
 import { SHEBANG_PREFIX } from "./no-comments-route";
 import { lineEnd, nestedBlockEnd, type Stopped, unterminated } from "./no-comments-spans";
 
@@ -21,10 +21,6 @@ const DOC_TEXT_WORD = "doc";
 const SHEBANG_TRIVIA = new RegExp(`${WHITESPACE}+|//(?![!/])[^\\n]*|////[^\\n]*`, "y");
 
 const PLAIN_BLOCK_COMMENT = /\/\*(?!!)(?!\*(?![*/]))/y;
-
-const OPENER = 2;
-
-const BLOCK_CLOSER = 2;
 
 function shebangEnd(text: string): number {
   if (!text.startsWith(SHEBANG_PREFIX)) return 0;
@@ -218,9 +214,7 @@ function spansOf(text: string, tokens: readonly Token[]): Span[] {
   }
 
   function found(start: number, end: number, style: Style): void {
-    const bodyStart = style === "attribute" ? start : start + OPENER;
-    const bodyEnd = style === "block" ? end - BLOCK_CLOSER : end;
-    spans.push({ start, end, bodyStart, bodyEnd, style });
+    spans.push({ start, end, style });
   }
 
   function isSingleEquals(at: number): boolean {
@@ -284,16 +278,12 @@ function spansOf(text: string, tokens: readonly Token[]): Span[] {
   return spans;
 }
 
-function commentSpans(text: string): Lexed<Span> {
+function commentSpans(text: string): Lexed {
   const tokenized = tokensOf(text);
   if (tokenized.kind === "stopped") return tokenized;
   const end = shebangEnd(text);
-  const shebang: Span[] =
-    end === 0 ? [] : [{ start: 0, end, bodyStart: SHEBANG_PREFIX.length, bodyEnd: end, style: "line" }];
+  const shebang: Span[] = end === 0 ? [] : [{ start: 0, end, style: "line" }];
   return { kind: "lexed", spans: [...shebang, ...spansOf(text, tokenized.tokens)] };
 }
 
-export const { comments, kept } = adapter({
-  lex: commentSpans,
-  kept: [SHEBANG],
-});
+export const { comments } = adapter(commentSpans);

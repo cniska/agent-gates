@@ -33,24 +33,17 @@ function isReading(value: unknown): value is Reading {
   }
 }
 
-function isFormList(value: unknown): value is readonly string[] {
-  return Array.isArray(value) && value.every((form) => typeof form === "string");
-}
-
 function adapterAt(path: string, load: NodeJS.Require): Adapter | null {
   if (!existsSync(path)) return null;
   const module = Object(load(path));
   const comments: unknown = Reflect.get(module, "comments");
-  const kept: unknown = Reflect.get(module, "kept");
   invariant(typeof comments === "function", `${path} exports comments()`);
-  invariant(isFormList(kept), `${path} exports the comment forms it keeps`);
   return {
     comments: (file, text) => {
       const reading: unknown = Reflect.apply(comments, undefined, [file, text]);
       invariant(isReading(reading), `${path} returns the comments it read, or where the file stops parsing`);
       return reading;
     },
-    kept,
   };
 }
 

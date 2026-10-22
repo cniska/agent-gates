@@ -1,5 +1,6 @@
 import { invariant } from "./assert";
 import type { Adapter, Reading } from "./no-comments-adapter";
+import { isKept, type Keep } from "./no-comments-keep";
 import { type Language, languageOf } from "./no-comments-languages";
 import { outsideTheCode } from "./no-comments-skips";
 import { firstLine } from "./no-comments-spans";
@@ -35,6 +36,8 @@ export type FileFindings =
 
 export type AdapterOf = (language: Language) => Adapter | null;
 
+type Reader = { readonly adapterOf: AdapterOf; readonly keep: Keep };
+
 type LanguageReading = { readonly language: Language; readonly reading: Reading };
 
 const WHITESPACE_RUN = /\s+/g;
@@ -63,17 +66,14 @@ export function judgedChange(root: string, judged: Judged): JudgedChange {
   return { heads, bases: files.slice(inTheCode.length) };
 }
 
-function readingOf({ path, text }: FileText, adapterOf: AdapterOf): LanguageReading | null {
+function readingOf({ path, text }: FileText, { adapterOf, keep }: Reader): LanguageReading | null {
   const language = languageOf(path, firstLine(text));
   const adapter = language === null ? null : adapterOf(language);
   if (language === null || adapter === null) return null;
-  return { language, reading: adapter.comments(path, text) };
-}
-
-export function keptIn(adapterOf: AdapterOf, language: Language): readonly string[] {
-  const adapter = adapterOf(language);
-  invariant(adapter !== null, `the ${language} adapter that refused a comment is loaded`);
-  return adapter.kept;
+  const reading = adapter.comments(path, text);
+  if (reading.kind === "unparsed") return { language, reading };
+  const comments = reading.comments.filter((comment) => !isKept(keep, language, comment.text));
+  return { language, reading: { kind: "read", comments } };
 }
 
 function identityOf(comment: string): string {
@@ -87,9 +87,9 @@ function added(pool: Counts, identity: string, count: number): void {
   pool.set(identity, (pool.get(identity) ?? 0) + count);
 }
 
-function poolOf(base: FileText, adapterOf: AdapterOf): Pool {
+function poolOf(base: FileText, reader: Reader): Pool {
   const pool: Counts = new Map();
-  const reading = readingOf(base, adapterOf)?.reading;
+  const reading = readingOf(base, reader)?.reading;
   if (reading?.kind === "read") for (const { text } of reading.comments) added(pool, identityOf(text), 1);
   return pool;
 }
@@ -126,12 +126,12 @@ type Unmatched = { readonly file: FileText; readonly read: LanguageReading | nul
 
 type OwnMatch = { readonly unmatched: readonly Unmatched[]; readonly leftovers: Pool };
 
-function ownMatch({ heads, bases }: JudgedChange, adapterOf: AdapterOf): OwnMatch {
-  const pools = new Map(bases.map((base) => [base.path, poolOf(base, adapterOf)]));
+function ownMatch({ heads, bases }: JudgedChange, reader: Reader): OwnMatch {
+  const pools = new Map(bases.map((base) => [base.path, poolOf(base, reader)]));
   const matched = heads.map(({ file, base }) => {
     const ownPath = base?.origin === "own" ? base.path : null;
     const own = ownPath === null ? null : (pools.get(ownPath) ?? null);
-    return { file, ownPath, ...unmatchedIn(readingOf(file, adapterOf), own) };
+    return { file, ownPath, ...unmatchedIn(readingOf(file, reader), own) };
   });
   const remainders = new Map<string, Pool>();
   for (const { ownPath, left } of matched) {
@@ -168,6 +168,6 @@ function crossFileFindings({ unmatched, leftovers }: OwnMatch): FileFindings[] {
   return found;
 }
 
-export function findings(change: JudgedChange, adapterOf: AdapterOf): FileFindings[] {
-  return crossFileFindings(ownMatch(change, adapterOf)).sort(byPath);
+export function findings(change: JudgedChange, adapterOf: AdapterOf, keep: Keep): FileFindings[] {
+  return crossFileFindings(ownMatch(change, { adapterOf, keep })).sort(byPath);
 }

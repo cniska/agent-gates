@@ -201,7 +201,7 @@ test("AC-23 cuts a long comment and a long reply", () => {
     { length: 150 },
     (_, at) => `export const a${at} = ${at}; // comment number ${at}\n`,
   );
-  const shown = Array.from({ length: 133 }, (_, at) => `  ${at + 1}  // comment number ${at}`);
+  const shown = Array.from({ length: 137 }, (_, at) => `  ${at + 1}  // comment number ${at}`);
   expect(commitFiles(dir, { "many.ts": many.join(""), "z.ts": "// z\n" })).toEqual(
     refusedWith(
       lines([
@@ -209,7 +209,7 @@ test("AC-23 cuts a long comment and a long reply", () => {
         KEPT_JAVASCRIPT,
         "many.ts",
         ...shown,
-        "many.ts: 17 more",
+        "many.ts: 13 more",
         "z.ts: 1 more",
       ]),
     ),

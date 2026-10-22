@@ -1,27 +1,25 @@
-import { adapter, type Lexed, SHEBANG, type Span } from "./no-comments-adapter";
+import { adapter, type Lexed, type Span } from "./no-comments-adapter";
 import { bracketsOf } from "./no-comments-brackets";
 import { SHEBANG_PREFIX } from "./no-comments-route";
 import { lineEnd, nestedBlockEnd, type Stopped, unterminated } from "./no-comments-spans";
 
-const OPENER = 2;
-
 const IDENTIFIER_CHAR = /[A-Za-z0-9_$]/;
 
-function commentSpans(text: string): Lexed<Span> {
+function commentSpans(text: string): Lexed {
   const spans: Span[] = [];
   let at = text.startsWith(SHEBANG_PREFIX) ? lineEnd(text, 0) : 0;
-  if (at > 0) spans.push({ start: 0, end: at, bodyStart: SHEBANG_PREFIX.length, bodyEnd: at, style: "line" });
+  if (at > 0) spans.push({ start: 0, end: at, style: "line" });
 
   function lineComment(): void {
     const start = at;
     at = lineEnd(text, at);
-    spans.push({ start, end: at, bodyStart: start + OPENER, bodyEnd: at, style: "line" });
+    spans.push({ start, end: at, style: "line" });
   }
 
   function blockComment(): Stopped | null {
     const end = nestedBlockEnd(text, at, text.length);
     if (end === null) return unterminated(at, "comment");
-    spans.push({ start: at, end, bodyStart: at + OPENER, bodyEnd: end - OPENER, style: "block" });
+    spans.push({ start: at, end, style: "block" });
     at = end;
     return null;
   }
@@ -78,7 +76,4 @@ function commentSpans(text: string): Lexed<Span> {
   return { kind: "lexed", spans };
 }
 
-export const { comments, kept } = adapter({
-  lex: commentSpans,
-  kept: [SHEBANG],
-});
+export const { comments } = adapter(commentSpans);

@@ -41,6 +41,7 @@ import {
 import { filledIn, fillTemplateOf, withFill } from "./gates-fill";
 import { gateSources } from "./gates-sources" with { type: "macro" };
 import { configValue, setConfig } from "./git";
+import { KEEP_FILE, withInstallLines } from "./no-comments-keep";
 import { LANGUAGE_NAMES, type Language } from "./no-comments-languages";
 import { trackedLanguages, trackedPerLanguage } from "./no-comments-tracked";
 import { type PrepareState, prepareState } from "./package-manifest";
@@ -300,6 +301,22 @@ function applied(root: string, { file, path, source, state }: WritableFile): str
   return backup;
 }
 
+type KeepPlan =
+  | { readonly state: "installed" }
+  | { readonly state: "missing" | "behind"; readonly path: string; readonly text: string };
+
+function keepPlan(root: string): KeepPlan {
+  const path = join(root, KEEP_FILE);
+  const found = foundAt(path)?.text ?? null;
+  const text = withInstallLines(found);
+  if (text === null) return { state: "installed" };
+  return { state: found === null ? "missing" : "behind", path, text };
+}
+
+function keepsComments(gates: readonly GateName[]): boolean {
+  return LANGUAGE_NAMES.some((language) => gates.includes(noCommentsGate(language)));
+}
+
 const HOOKS_LANGUAGE: Language = "shell";
 
 export function trackedLanguageGates(root: string): NoCommentsGate[] {
@@ -322,11 +339,19 @@ export function installGates(root: string, named: readonly GateName[], given: Fi
   });
   const prepare = prepareState(root);
   if (prepare.kind === "occupied" || prepare.kind === "unparseable") throw prepare.refusal;
-  const files = toWrite.map((planned) => ({
+  const keep = keepsComments(gates) ? keepPlan(root) : null;
+  const files: InstalledFile[] = toWrite.map((planned) => ({
     target: planned.target,
     state: planned.state,
     backup: applied(root, planned),
   }));
+  if (keep !== null) {
+    if (keep.state !== "installed") {
+      const { path, text } = keep;
+      writing(path, () => writeFileSync(path, text));
+    }
+    files.push({ target: KEEP_FILE, state: keep.state, backup: null });
+  }
   if (prepare.kind === "missing" || prepare.kind === "behind")
     writing(prepare.path, () => writeFileSync(prepare.path, prepare.wired));
   if (hooksPath.kind === "unset") setConfig(root, "core.hooksPath", HOOKS_DIR);

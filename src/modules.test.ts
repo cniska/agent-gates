@@ -18,6 +18,7 @@ const PUBLIC_FILES: Readonly<Record<string, readonly string[]>> = {
   install: ["install-command"],
   "no-comments": [
     "no-comments-installed",
+    "no-comments-keep",
     "no-comments-languages",
     "no-comments-report",
     "no-comments-scan",

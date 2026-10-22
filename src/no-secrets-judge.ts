@@ -1,8 +1,8 @@
 import { ALLOW_FILE, fingerprintOf, parsedAllow } from "./no-secrets-allow";
-import { allowTextOf, type JudgedChange, judgedChange, type RootRelative } from "./no-secrets-change";
+import { type JudgedChange, judgedChange, type RootRelative } from "./no-secrets-change";
 import { type CompiledTable, compiled, type Secret, secretsIn } from "./no-secrets-match";
 import { shippedRules } from "./no-secrets-rules" with { type: "macro" };
-import type { FileText, Judged } from "./scanner-change";
+import { type FileText, type Judged, judgedTextOf } from "./scanner-change";
 
 export type Found = Secret & { readonly fingerprint: string };
 
@@ -64,7 +64,7 @@ export function secretsAdded(
   target: Judged,
   skipped: readonly RootRelative[],
 ): readonly FileSecrets[] {
-  const allowed = parsedAllow(allowTextOf(root, target));
+  const allowed = parsedAllow(judgedTextOf(root, target, ALLOW_FILE));
   return judged(judgedChange(root, target), {
     table: TABLE,
     allowed,

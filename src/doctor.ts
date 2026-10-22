@@ -32,6 +32,7 @@ import {
   WORKFLOWS_DIR,
 } from "./gates-contract";
 import { adaptersBeside } from "./no-comments-installed";
+import { KEEP_FILE, keepRead } from "./no-comments-keep";
 import { LANGUAGE_NAMES, type Language } from "./no-comments-languages";
 import { countsOf } from "./no-comments-report";
 import { findings, judgedChange } from "./no-comments-scan";
@@ -42,6 +43,7 @@ import { type PrepareState, prepareState } from "./package-manifest";
 import { unpinnedIn } from "./pinned-actions-judge";
 import { countsOf as unpinnedCountsOf } from "./pinned-actions-report";
 import { SWEEP_ALL } from "./scanner-call";
+import { judgedTextOf } from "./scanner-change";
 
 type Health = {
   readonly name: string;
@@ -188,7 +190,9 @@ function languagesHealth(root: string, installed: readonly Language[]): Health[]
   ];
 }
 
-type Counted = { readonly detail: string; readonly clean: boolean };
+type Counted =
+  | { readonly kind: "counted"; readonly detail: string; readonly clean: boolean }
+  | { readonly kind: "refused"; readonly refusal: Refusal };
 
 function staleOf(runs: readonly GateFile[], planned: readonly PlannedFile[]): string[] {
   return planned
@@ -211,9 +215,15 @@ function backlogOf(
   const runs = [scanner, ...alsoRuns];
   const stale = staleOf(runs, planned);
   if (stale.length > 0) return { name, state: "warn", detail: notCounted(runs, stale), fix: REINSTALL };
-  const { detail, clean } = counted();
-  if (clean) return { name, state: "ok", detail, fix: null };
-  return { name, state: "warn", detail, fix: `node ${scanner.target} ${SWEEP_ALL} lists each one` };
+  const count = counted();
+  if (count.kind === "refused") return refusedHealth(name, count.refusal);
+  if (count.clean) return { name, state: "ok", detail: count.detail, fix: null };
+  return {
+    name,
+    state: "warn",
+    detail: count.detail,
+    fix: `node ${scanner.target} ${SWEEP_ALL} lists each one`,
+  };
 }
 
 function backlogHealth(
@@ -225,9 +235,12 @@ function backlogHealth(
   const adapterFiles = installed.map((language) => ADAPTER_FILES[language]);
   return [
     backlogOf("no-comments backlog", SCANNER_FILE, adapterFiles, planned, () => {
+      const all = { kind: "all" } as const;
+      const read = keepRead(judgedTextOf(root, all, KEEP_FILE));
+      if (read.kind === "malformed") return { kind: "refused", refusal: read.refusal };
       const adapters = adaptersBeside(join(root, dirname(SCANNER_FILE.target)));
-      const found = findings(judgedChange(root, { kind: "all" }), adapters);
-      return { detail: countsOf(found, "tracked"), clean: found.length === 0 };
+      const found = findings(judgedChange(root, all), adapters, read.keep);
+      return { kind: "counted", detail: countsOf(found, "tracked"), clean: found.length === 0 };
     }),
   ];
 }
@@ -238,7 +251,7 @@ function secretsHealth(root: string, gates: readonly GateName[], planned: readon
     backlogOf("no-secrets backlog", NO_SECRETS_SCANNER, [], planned, () => {
       const skipped = [{ inRoot: dirname(NO_SECRETS_SCANNER.target) }];
       const found = secretsAdded(root, { kind: "all" }, skipped);
-      return { detail: secretCountsOf(found, "tracked"), clean: found.length === 0 };
+      return { kind: "counted", detail: secretCountsOf(found, "tracked"), clean: found.length === 0 };
     }),
   ];
 }
@@ -248,7 +261,7 @@ function actionsHealth(root: string, gates: readonly GateName[], planned: readon
   return [
     backlogOf("pinned-actions backlog", PINNED_ACTIONS_SCANNER, [], planned, () => {
       const found = unpinnedIn(root, { kind: "all" });
-      return { detail: unpinnedCountsOf(found, "tracked"), clean: found.length === 0 };
+      return { kind: "counted", detail: unpinnedCountsOf(found, "tracked"), clean: found.length === 0 };
     }),
   ];
 }

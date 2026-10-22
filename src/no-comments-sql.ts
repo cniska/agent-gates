@@ -1,11 +1,4 @@
-import {
-  adapter,
-  type CommentRead,
-  directive,
-  type KeptForm,
-  type Lexed,
-  type Span,
-} from "./no-comments-adapter";
+import { adapter, type Lexed, type Span } from "./no-comments-adapter";
 import { bracketsOf } from "./no-comments-brackets";
 import { lineEnd, nestedBlockEnd, type Stopped, unexpected, unterminated } from "./no-comments-spans";
 
@@ -19,13 +12,7 @@ const DIGIT = /^[0-9]$/;
 
 const ESCAPE_STRING_PREFIX = /^[Ee]$/;
 
-const OPENER = 2;
-
-const LINE_OPENER = "--";
-
-const DRIZZLE_STATEMENT_BREAKPOINT = /> statement-breakpoint/;
-
-function commentSpans(text: string): Lexed<Span> {
+function commentSpans(text: string): Lexed {
   const spans: Span[] = [];
   const followsIdentifier = (index: number) => IDENTIFIER_CHAR.test(text[index - 1] ?? "");
 
@@ -55,14 +42,14 @@ function commentSpans(text: string): Lexed<Span> {
 
   function lineComment(start: number, to: number): number {
     const end = Math.min(lineEnd(text, start), to);
-    spans.push({ start, end, bodyStart: start + OPENER, bodyEnd: end, style: "line" });
+    spans.push({ start, end, style: "line" });
     return end;
   }
 
   function blockComment(start: number, to: number): number | Stopped {
     const end = nestedBlockEnd(text, start, to);
     if (end === null) return unterminated(start, "comment");
-    spans.push({ start, end, bodyStart: start + OPENER, bodyEnd: end - OPENER, style: "block" });
+    spans.push({ start, end, style: "block" });
     return end;
   }
 
@@ -94,14 +81,4 @@ function commentSpans(text: string): Lexed<Span> {
   return code(0, text.length) ?? { kind: "lexed", spans };
 }
 
-const KEPT: readonly KeptForm<CommentRead<Span>>[] = [
-  directive("drizzle's `--> statement-breakpoint`", {
-    pattern: DRIZZLE_STATEMENT_BREAKPOINT,
-    where: ({ opener }) => opener === LINE_OPENER,
-  }),
-];
-
-export const { comments, kept } = adapter({
-  lex: commentSpans,
-  kept: KEPT,
-});
+export const { comments } = adapter(commentSpans);

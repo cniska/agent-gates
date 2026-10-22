@@ -39,9 +39,9 @@ bin/agent-gates doctor
 ## Adding a language
 
 1. Add it to `LANGUAGE_NAMES` and `LANGUAGES` in `src/no-comments-languages.ts`, with its extensions and shebang interpreters.
-2. Write `src/no-comments-<language>.ts` on the model of `src/no-comments-dart.ts`, the smallest adapter: `export const { comments, kept } = adapter({ lex, kept })`. `lex` returns each comment's `Span`, or `unterminated(<offset>, "<construct>")` where the file stops parsing. A comment the toolchain reads is kept with `directive(shown, { pattern, where })`, which matches the whole comment body and nothing after it; any other rule is a `{ shown, keeps }` form.
+2. Write `src/no-comments-<language>.ts` on the model of `src/no-comments-dart.ts`, the smallest adapter: `export const { comments } = adapter(lex)`. `lex` returns each comment's `Span`, or `unterminated(<offset>, "<construct>")` where the file stops parsing. An adapter keeps no comment: a project keeps one in [`.no-comments-keep`](no-comments.md#kept-comments).
 3. Check the lexer against the language's own tokenizer on real and deliberately broken files: same comments, and no refusal of a file the tokenizer accepts.
-4. Add tests, a `GATES` and an `ADAPTER_FILES` entry in `src/gates-contract.ts`, a row in the [kept-comments table](no-comments.md#kept-comments) (a test checks it), the language in the list in [No comments](no-comments.md), and its gate's row in the [README's gate table](../README.md#gates).
+4. Add tests, a `GATES` and an `ADAPTER_FILES` entry in `src/gates-contract.ts`, the language in the list in [No comments](no-comments.md), and its gate's row in the [README's gate table](../README.md#gates).
 5. Run `bun run gates:bundle` and record the hash, as [`AGENTS.md`](../AGENTS.md) describes. `bun run check` fails until the entry, bundle and hash agree.
 
 ## Refreshing the secret rules

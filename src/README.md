@@ -21,10 +21,10 @@ Only an entry, such as `cli.ts`, reads the environment; it passes what a module 
 | --- | --- |
 | `cli` | Dispatch a command and print its result or error as JSON |
 | `install` | The `install` command |
-| `doctor` | Report the installed gates' health: their files, the hooks path, `prepare`, the format command, the commit prefixes, the project's own hook steps no workflow runs, the comments tracked files already hold, the secrets they hold that `.no-secrets-allow` does not name, and the unpinned actions their workflow and action files hold |
+| `doctor` | Report the installed gates' health: their files, the hooks path, `prepare`, the format command, the commit prefixes, the project's own hook steps no workflow runs, the comments tracked files already hold that `.no-comments-keep` does not keep, the secrets they hold that `.no-secrets-allow` does not name, and the unpinned actions their workflow and action files hold |
 | `gates` | The registry of gate files, their text embedded in the build, the commands and prefixes install writes into them, and installing them into a project |
 | `gate` | Gate names and parts, the marker an installed file carries, and bundling the `no-comments`, `no-secrets` and `pinned-actions` scanners into `gates/` |
-| `no-comments` | The scanner a `no-comments` gate runs: route a file to its language, read its comments, judge a change and report findings |
+| `no-comments` | The scanner a `no-comments` gate runs: route a file to its language, read its comments, keep those `.no-comments-keep` lists, judge a change and report findings |
 | `no-secrets` | The scanner a `no-secrets` gate runs: gitleaks' rules translated for Node's RegExp, the matcher, the allow file's fingerprints, reading a change and judging what it adds |
 | `pinned-actions` | The scanner a `pinned-actions` gate runs: read each `uses:` of a changed workflow or action file, judge whether its reference is pinned and report the rest |
 | `scanner` | What every scanner shares: reading the staged, pushed or whole change out of git, the call (`--format github`, `--all`, a base and a head), its usage error, the reply's capping and GitHub annotations, and running a scanner's main to the process's streams and exit code |
