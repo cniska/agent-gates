@@ -1577,11 +1577,12 @@ describe("install and doctor", () => {
       "bin/tool": "#!/usr/bin/env node\n",
       "img.dart": "\0binary\n",
     });
+    installGates(dir, ["no-comments-shell"], NO_FILLS);
     git(dir, ["add", "-A"]);
     expect(doctorCheck(dir, "no-comments languages")).toEqual({
       name: "no-comments languages",
       state: "ok",
-      detail: "javascript, as the tracked files need",
+      detail: "javascript, shell, as the tracked files need",
       fix: null,
     });
     git(dir, ["rm", "-q", "-f", "a.ts", "bin/tool"]);
@@ -1604,7 +1605,7 @@ describe("install and doctor", () => {
         name: "no-comments languages",
         state: "warn",
         detail:
-          "dart reads 1 tracked file, but no-comments-dart is not installed; no-comments-javascript is installed, but the project tracks no file javascript reads",
+          "dart reads 1 tracked file, but no-comments-dart is not installed; shell reads 5 tracked files, but no-comments-shell is not installed; no-comments-javascript is installed, but the project tracks no file javascript reads",
         fix: "agent-gates install no-comments; delete .githooks/no-comments/javascript.cjs",
       },
     ]);
@@ -1617,7 +1618,7 @@ describe("install and doctor", () => {
       name: "no-comments languages",
       state: "warn",
       detail:
-        "dart reads 2 tracked files, but no-comments-dart is not installed; sql reads 1 tracked file, but no-comments-sql is not installed",
+        "dart reads 2 tracked files, but no-comments-dart is not installed; sql reads 1 tracked file, but no-comments-sql is not installed; shell reads 5 tracked files, but no-comments-shell is not installed",
       fix: "agent-gates install no-comments",
     });
   });

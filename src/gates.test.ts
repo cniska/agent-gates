@@ -198,11 +198,26 @@ describe("install", () => {
     expect(commit(dir, { subject: "feat: add the gates" })).toEqual({ status: 0, stderr: "" });
   });
 
-  test("marks the hook code linguist-generated", () => {
+  test("marks only the bundles linguist-generated, and every hook file LF", () => {
     const dir = repo();
-    installGates(dir, ["commit-subject"], NO_FILLS);
-    const attr = execFileSync("git", ["-C", dir, "check-attr", "linguist-generated", ".githooks/commit-msg"]);
-    expect(attr.toString()).toBe(".githooks/commit-msg: linguist-generated: set\n");
+    installGates(dir, ["commit-subject", "no-comments-shell"], NO_FILLS);
+    const paths = [
+      ".githooks/commit-msg",
+      ".githooks/pre-commit.d/no-comments",
+      ".githooks/no-comments/shell.cjs",
+    ];
+    const attr = execFileSync("git", ["-C", dir, "check-attr", "linguist-generated", "eol", "--", ...paths]);
+    expect(attr.toString()).toBe(
+      [
+        ".githooks/commit-msg: linguist-generated: unspecified",
+        ".githooks/commit-msg: eol: lf",
+        ".githooks/pre-commit.d/no-comments: linguist-generated: unspecified",
+        ".githooks/pre-commit.d/no-comments: eol: lf",
+        ".githooks/no-comments/shell.cjs: linguist-generated: set",
+        ".githooks/no-comments/shell.cjs: eol: lf",
+        "",
+      ].join("\n"),
+    );
   });
 
   test("reads the installed gates back from their markers", () => {

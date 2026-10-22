@@ -41,6 +41,7 @@ import {
 import { filledIn, fillTemplateOf, withFill } from "./gates-fill";
 import { gateSources } from "./gates-sources" with { type: "macro" };
 import { configValue, setConfig } from "./git";
+import { LANGUAGE_NAMES, type Language } from "./no-comments-languages";
 import { trackedLanguages, trackedPerLanguage } from "./no-comments-tracked";
 import { type PrepareState, prepareState } from "./package-manifest";
 
@@ -299,10 +300,14 @@ function applied(root: string, { file, path, source, state }: WritableFile): str
   return backup;
 }
 
+const HOOKS_LANGUAGE: Language = "shell";
+
 export function trackedLanguageGates(root: string): NoCommentsGate[] {
-  const languages = trackedLanguages(trackedPerLanguage(root));
-  if (languages.length === 0) throw gatesRefusal("no_language_tracked", { root });
-  return languages.map(noCommentsGate);
+  const tracked = trackedLanguages(trackedPerLanguage(root));
+  if (tracked.length === 0) throw gatesRefusal("no_language_tracked", { root });
+  return LANGUAGE_NAMES.filter((language) => language === HOOKS_LANGUAGE || tracked.includes(language)).map(
+    noCommentsGate,
+  );
 }
 
 export function installGates(root: string, named: readonly GateName[], given: Fills): GatesInstalled {

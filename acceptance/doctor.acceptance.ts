@@ -53,10 +53,11 @@ test("AC-11 reports no gate, then every check passing", () => {
 
   install(dir, ["commit-subject"]);
   install(dir, ["no-comments-javascript"]);
+  install(dir, ["no-comments-shell"]);
   writeFiles(dir, { "src/a.ts": "export const a = 1;\n" });
   git(dir, ["add", "-A"]);
   doctorReports(dir, [
-    passing("gates", "commit-subject, no-comments-javascript"),
+    passing("gates", "commit-subject, no-comments-javascript, no-comments-shell"),
     ...[
       ".githooks/commit-msg",
       ".github/workflows/commits.yml",
@@ -70,11 +71,12 @@ test("AC-11 reports no gate, then every check passing", () => {
       ".githooks/no-comments/scan.cjs",
       ".github/workflows/no-comments.yml",
       ".githooks/no-comments/javascript.cjs",
+      ".githooks/no-comments/shell.cjs",
     ].map((name) => passing(name, "installed")),
     passing("hooksPath", "core.hooksPath is .githooks"),
     passing("prepare", NO_PACKAGE_JSON),
     passing("commit prefixes", "none installed, so the gate allows its default set"),
-    passing("no-comments languages", "javascript, as the tracked files need"),
+    passing("no-comments languages", "javascript, shell, as the tracked files need"),
     passing("no-comments backlog", "the tracked files hold no comment"),
   ]);
 });
@@ -95,7 +97,7 @@ test("AC-12 warns of tracked languages without a gate and gates without a langua
       name: "no-comments languages",
       state: "warn",
       detail:
-        "python reads 1 tracked file, but no-comments-python is not installed; no-comments-rust is installed, but the project tracks no file rust reads",
+        "shell reads 5 tracked files, but no-comments-shell is not installed; python reads 1 tracked file, but no-comments-python is not installed; no-comments-rust is installed, but the project tracks no file rust reads",
       fix: "agent-gates install no-comments; delete .githooks/no-comments/rust.cjs",
     },
     passing("no-comments backlog", "the tracked files hold no comment"),
@@ -156,14 +158,19 @@ test("AC-29 installs the gate of each tracked language, and refuses when none is
   ]);
 
   installs(dir, ["no-comments"], {
-    gates: ["no-comments-javascript", "no-comments-python"],
+    gates: ["no-comments-javascript", "no-comments-shell", "no-comments-python"],
     files: each("missing", [
       ...NO_COMMENTS_FILES,
       ".githooks/no-comments/javascript.cjs",
+      ".githooks/no-comments/shell.cjs",
       ".githooks/no-comments/python.cjs",
     ]),
     prepare: "absent",
   });
+  git(dir, ["add", "-A"]);
+  expect(check(dir, "no-comments languages")).toEqual(
+    passing("no-comments languages", "javascript, shell, python, as the tracked files need"),
+  );
 
   const untyped = checkout({ "notes.txt": "a note\n" });
   git(untyped, ["add", "-A"]);

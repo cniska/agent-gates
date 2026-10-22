@@ -19,7 +19,7 @@ Installed files:
 - are committed with the project, so contributors and CI are gated without installing agent-gates;
 - carry a marker, `# agent-gate:<part>:<version>` (`//` in a `.cjs`), from which agent-gates reads back what is installed, so there is no config file. To remove a language, delete its `.githooks/no-comments/<language>.cjs`.
 
-Install also points `core.hooksPath` at `.githooks` in the current clone, and `.githooks/.gitattributes` marks the hooks `linguist-generated` with LF endings. With a `package.json`, install adds the same wiring to its `prepare` script, so a fresh clone wires itself. Without one, each contributor runs `git config core.hooksPath .githooks` once. CI checks every push either way.
+Install also points `core.hooksPath` at `.githooks` in the current clone, and `.githooks/.gitattributes` gives every file under `.githooks` LF endings and marks only the `.cjs` bundles `linguist-generated`, so the hook scripts are judged and reviewed like any other code. With a `package.json`, install adds the same wiring to its `prepare` script, so a fresh clone wires itself. Without one, each contributor runs `git config core.hooksPath .githooks` once. CI checks every push either way.
 
 ## How the hooks run
 

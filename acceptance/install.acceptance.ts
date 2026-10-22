@@ -71,7 +71,7 @@ test("AC-3 installs commit-subject at the checkout's root and wires the hooks", 
   expect(readText(dir, ".githooks/commit-msg")).toMatch(/^# agent-gate:commit-subject:\d+$/m);
   expect(readText(dir, ".github/workflows/commits.yml")).toMatch(/^# agent-gate:commit-subject:\d+$/m);
   expect(readText(dir, ".githooks/.gitattributes")).toMatch(
-    /^# agent-gate:githooks:\d+\n\* linguist-generated eol=lf\n$/,
+    /^# agent-gate:githooks:\d+\n\* eol=lf\n\*\.cjs linguist-generated\n$/,
   );
   expect(hooksPath(dir)).toBe(".githooks");
 });

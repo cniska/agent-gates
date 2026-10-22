@@ -4,7 +4,7 @@ What the `no-comments-<language>` gates judge, what a refusal holds, the comment
 
 A comment is where a coding agent excuses a workaround instead of fixing it, and a reviewer reading the diff tends to accept it. Without comments, the reason for a choice goes into a name, a test or the docs, and a workaround is fixed or left visibly unfinished. Cursor's [pstack `/no-comments`](https://github.com/cursor/plugins/blob/main/pstack/skills/no-comments/SKILL.md) skill works from the same idea; these gates enforce it on commit, on push and in CI.
 
-The languages are `javascript` (JavaScript and TypeScript), `dart`, `sql` (PostgreSQL), `shell`, `rust` and `python`. `agent-gates install no-comments` installs the gate for each language the tracked files hold, and refuses when they hold none. The gates need `node` on `PATH` and nothing installed in the project.
+The languages are `javascript` (JavaScript and TypeScript), `dart`, `sql` (PostgreSQL), `shell`, `rust` and `python`. `agent-gates install no-comments` installs the gate for each language the tracked files hold, and `no-comments-shell` for the hooks it installs, which are shell and judged like any other code, since only the `.cjs` bundles under `.githooks` are marked generated. It refuses when the tracked files hold no language. The gates need `node` on `PATH` and nothing installed in the project.
 
 ## What is judged
 

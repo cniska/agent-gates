@@ -63,12 +63,16 @@ describe("the cli", () => {
     });
   });
 
-  test("install no-comments installs the gate for each language the tracked files hold", () => {
+  test("install no-comments installs the gate for each language the tracked files hold, and shell for the hooks", () => {
     const tracked = repo({ "a.ts": "export {};\n", "db/a.sql": "select 1;\n", "b.py": "", "notes.txt": "" });
     execFileSync("git", ["-C", tracked, "add", "a.ts", "db/a.sql", "notes.txt"]);
     const run = cliIn(tracked, "install", "no-comments");
     expect([run.status, run.stderr]).toEqual([0, ""]);
-    expect(JSON.parse(run.stdout).result.gates).toEqual(["no-comments-javascript", "no-comments-sql"]);
+    expect(JSON.parse(run.stdout).result.gates).toEqual([
+      "no-comments-javascript",
+      "no-comments-sql",
+      "no-comments-shell",
+    ]);
     expect(existsSync(join(tracked, ".githooks/no-comments/python.cjs"))).toBe(false);
   });
 

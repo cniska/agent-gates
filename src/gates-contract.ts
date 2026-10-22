@@ -98,6 +98,7 @@ const GITATTRIBUTES: GateFile = {
   versions: [
     { version: 1, sha256: "ad36a0eb187fe7a496ae5268c924ae0c1d70451796700a133f1731d49d1d4a0c" },
     { version: 2, sha256: "4765ab668d4acf13110366595f389b0a2b09424903378faa02786f96ac64369b" },
+    { version: 3, sha256: "3b956fdc44e708856bbb9fc4bf00cc47ba0590dddc02f9c78231326b31fbeb4f" },
   ],
 };
 
