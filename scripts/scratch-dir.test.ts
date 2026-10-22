@@ -10,15 +10,19 @@ const SEARCHED_DIRS = ["src", "acceptance", "scripts"];
 
 const OWN_MKDTEMP = /\bmkdtemp(?:Sync)?\b/;
 
-const HELPERS = [
-  { suffix: ".test.ts", helper: "scratchDir() in src/repo.test-support.ts" },
-  { suffix: ".acceptance.ts", helper: "scratchDir() in acceptance/cli.ts" },
-] as const;
+const TEST_SUFFIXES = [".test.ts", ".acceptance.ts"];
+
+const ACCEPTANCE_DIR = "acceptance/";
+
+const ACCEPTANCE_HELPER = "scratchDir() in acceptance/cli.ts";
+
+const SOURCE_HELPER = "scratchDir() in src/repo.test-support.ts";
 
 type Source = { readonly path: string; readonly text: string };
 
 function helperFor(path: string): string | null {
-  return HELPERS.find(({ suffix }) => path.endsWith(suffix))?.helper ?? null;
+  if (!TEST_SUFFIXES.some((suffix) => path.endsWith(suffix))) return null;
+  return path.startsWith(ACCEPTANCE_DIR) ? ACCEPTANCE_HELPER : SOURCE_HELPER;
 }
 
 function testFiles(): readonly Source[] {
@@ -49,8 +53,10 @@ describe("tests make scratch directories through the shared helpers", () => {
     expect(paths).toContain("src/cli.test.ts");
     expect(paths).toContain("scripts/standalone.test.ts");
     expect(paths).toContain("acceptance/cli.acceptance.ts");
+    expect(paths).toContain("acceptance/cli.test.ts");
     expect(paths).not.toContain("src/repo.test-support.ts");
     expect(paths).not.toContain("acceptance/cli.ts");
+    expect(paths).not.toContain("acceptance/no-comments.ts");
     expect(paths).not.toContain(SELF);
   });
 
@@ -66,6 +72,11 @@ describe("tests make scratch directories through the shared helpers", () => {
       "acceptance/x.acceptance.ts:1 calls mkdtempSync; use scratchDir() in acceptance/cli.ts",
       "acceptance/x.acceptance.ts:2 calls mkdtempSync; use scratchDir() in acceptance/cli.ts",
       "acceptance/x.acceptance.ts:3 calls mkdtemp; use scratchDir() in acceptance/cli.ts",
+    ]);
+    expect(ownScratchDirs({ path: "acceptance/x.test.ts", text })).toEqual([
+      "acceptance/x.test.ts:1 calls mkdtempSync; use scratchDir() in acceptance/cli.ts",
+      "acceptance/x.test.ts:2 calls mkdtempSync; use scratchDir() in acceptance/cli.ts",
+      "acceptance/x.test.ts:3 calls mkdtemp; use scratchDir() in acceptance/cli.ts",
     ]);
     expect(ownScratchDirs({ path: "src/repo.test-support.ts", text })).toEqual([]);
   });

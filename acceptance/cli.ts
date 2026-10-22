@@ -260,13 +260,28 @@ export function shell(dir: string, script: string, env: Env = {}, input = ""): R
   return run("sh", ["-c", script], dir, env, input);
 }
 
-export function pathOf(tools: readonly string[]): string {
+function isExecutableFile(path: string): boolean {
+  const stats = statSync(path, { throwIfNoEntry: false });
+  return stats?.isFile() === true && (stats.mode & 0o111) !== 0;
+}
+
+function isMiseShim(path: string): boolean {
+  return basename(realpathSync(path)) === "mise";
+}
+
+function firstOnPath(tool: string, searched: string): string {
+  const found = searched
+    .split(":")
+    .filter((dir) => dir !== "")
+    .map((dir) => join(dir, tool))
+    .find((path) => isExecutableFile(path) && !isMiseShim(path));
+  if (found === undefined) throw new Error(`${tool} is not on PATH`);
+  return found;
+}
+
+export function pathOf(tools: readonly string[], searched = process.env.PATH ?? ""): string {
   const bin = scratchDir();
-  for (const tool of tools) {
-    const found = shell(bin, `command -v ${tool}`).stdout.trim();
-    if (!found.startsWith("/")) throw new Error(`${tool} is not on PATH`);
-    symlinkSync(found, join(bin, tool));
-  }
+  for (const tool of tools) symlinkSync(firstOnPath(tool, searched), join(bin, tool));
   return bin;
 }
 
