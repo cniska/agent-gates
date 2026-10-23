@@ -1,6 +1,6 @@
 import { lines, type Outcome, refusedWith } from "./cli";
 
-export const LANGUAGES = ["javascript", "dart", "sql", "shell", "rust", "python"];
+export const LANGUAGES = ["javascript", "dart", "sql", "shell", "rust", "python", "yaml"];
 
 export const ALL_LANGUAGES = LANGUAGES.map((language) => `no-comments-${language}`);
 
@@ -20,6 +20,11 @@ export const KEPT_DART = "kept in Dart: none";
 export const KEPT_SQL = "kept in SQL: none";
 
 export const KEPT_RUST = "kept in Rust: none";
+
+export const KEPT_YAML = "kept in YAML: none";
+
+export const KEPT_YAML_BY_INSTALL =
+  "kept in YAML: `# agent-gate:[a-z-]+:[0-9]+`, `# v?[0-9]+(\\.[0-9]+)*(-[0-9A-Za-z.]+)?`";
 
 type Findings = readonly (readonly [path: string, lines: readonly string[]])[];
 

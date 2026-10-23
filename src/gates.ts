@@ -317,14 +317,14 @@ function keepsComments(gates: readonly GateName[]): boolean {
   return LANGUAGE_NAMES.some((language) => gates.includes(noCommentsGate(language)));
 }
 
-const HOOKS_LANGUAGE: Language = "shell";
+const GATE_FILE_LANGUAGES: readonly Language[] = ["shell", "yaml"];
 
 export function trackedLanguageGates(root: string): NoCommentsGate[] {
   const tracked = trackedLanguages(trackedPerLanguage(root));
   if (tracked.length === 0) throw gatesRefusal("no_language_tracked", { root });
-  return LANGUAGE_NAMES.filter((language) => language === HOOKS_LANGUAGE || tracked.includes(language)).map(
-    noCommentsGate,
-  );
+  return LANGUAGE_NAMES.filter(
+    (language) => GATE_FILE_LANGUAGES.includes(language) || tracked.includes(language),
+  ).map(noCommentsGate);
 }
 
 export function installGates(root: string, named: readonly GateName[], given: Fills): GatesInstalled {

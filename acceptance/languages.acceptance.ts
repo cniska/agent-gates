@@ -26,11 +26,21 @@ import {
   KEPT_PYTHON,
   KEPT_RUST,
   KEPT_SQL,
+  KEPT_YAML,
+  KEPT_YAML_BY_INSTALL,
 } from "./no-comments";
 
 afterEach(removeScratchDirs);
 
-const ALL_NONE = [KEPT_JAVASCRIPT, KEPT_DART, KEPT_SQL, "kept in shell: none", KEPT_RUST, KEPT_PYTHON];
+const ALL_NONE = [
+  KEPT_JAVASCRIPT,
+  KEPT_DART,
+  KEPT_SQL,
+  "kept in shell: none",
+  KEPT_RUST,
+  KEPT_PYTHON,
+  KEPT_YAML,
+];
 
 const KEEP = lines([
   "shell # agent-gate:[a-z-]+:[0-9]+",
@@ -41,6 +51,7 @@ const KEEP = lines([
   "sql --> statement-breakpoint",
   "rust // agent-gate:[a-z-]+:[0-9]+",
   "python # agent-gate:[a-z-]+:[0-9]+",
+  "yaml # agent-gate:[a-z-]+:[0-9]+",
 ]);
 
 const KEPT_BY_KEEP = [
@@ -50,6 +61,7 @@ const KEPT_BY_KEEP = [
   "kept in shell: `# agent-gate:[a-z-]+:[0-9]+`",
   "kept in Rust: `// agent-gate:[a-z-]+:[0-9]+`",
   "kept in Python: `# agent-gate:[a-z-]+:[0-9]+`",
+  "kept in YAML: `# agent-gate:[a-z-]+:[0-9]+`",
 ];
 
 const KEPT_FILES = {
@@ -60,6 +72,7 @@ const KEPT_FILES = {
   "k.sh": "#!/bin/sh\n# agent-gate:no-comments:1\necho hi\n",
   "k.rs": "#!/usr/bin/env rust-script\n// agent-gate:no-comments:1\nfn main() {}\n",
   "k.py": "#!/usr/bin/env python3\n# agent-gate:no-comments:1\nx = 1\n",
+  "k.yml": "# agent-gate:no-comments:1\na: 1\n",
 };
 
 test("AC-26 keeps a comment only through a .no-comments-keep pattern of its language", () => {
@@ -85,6 +98,8 @@ test("AC-26 keeps a comment only through a .no-comments-keep pattern of its lang
       "r.sh": "#!/bin/sh # strict\n# shellcheck disable=SC2034\necho hi\n",
       "r.rs": "/// The entry.\n//! The crate.\n// agent-gate:no-comments:1 kept\nfn main() {}\n",
       "r.py": "# -*- coding: utf-8 -*-\nx = 1  # type: ignore\ny = 2  # noqa: E501\n",
+      "r.yml":
+        "# yaml-language-server: $schema=a.json\n# agent-gate:no-comments:1 kept\nb: 2 # prettier-ignore\n",
     }),
   ).toEqual(
     refusedWith(
@@ -110,6 +125,14 @@ test("AC-26 keeps a comment only through a .no-comments-keep pattern of its lang
             "9  // prettier-ignore",
           ],
         ],
+        [
+          "r.yml",
+          [
+            "1  # yaml-language-server: $schema=a.json",
+            "2  # agent-gate:no-comments:1 kept",
+            "3  # prettier-ignore",
+          ],
+        ],
       ]),
     ),
   );
@@ -125,6 +148,7 @@ test("AC-26 keeps a comment only through a .no-comments-keep pattern of its lang
         ["k.sh", ["2  # agent-gate:no-comments:1"]],
         ["k.sql", ["1  -- agent-gate:no-comments:1", "3  --> statement-breakpoint"]],
         ["k.ts", ['2  /// <reference types="node" />', "3  // agent-gate:no-comments:1"]],
+        ["k.yml", ["1  # agent-gate:no-comments:1"]],
       ]),
     ),
   );
@@ -163,15 +187,17 @@ test("AC-27 reads comments where each language's tokenizer does", () => {
       "f.sql": "create function f() returns int as $$\n  select 1; -- inside\n$$ language sql;\n",
       "f.rs": '#[cfg_attr(test, doc = "Tested.")]\nfn tested() {}\n',
       "f.py": 'def f():\n    """Answer."""\n    return 1\n',
+      "f.yml": 'q: "a # not"\nrun: |\n  echo # not\nlist:\n  # in a sequence\n  - a # after\n',
     }),
   ).toEqual(
     refusedWith(
       commentReply(
-        [KEPT_SQL, KEPT_RUST, KEPT_PYTHON],
+        [KEPT_SQL, KEPT_RUST, KEPT_PYTHON, KEPT_YAML_BY_INSTALL],
         [
           ["f.py", ['2  """Answer."""']],
           ["f.rs", ['1  #[cfg_attr(test, doc = "Tested.")]']],
           ["f.sql", ["2  -- inside"]],
+          ["f.yml", ["5  # in a sequence", "6  # after"]],
         ],
       ),
     ),

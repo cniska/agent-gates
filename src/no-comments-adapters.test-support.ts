@@ -6,6 +6,7 @@ import * as python from "./no-comments-python";
 import * as rust from "./no-comments-rust";
 import * as shell from "./no-comments-shell";
 import * as sql from "./no-comments-sql";
+import * as yaml from "./no-comments-yaml";
 
 export const ADAPTERS: Readonly<Record<Language, Adapter>> = {
   javascript,
@@ -14,4 +15,5 @@ export const ADAPTERS: Readonly<Record<Language, Adapter>> = {
   shell,
   rust,
   python,
+  yaml,
 };

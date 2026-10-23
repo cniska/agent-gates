@@ -185,6 +185,13 @@ test("AC-22 refuses a file that does not parse, at the line where it stops", () 
     ["c.dart", "void main() {\n  print(1);\n", 1, "Unterminated brace"],
     ["b.sql", "select (1;\n", 1, "Unterminated parenthesis"],
     ["a.ts", "export const a = 1;\nexport const = ;\n", 2, "Unexpected token"],
+    [
+      "a.yml",
+      "key: [a, b\nnext: 1\n",
+      2,
+      "Flow sequence in block collection must be sufficiently indented and end with a ]",
+    ],
+    ["b.yml", 'key: "a\nnext: 1\n', 3, 'Missing closing "quote'],
   ] as const) {
     expect(commitFiles(restart(dir), { [path]: text })).toEqual(unparsedRefusal(path, line, reason));
   }

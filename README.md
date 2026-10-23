@@ -72,6 +72,7 @@ The plugin acts only in a checkout with the gates installed.
 | `no-comments-shell` | An added comment in shell, and a file that does not parse |
 | `no-comments-rust` | An added comment in Rust, and a file that does not parse |
 | `no-comments-python` | An added comment in Python, and a file that does not parse |
+| `no-comments-yaml` | An added comment in YAML, GitHub workflows included, and a file that does not parse |
 | `no-secrets` | An added secret: a key, token or private key one of gitleaks' rules matches, or a literal value assigned to a `*_TOKEN` or `*_SECRET` name |
 | `pinned-actions` | A workflow or `action.yml` whose `uses:` names an action, reusable workflow or `docker://` image by anything but a full commit SHA or image digest; a `./` or `$/` path to the repository's own action passes |
 

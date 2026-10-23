@@ -3,7 +3,11 @@ import { LANGUAGE_NAMES, type Language } from "./no-comments-languages";
 
 export const KEEP_FILE = ".no-comments-keep";
 
-const INSTALL_KEEP_LINES: readonly string[] = ["shell # agent-gate:[a-z-]+:[0-9]+"];
+const INSTALL_KEEP_LINES: readonly string[] = [
+  "shell # agent-gate:[a-z-]+:[0-9]+",
+  "yaml # agent-gate:[a-z-]+:[0-9]+",
+  "yaml # v?[0-9]+(\\.[0-9]+)*(-[0-9A-Za-z.]+)?",
+];
 
 type KeepPattern = { readonly language: Language; readonly shown: string; readonly matches: RegExp };
 

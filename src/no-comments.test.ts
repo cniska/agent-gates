@@ -953,6 +953,131 @@ describe("the python adapter", () => {
   });
 });
 
+const YAML_COMMENT_COUNTS: readonly (readonly [string, number])[] = [
+  ["name: Don't fail # why\n", 1],
+  ["run: echo it's\n", 0],
+  ["key: | # why\n  body # not\n  more # nor\n", 1],
+  ["[a, b] # c\n", 1],
+  ["key: 'it'' #s'\n", 0],
+  ['key: "a\n  # b"\n', 0],
+  ["key: 'a\n  # b'\n", 0],
+  ["run: |-\n  echo '#' # not\n", 0],
+  ["description: >-\n  a ' # not\n", 0],
+  ["run: |2-\n    # not\n", 0],
+  ['key: "a\\\\" # c\n', 1],
+  ['key: "a\\" # b" # c\n', 1],
+  ["- |\n  # x\n", 0],
+  ["- - >-\n    # x\n", 0],
+  ["key: |\n  body\n# c\n", 1],
+  ["- key: |\n    body\n# c\n", 1],
+  ["- |\n  body\n# c\n", 1],
+  ["- |\n  body\n  # c\n", 0],
+  ["[\n  '#',\n  b\n] # c\n", 1],
+  ["{a: [1, 2]} # c\n", 1],
+  ["key: a[0] # c\n", 1],
+  ["url: http://x#frag\n", 0],
+  ["run: cat a | grep b # c\n", 1],
+  ["run: make 2>&1 |\n  # c\n", 1],
+  ["run: echo a > b\n# c\n", 1],
+  ["[ 'a # b' ] # c\n", 1],
+  ['{"a":"b # c"}\n', 0],
+  ["[a, # c\n  b]\n", 1],
+  [`if: \${{ x }} # c\n`, 1],
+  ['key: !!str "a # b" # c\n', 1],
+  ["- &x 'a # b' # c\n", 1],
+  ["? a # c\n", 1],
+  ["a: 1\n...\n# after the document end\n", 1],
+  ["%YAML 1.2 # on a directive\n---\na: 1\n", 1],
+  ["", 0],
+  ["# only\n", 1],
+];
+
+describe("the yaml adapter", () => {
+  test("refuses each comment, naming its line and text", () => {
+    const text = [
+      "# agent-gate:no-comments:5",
+      "name: Check # the workflow",
+      "on:",
+      "  push: # every branch",
+      "    branches: ['*']",
+      "jobs:",
+      "  check:",
+      "    steps:",
+      "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
+      "      - run: |",
+      "          echo '# not a comment'",
+      "          echo done # nor this",
+      "      # a comment line inside the sequence",
+      "      - run: echo",
+    ].join("\n");
+    expect(ADAPTERS.yaml.comments("a.yml", text)).toEqual(
+      read([
+        { line: 1, text: "# agent-gate:no-comments:5" },
+        { line: 2, text: "# the workflow" },
+        { line: 4, text: "# every branch" },
+        { line: 9, text: "# v7.0.1" },
+        { line: 13, text: "# a comment line inside the sequence" },
+      ]),
+    );
+  });
+
+  test("finds the comments YAML 1.2 does, and none inside a quoted or block scalar", () => {
+    const counted = YAML_COMMENT_COUNTS.map(([text]) => {
+      const reading = ADAPTERS.yaml.comments("a.yml", text);
+      return [text, reading.kind === "read" ? reading.comments.length : reading] as const;
+    });
+    expect(counted).toEqual([...YAML_COMMENT_COUNTS]);
+  });
+
+  test("reads every document of a multi-document file", () => {
+    expect(ADAPTERS.yaml.comments("a.yaml", "a: 1 # one\n---\nb: 2 # two\n--- # three\nc: 3\n")).toEqual(
+      read([
+        { line: 1, text: "# one" },
+        { line: 3, text: "# two" },
+        { line: 4, text: "# three" },
+      ]),
+    );
+  });
+
+  test("refuses a file the parser reports an error in, at the error's line with its reason", () => {
+    for (const [text, line, reason] of [
+      [
+        "key: [a, b\nnext: 1\n",
+        2,
+        "Flow sequence in block collection must be sufficiently indented and end with a ]",
+      ],
+      ['key: "a\nnext: 1\n', 3, 'Missing closing "quote'],
+      ["key: 'abc\n", 2, "Missing closing 'quote"],
+      ["a: 1\na: 2\n", 2, "Map keys must be unique"],
+      ["a: b: c\n", 1, "Nested mappings are not allowed in compact mappings"],
+      ["\ta: 1\n", 1, "Tabs are not allowed as indentation"],
+      ["a:\n  - b\n c: d\n", 3, "All mapping items must start at the same column"],
+      ['key: "a\\q"\n', 1, "Invalid escape sequence \\q"],
+    ] as const)
+      expect([text, ADAPTERS.yaml.comments("a.yml", text)]).toEqual([text, unparsed(line, reason)]);
+  });
+
+  test("reads every tracked YAML file of this repo, and the release workflow's version trailers alone", () => {
+    const root = join(import.meta.dir, "..");
+    const tracked = git(root, ["ls-files", "--", "*.yml", "*.yaml"]).split("\n");
+    expect(tracked).toContain(".github/workflows/release.yml");
+    for (const path of tracked) {
+      const reading = ADAPTERS.yaml.comments(path, readFileSync(join(root, path), "utf8"));
+      expect([path, reading.kind]).toEqual([path, "read"]);
+    }
+    const release = ADAPTERS.yaml.comments(
+      ".github/workflows/release.yml",
+      readFileSync(join(root, ".github/workflows/release.yml"), "utf8"),
+    );
+    expect(release.kind === "read" ? release.comments.map(({ line }) => line) : release).toEqual([
+      32, 37, 69, 91, 94, 120, 150, 167, 170, 176, 185, 232, 235, 240,
+    ]);
+    expect(
+      release.kind === "read" ? release.comments.map(({ text }) => text.startsWith("# v")) : release,
+    ).toEqual(Array(14).fill(true));
+  });
+});
+
 describe("the no-comments doc", () => {
   test("shows keep lines that each keep the comment beside them, install's lines among them", () => {
     const doc = readFileSync(join(import.meta.dir, "../docs/no-comments.md"), "utf8");
@@ -1143,7 +1268,7 @@ describe("the pre-commit hook", () => {
     expect(commit(dir)).toEqual({
       status: 1,
       stderr:
-        "no-comments: .no-comments-keep line 3 names no language the gates read: cobol # y; write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python), one space and a regex that compiles, blank lines aside\n",
+        "no-comments: .no-comments-keep line 3 names no language the gates read: cobol # y; write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python, yaml), one space and a regex that compiles, blank lines aside\n",
     });
   });
 
@@ -1600,11 +1725,12 @@ describe("install and doctor", () => {
       "img.dart": "\0binary\n",
     });
     installGates(dir, ["no-comments-shell"], NO_FILLS);
+    installGates(dir, ["no-comments-yaml"], NO_FILLS);
     git(dir, ["add", "-A"]);
     expect(doctorCheck(dir, "no-comments languages")).toEqual({
       name: "no-comments languages",
       state: "ok",
-      detail: "javascript, shell, as the tracked files need",
+      detail: "javascript, shell, yaml, as the tracked files need",
       fix: null,
     });
     git(dir, ["rm", "-q", "-f", "a.ts", "bin/tool"]);
@@ -1627,7 +1753,7 @@ describe("install and doctor", () => {
         name: "no-comments languages",
         state: "warn",
         detail:
-          "dart reads 1 tracked file, but no-comments-dart is not installed; shell reads 5 tracked files, but no-comments-shell is not installed; no-comments-javascript is installed, but the project tracks no file javascript reads",
+          "dart reads 1 tracked file, but no-comments-dart is not installed; shell reads 5 tracked files, but no-comments-shell is not installed; yaml reads 1 tracked file, but no-comments-yaml is not installed; no-comments-javascript is installed, but the project tracks no file javascript reads",
         fix: "agent-gates install no-comments; delete .githooks/no-comments/javascript.cjs",
       },
     ]);
@@ -1640,7 +1766,7 @@ describe("install and doctor", () => {
       name: "no-comments languages",
       state: "warn",
       detail:
-        "dart reads 2 tracked files, but no-comments-dart is not installed; sql reads 1 tracked file, but no-comments-sql is not installed; shell reads 5 tracked files, but no-comments-shell is not installed",
+        "dart reads 2 tracked files, but no-comments-dart is not installed; sql reads 1 tracked file, but no-comments-sql is not installed; shell reads 5 tracked files, but no-comments-shell is not installed; yaml reads 1 tracked file, but no-comments-yaml is not installed",
       fix: "agent-gates install no-comments",
     });
   });
@@ -1696,8 +1822,8 @@ describe("install and doctor", () => {
     expect(doctorCheck(dir, "no-comments backlog")).toEqual({
       name: "no-comments backlog",
       state: "fail",
-      detail: ".no-comments-keep line 2 holds a regex that does not compile: javascript (",
-      fix: "write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python), one space and a regex that compiles, blank lines aside",
+      detail: ".no-comments-keep line 4 holds a regex that does not compile: javascript (",
+      fix: "write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python, yaml), one space and a regex that compiles, blank lines aside",
     });
   });
 
@@ -1709,14 +1835,17 @@ describe("install and doctor", () => {
       state: "behind",
       backup: null,
     });
-    const merged = "javascript // own\nsql -- own\nshell # agent-gate:[a-z-]+:[0-9]+\n";
+    const merged =
+      "javascript // own\nsql -- own\nshell # agent-gate:[a-z-]+:[0-9]+\nyaml # agent-gate:[a-z-]+:[0-9]+\nyaml # v?[0-9]+(\\.[0-9]+)*(-[0-9A-Za-z.]+)?\n";
     expect(readFileSync(join(dir, KEEP_FILE), "utf8")).toBe(merged);
     const again = installGates(dir, [], NO_FILLS);
     expect(again.files.find(({ target }) => target === KEEP_FILE)?.state).toBe("installed");
     expect(readFileSync(join(dir, KEEP_FILE), "utf8")).toBe(merged);
     const fresh = repo();
     installGates(fresh, ["no-comments-shell"], NO_FILLS);
-    expect(readFileSync(join(fresh, KEEP_FILE), "utf8")).toBe("shell # agent-gate:[a-z-]+:[0-9]+\n");
+    expect(readFileSync(join(fresh, KEEP_FILE), "utf8")).toBe(
+      "shell # agent-gate:[a-z-]+:[0-9]+\nyaml # agent-gate:[a-z-]+:[0-9]+\nyaml # v?[0-9]+(\\.[0-9]+)*(-[0-9A-Za-z.]+)?\n",
+    );
     const unkept = repo();
     installGates(unkept, ["commit-subject"], NO_FILLS);
     expect(existsSync(join(unkept, KEEP_FILE))).toBe(false);

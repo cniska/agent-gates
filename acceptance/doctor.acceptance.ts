@@ -22,7 +22,7 @@ import {
 afterEach(removeScratchDirs);
 
 const INSTALL_USAGE =
-  "agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-secrets, pinned-actions, no-comments (each language the tracked files hold)";
+  "agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments-yaml, no-secrets, pinned-actions, no-comments (each language the tracked files hold)";
 
 const NO_PACKAGE_JSON = "no package.json, so each contributor runs git config core.hooksPath .githooks once";
 
@@ -54,10 +54,11 @@ test("AC-11 reports no gate, then every check passing", () => {
   install(dir, ["commit-subject"]);
   install(dir, ["no-comments-javascript"]);
   install(dir, ["no-comments-shell"]);
+  install(dir, ["no-comments-yaml"]);
   writeFiles(dir, { "src/a.ts": "export const a = 1;\n" });
   git(dir, ["add", "-A"]);
   doctorReports(dir, [
-    passing("gates", "commit-subject, no-comments-javascript, no-comments-shell"),
+    passing("gates", "commit-subject, no-comments-javascript, no-comments-shell, no-comments-yaml"),
     ...[
       ".githooks/commit-msg",
       ".github/workflows/commits.yml",
@@ -72,11 +73,12 @@ test("AC-11 reports no gate, then every check passing", () => {
       ".github/workflows/no-comments.yml",
       ".githooks/no-comments/javascript.cjs",
       ".githooks/no-comments/shell.cjs",
+      ".githooks/no-comments/yaml.cjs",
     ].map((name) => passing(name, "installed")),
     passing("hooksPath", "core.hooksPath is .githooks"),
     passing("prepare", NO_PACKAGE_JSON),
     passing("commit prefixes", "none installed, so the gate allows its default set"),
-    passing("no-comments languages", "javascript, shell, as the tracked files need"),
+    passing("no-comments languages", "javascript, shell, yaml, as the tracked files need"),
     passing("no-comments backlog", "the tracked files hold no comment"),
   ]);
 });
@@ -97,7 +99,7 @@ test("AC-12 warns of tracked languages without a gate and gates without a langua
       name: "no-comments languages",
       state: "warn",
       detail:
-        "shell reads 5 tracked files, but no-comments-shell is not installed; python reads 1 tracked file, but no-comments-python is not installed; no-comments-rust is installed, but the project tracks no file rust reads",
+        "shell reads 5 tracked files, but no-comments-shell is not installed; python reads 1 tracked file, but no-comments-python is not installed; yaml reads 1 tracked file, but no-comments-yaml is not installed; no-comments-rust is installed, but the project tracks no file rust reads",
       fix: "agent-gates install no-comments; delete .githooks/no-comments/rust.cjs",
     },
     passing("no-comments backlog", "the tracked files hold no comment"),
@@ -151,11 +153,11 @@ test("AC-13 counts the comments tracked files hold and no pattern keeps, through
     name: "no-comments backlog",
     state: "fail",
     detail: ".no-comments-keep line 2 holds a regex that does not compile: javascript (",
-    fix: "write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python), one space and a regex that compiles, blank lines aside",
+    fix: "write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python, yaml), one space and a regex that compiles, blank lines aside",
   });
 });
 
-test("AC-29 installs the gate of each tracked language, and refuses when none is tracked", () => {
+test("AC-29 installs the gate of each tracked language and of the files it writes, and refuses when none is tracked", () => {
   const dir = checkout({ "a.ts": "export const a = 1;\n", "b.py": "x = 1\n" });
   git(dir, ["add", "-A"]);
   doctorReports(dir, [
@@ -170,19 +172,20 @@ test("AC-29 installs the gate of each tracked language, and refuses when none is
   ]);
 
   installs(dir, ["no-comments"], {
-    gates: ["no-comments-javascript", "no-comments-shell", "no-comments-python"],
+    gates: ["no-comments-javascript", "no-comments-shell", "no-comments-python", "no-comments-yaml"],
     files: each("missing", [
       ...NO_COMMENTS_FILES,
       ".githooks/no-comments/javascript.cjs",
       ".githooks/no-comments/shell.cjs",
       ".githooks/no-comments/python.cjs",
+      ".githooks/no-comments/yaml.cjs",
       ".no-comments-keep",
     ]),
     prepare: "absent",
   });
   git(dir, ["add", "-A"]);
   expect(check(dir, "no-comments languages")).toEqual(
-    passing("no-comments languages", "javascript, shell, python, as the tracked files need"),
+    passing("no-comments languages", "javascript, shell, python, yaml, as the tracked files need"),
   );
 
   const untyped = checkout({ "notes.txt": "a note\n" });

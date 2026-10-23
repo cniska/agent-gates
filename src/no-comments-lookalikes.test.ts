@@ -14,6 +14,7 @@ const PATHS: Readonly<Record<Language, string>> = {
   shell: "a.sh",
   rust: "a.rs",
   python: "a.py",
+  yaml: "a.yml",
 };
 
 const CODE: Readonly<Record<Language, string>> = {
@@ -23,6 +24,7 @@ const CODE: Readonly<Record<Language, string>> = {
   shell: "echo\n",
   rust: "fn f() {}\n",
   python: "x = 1\n",
+  yaml: "a: 1\n",
 };
 
 function at(language: Language, comment: string): Lookalike {
@@ -43,6 +45,8 @@ const KEEP = keepOf(
     "python # agent-gate:[a-z-]+:[0-9]+",
     "dart // x-gate:[0-9]+",
     "rust // x-gate:[0-9]+",
+    "yaml # agent-gate:[a-z-]+:[0-9]+",
+    "yaml # v?[0-9]+(\\.[0-9]+)*(-[0-9A-Za-z.]+)?",
     "",
   ].join("\n"),
 );
@@ -55,6 +59,7 @@ const INTERPRETER_LINES: readonly Lookalike[] = [
   at("dart", "#!/usr/bin/env dart"),
   at("rust", "#!/usr/bin/env -S cargo +nightly -Zscript"),
   at("shell", "#!/opt/a#b/bin/sh -e"),
+  at("yaml", "#!/usr/bin/env yq"),
 ];
 
 const ORDINARY_SHEBANGS: readonly Lookalike[] = [
@@ -70,6 +75,8 @@ const ORDINARY_SHEBANGS: readonly Lookalike[] = [
   at("python", "#!/usr/bin/env -S python3 -u \\c because reasons"),
   { language: "shell", path: "a.sh", text: "echo\n#!/bin/sh\n" },
   at("python", " #!/usr/bin/env python3"),
+  at("yaml", "#!/usr/bin/env yq # because reasons"),
+  { language: "yaml", path: "a.yml", text: "a: 1\n#!/usr/bin/env yq\n" },
 ];
 
 const KEPT_BY_PATTERN: readonly Lookalike[] = [
@@ -88,6 +95,16 @@ const KEPT_BY_PATTERN: readonly Lookalike[] = [
   at("python", "# agent-gate:no-comments-python:3"),
   at("dart", "// x-gate:1"),
   at("rust", "// x-gate:1"),
+  at("yaml", "# agent-gate:no-comments:5"),
+  {
+    language: "yaml",
+    path: "a.yml",
+    text: "uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n",
+  },
+  at("yaml", "# v4"),
+  at("yaml", "# v4.1.0"),
+  at("yaml", "# 0.28.0"),
+  at("yaml", "# v1.2.3-rc.1"),
 ];
 
 const NEAR_MISSES: readonly Lookalike[] = [
@@ -104,6 +121,10 @@ const NEAR_MISSES: readonly Lookalike[] = [
   at("python", "# v1"),
   at("dart", "/// x-gate:1"),
   at("rust", "//! x-gate:1"),
+  at("yaml", "# v4 why"),
+  at("yaml", "# version 4"),
+  at("yaml", "# v4."),
+  at("yaml", "# yamllint disable-line"),
 ];
 
 const REFUSED_WITHOUT_KEEP: readonly Lookalike[] = [
@@ -124,6 +145,8 @@ const REFUSED_WITHOUT_KEEP: readonly Lookalike[] = [
   at("python", "# coding=cp1252"),
   at("python", '"""A docstring."""'),
   at("javascript", "// SPDX-License-Identifier: MIT"),
+  at("yaml", "# yaml-language-server: $schema=schema.json"),
+  at("yaml", "# prettier-ignore"),
   at("shell", "# SPDX-License-Identifier: (GPL-2.0-or-later WITH Linux-syscall-note) OR MIT"),
 ];
 

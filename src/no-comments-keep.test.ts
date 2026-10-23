@@ -44,11 +44,15 @@ describe("the keep file", () => {
 
 describe("install's keep lines", () => {
   test("append each missing line at the end, keeping every line the file holds", () => {
-    const line = "shell # agent-gate:[a-z-]+:[0-9]+";
-    expect(withInstallLines(null)).toBe(`${line}\n`);
-    expect(withInstallLines("")).toBe(`${line}\n`);
-    expect(withInstallLines("sql -- a")).toBe(`sql -- a\n${line}\n`);
-    expect(withInstallLines(`${line}\nsql -- a\n`)).toBeNull();
-    expect(withInstallLines(`${line}\r\n`)).toBeNull();
+    const shell = "shell # agent-gate:[a-z-]+:[0-9]+";
+    const marker = "yaml # agent-gate:[a-z-]+:[0-9]+";
+    const trailer = "yaml # v?[0-9]+(\\.[0-9]+)*(-[0-9A-Za-z.]+)?";
+    const all = `${shell}\n${marker}\n${trailer}\n`;
+    expect(withInstallLines(null)).toBe(all);
+    expect(withInstallLines("")).toBe(all);
+    expect(withInstallLines("sql -- a")).toBe(`sql -- a\n${all}`);
+    expect(withInstallLines(`${shell}\nsql -- a\n`)).toBe(`${shell}\nsql -- a\n${marker}\n${trailer}\n`);
+    expect(withInstallLines(`${trailer}\n${marker}\n${shell}\nsql -- a\n`)).toBeNull();
+    expect(withInstallLines(all.replaceAll("\n", "\r\n"))).toBeNull();
   });
 });
