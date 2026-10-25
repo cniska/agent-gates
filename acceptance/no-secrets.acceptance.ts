@@ -56,6 +56,18 @@ const TOKEN_VALUE = ["ab", "12", "cd", "34"].join("");
 
 const TOKEN_LINE = ["FOO_TOKEN", "=", TOKEN_VALUE].join("");
 
+function plist(entries: string): string {
+  return lines([
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
+    '<plist version="1.0">',
+    "<dict>",
+    entries,
+    "</dict>",
+    "</plist>",
+  ]);
+}
+
 type Finding = readonly [line: number, rule: string, secret: string];
 
 function shown(path: string, [, rule, secret]: Finding): string {
@@ -122,11 +134,31 @@ test("AC-55 refuses a commit adding a secret, naming its file, line and rule wit
     ".env": `${TOKEN_LINE}\n`,
     "generated.ts": `export const key = "${AWS_KEY}";\n`,
     "binary.bin": `\u0000\u0001${AWS_KEY}\n`,
+    "App/Keys.swift": `let key = "${AWS_KEY}"\nlet API_TOKEN = "${TOKEN_VALUE}"\n`,
+    "App/Release.xcconfig": `AWS_KEY_ID = ${AWS_KEY}\nAPI_TOKEN = ${TOKEN_VALUE}\n`,
+    "App/Info.plist": plist(`<key>AWSKeyID</key>\n<string>${AWS_KEY}</string>`),
+    "App/App.entitlements": plist(`<key>com.example.key</key>\n<string>${AWS_KEY}</string>`),
   });
   expect(refused).toEqual(
     refusedWith(
       secretReply([
         [".env", [[1, "token-or-secret-assignment", TOKEN_VALUE]]],
+        ["App/App.entitlements", [[6, "aws-access-token", AWS_KEY]]],
+        ["App/Info.plist", [[6, "aws-access-token", AWS_KEY]]],
+        [
+          "App/Keys.swift",
+          [
+            [1, "aws-access-token", AWS_KEY],
+            [2, "token-or-secret-assignment", TOKEN_VALUE],
+          ],
+        ],
+        [
+          "App/Release.xcconfig",
+          [
+            [1, "aws-access-token", AWS_KEY],
+            [2, "token-or-secret-assignment", TOKEN_VALUE],
+          ],
+        ],
         ["deploy/key.yml", [[2, "private-key", PRIVATE_KEY]]],
         ["generated.ts", [[1, "aws-access-token", AWS_KEY]]],
         ["src/aws.ts", [[2, "aws-access-token", AWS_KEY]]],
@@ -146,6 +178,9 @@ test("AC-55 refuses a commit adding a secret, naming its file, line and rule wit
       "docs/setup.md":
         "A literal `FOO_TOKEN=<value>` is refused; `BAR_SECRET=<your token>` is a placeholder.\n",
       "binary.bin": `\u0000\u0001${AWS_KEY}\n`,
+      "App/Release.xcconfig": "API_TOKEN = $(OTHER)\n",
+      "App/Info.plist": plist(`<key>API_TOKEN</key>\n<string>${TOKEN_VALUE}</string>`),
+      "App/Binary.plist": `bplist00\u0000\u0001${AWS_KEY}\n`,
     }),
   ).toEqual(PASSED);
 
