@@ -22,7 +22,7 @@ import {
 afterEach(removeScratchDirs);
 
 const INSTALL_USAGE =
-  "agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments-yaml, no-secrets, pinned-actions, no-comments (each language the tracked files hold)";
+  "agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments-yaml, no-comments-swift, no-secrets, pinned-actions, no-comments (each language the tracked files hold)";
 
 const NO_PACKAGE_JSON = "no package.json, so each contributor runs git config core.hooksPath .githooks once";
 
@@ -153,7 +153,7 @@ test("AC-13 counts the comments tracked files hold and no pattern keeps, through
     name: "no-comments backlog",
     state: "fail",
     detail: ".no-comments-keep line 2 holds a regex that does not compile: javascript (",
-    fix: "write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python, yaml), one space and a regex that compiles, blank lines aside",
+    fix: "write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python, yaml, swift), one space and a regex that compiles, blank lines aside",
   });
 });
 

@@ -8,7 +8,7 @@ const BRACKET_PAIRS = [
 
 type BracketPair = (typeof BRACKET_PAIRS)[number];
 
-type Brackets = {
+export type Brackets = {
   readonly has: (char: string) => boolean;
   readonly isEmpty: () => boolean;
   readonly take: (at: number, char: string) => Stopped | null;

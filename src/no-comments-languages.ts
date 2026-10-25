@@ -1,6 +1,15 @@
 import { interpreterOf, routeOf, UV_SCRIPT } from "./no-comments-route";
 
-export const LANGUAGE_NAMES = ["javascript", "dart", "sql", "shell", "rust", "python", "yaml"] as const;
+export const LANGUAGE_NAMES = [
+  "javascript",
+  "dart",
+  "sql",
+  "shell",
+  "rust",
+  "python",
+  "yaml",
+  "swift",
+] as const;
 
 export type Language = (typeof LANGUAGE_NAMES)[number];
 
@@ -26,6 +35,7 @@ export const LANGUAGES: Readonly<Record<Language, LanguageEntry>> = {
     interpreters: ["python", "pypy", UV_SCRIPT],
   },
   yaml: { shown: "YAML", extensions: [".yml", ".yaml"], interpreters: [] },
+  swift: { shown: "Swift", extensions: [".swift"], interpreters: ["swift"] },
 };
 
 export function languageOf(path: string, firstLine: string): Language | null {

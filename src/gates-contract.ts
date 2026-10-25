@@ -175,6 +175,7 @@ export const SCANNER_FILE: GateFile = {
     { version: 30, sha256: "82fec478e778625c2bcf0d0ef517bd07bbf3fe8a9919331781918d33c6ad644c" },
     { version: 31, sha256: "e124dce7942a6ffcfaf7c78451408a2b7c89835a7e7d1384538f4bb063292dd4" },
     { version: 32, sha256: "38f76e204fe11404d9962b64f2757e157f5e836edf008e180ff8049415ae95cf" },
+    { version: 33, sha256: "a5b1bc5e720a98ccf0437f66a8ff1c9449482c33610e6b96ed07e8665818d10c" },
   ],
 };
 
@@ -399,6 +400,9 @@ export const ADAPTER_FILES: Readonly<Record<Language, GateFile>> = {
   yaml: adapterFile("yaml", [
     { version: 1, sha256: "1e4040a90ec8692d6395fdb38aa3213c10179100a51bcb3804e01361e965f7fb" },
   ]),
+  swift: adapterFile("swift", [
+    { version: 1, sha256: "224bb7142f59f78952f882b0042678128dbdacec0a293e81658b8c5344a08cff" },
+  ]),
 };
 
 export const NO_SECRETS_SCANNER: GateFile = {
@@ -562,6 +566,7 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
   "no-comments-rust": noCommentsFiles("rust"),
   "no-comments-python": noCommentsFiles("python"),
   "no-comments-yaml": noCommentsFiles("yaml"),
+  "no-comments-swift": noCommentsFiles("swift"),
   "no-secrets": NO_SECRETS_FILES,
   "pinned-actions": PINNED_ACTIONS_FILES,
 };

@@ -26,6 +26,7 @@ import {
   KEPT_PYTHON,
   KEPT_RUST,
   KEPT_SQL,
+  KEPT_SWIFT,
   KEPT_YAML,
   KEPT_YAML_BY_INSTALL,
 } from "./no-comments";
@@ -40,6 +41,7 @@ const ALL_NONE = [
   KEPT_RUST,
   KEPT_PYTHON,
   KEPT_YAML,
+  KEPT_SWIFT,
 ];
 
 const KEEP = lines([
@@ -52,6 +54,7 @@ const KEEP = lines([
   "rust // agent-gate:[a-z-]+:[0-9]+",
   "python # agent-gate:[a-z-]+:[0-9]+",
   "yaml # agent-gate:[a-z-]+:[0-9]+",
+  "swift // agent-gate:[a-z-]+:[0-9]+",
 ]);
 
 const KEPT_BY_KEEP = [
@@ -62,6 +65,7 @@ const KEPT_BY_KEEP = [
   "kept in Rust: `// agent-gate:[a-z-]+:[0-9]+`",
   "kept in Python: `# agent-gate:[a-z-]+:[0-9]+`",
   "kept in YAML: `# agent-gate:[a-z-]+:[0-9]+`",
+  "kept in Swift: `// agent-gate:[a-z-]+:[0-9]+`",
 ];
 
 const KEPT_FILES = {
@@ -73,6 +77,7 @@ const KEPT_FILES = {
   "k.rs": "#!/usr/bin/env rust-script\n// agent-gate:no-comments:1\nfn main() {}\n",
   "k.py": "#!/usr/bin/env python3\n# agent-gate:no-comments:1\nx = 1\n",
   "k.yml": "# agent-gate:no-comments:1\na: 1\n",
+  "k.swift": "#!/usr/bin/env swift\n// agent-gate:no-comments:1\nprint(1)\n",
 };
 
 test("AC-26 keeps a comment only through a .no-comments-keep pattern of its language", () => {
@@ -98,6 +103,15 @@ test("AC-26 keeps a comment only through a .no-comments-keep pattern of its lang
       "r.sh": "#!/bin/sh # strict\n# shellcheck disable=SC2034\necho hi\n",
       "r.rs": "/// The entry.\n//! The crate.\n// agent-gate:no-comments:1 kept\nfn main() {}\n",
       "r.py": "# -*- coding: utf-8 -*-\nx = 1  # type: ignore\ny = 2  # noqa: E501\n",
+      "r.swift": lines([
+        "/// The entry.",
+        "/** A doc block. */",
+        "// agent-gate:no-comments:1 kept",
+        "/* agent-gate:no-comments:1",
+        "*/",
+        "// swiftlint:disable:next force_cast",
+        "let a = 1",
+      ]),
       "r.yml":
         "# yaml-language-server: $schema=a.json\n# agent-gate:no-comments:1 kept\nb: 2 # prettier-ignore\n",
     }),
@@ -112,6 +126,16 @@ test("AC-26 keeps a comment only through a .no-comments-keep pattern of its lang
         ["r.rs", ["1  /// The entry.", "2  //! The crate.", "3  // agent-gate:no-comments:1 kept"]],
         ["r.sh", ["1  #!/bin/sh # strict", "2  # shellcheck disable=SC2034"]],
         ["r.sql", ["1  --> statement-breakpoint here", "3  -- sqlfluff:noqa"]],
+        [
+          "r.swift",
+          [
+            "1  /// The entry.",
+            "2  /** A doc block. */",
+            "3  // agent-gate:no-comments:1 kept",
+            "4  /* agent-gate:no-comments:1",
+            "6  // swiftlint:disable:next force_cast",
+          ],
+        ],
         [
           "r.ts",
           [
@@ -147,6 +171,7 @@ test("AC-26 keeps a comment only through a .no-comments-keep pattern of its lang
         ["k.rs", ["2  // agent-gate:no-comments:1"]],
         ["k.sh", ["2  # agent-gate:no-comments:1"]],
         ["k.sql", ["1  -- agent-gate:no-comments:1", "3  --> statement-breakpoint"]],
+        ["k.swift", ["2  // agent-gate:no-comments:1"]],
         ["k.ts", ['2  /// <reference types="node" />', "3  // agent-gate:no-comments:1"]],
         ["k.yml", ["1  # agent-gate:no-comments:1"]],
       ]),
@@ -179,6 +204,17 @@ test("AC-27 reads comments where each language's tokenizer does", () => {
       "t.rs":
         'fn main() {\n    let s = "// not";\n    let r = r#"/* nor */"#;\n}\n#[doc(hidden)]\nfn hidden() {}\n',
       "t.py": 'x = "# not a comment"\ny = f"{x} # nor"\n',
+      "t.swift": lines([
+        'let s = "// not a comment"',
+        'let t = "\\(s.count + 1) /* nor this */"',
+        'let r = #"raw \\" // still text"#',
+        'let m = """',
+        "  /* inside a multi-line string */",
+        '  """',
+        "let u = #/https?:\\/\\/x/#",
+        "let v = /a\\/\\//",
+        "let w = 6 / 3 / 2",
+      ]),
     }),
   ).toEqual(PASSED);
 
@@ -188,15 +224,17 @@ test("AC-27 reads comments where each language's tokenizer does", () => {
       "f.rs": '#[cfg_attr(test, doc = "Tested.")]\nfn tested() {}\n',
       "f.py": 'def f():\n    """Answer."""\n    return 1\n',
       "f.yml": 'q: "a # not"\nrun: |\n  echo # not\nlist:\n  # in a sequence\n  - a # after\n',
+      "f.swift": 'let t = "\\(s.count /* in the interpolation */ + 1) // not"\n',
     }),
   ).toEqual(
     refusedWith(
       commentReply(
-        [KEPT_SQL, KEPT_RUST, KEPT_PYTHON, KEPT_YAML_BY_INSTALL],
+        [KEPT_SQL, KEPT_RUST, KEPT_PYTHON, KEPT_YAML_BY_INSTALL, KEPT_SWIFT],
         [
           ["f.py", ['2  """Answer."""']],
           ["f.rs", ['1  #[cfg_attr(test, doc = "Tested.")]']],
           ["f.sql", ["2  -- inside"]],
+          ["f.swift", ["1  /* in the interpolation */"]],
           ["f.yml", ["5  # in a sequence", "6  # after"]],
         ],
       ),

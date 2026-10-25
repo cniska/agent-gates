@@ -44,6 +44,8 @@ const rustComments = ADAPTERS.rust.comments;
 
 const pythonComments = ADAPTERS.python.comments;
 
+const swiftComments = ADAPTERS.swift.comments;
+
 function read(comments: readonly Comment[]): Reading {
   return { kind: "read", comments };
 }
@@ -146,6 +148,8 @@ describe("the language table", () => {
     expect(languageOf("bin/tool", "#!/usr/bin/env dart")).toBe("dart");
     expect(languageOf("db/001.sql", "")).toBe("sql");
     expect(languageOf("src/main.rs", "")).toBe("rust");
+    expect(languageOf("Sources/App/main.swift", "")).toBe("swift");
+    expect(languageOf("bin/tool", "#!/usr/bin/env swift")).toBe("swift");
     expect(languageOf("scripts/a.sh", "")).toBe("shell");
     expect(languageOf("scripts/a.bash", "")).toBe("shell");
     for (const shebang of ["#!/bin/sh", "#!/usr/bin/env bash", "#!/bin/dash", "#!/bin/zsh -f"])
@@ -1078,6 +1082,116 @@ describe("the yaml adapter", () => {
   });
 });
 
+describe("the swift adapter", () => {
+  test("refuses line, block and doc comments, nested blocks whole, naming each line and text", () => {
+    const text = [
+      "/// Doc line.",
+      "/** Doc block. */",
+      "struct S {",
+      "  let a = 1 // trailing",
+      "  /* outer /* inner */ still outer */",
+      "  /*",
+      "   spans",
+      "   */",
+      "}",
+    ].join("\n");
+    expect(swiftComments("a.swift", text)).toEqual(
+      read([
+        { line: 1, text: "/// Doc line." },
+        { line: 2, text: "/** Doc block. */" },
+        { line: 4, text: "// trailing" },
+        { line: 5, text: "/* outer /* inner */ still outer */" },
+        { line: 6, text: "/*\n   spans\n   */" },
+      ]),
+    );
+  });
+
+  test("leaves comment markers inside every string form alone", () => {
+    const text = [
+      'let a = "// not /* a comment"',
+      'let b = "escaped \\" // still text"',
+      'let c = """',
+      "  // inside a multi-line string",
+      '  """',
+      'let d = #"raw \\" // still text"#',
+      'let e = ##"a "# // still text"##',
+      'let f = #"""',
+      '  """ /* still text',
+      '  """#',
+      "let g = 1 // real",
+    ].join("\n");
+    expect(swiftComments("a.swift", text)).toEqual(read([{ line: 11, text: "// real" }]));
+  });
+
+  test("lexes interpolation as code, a string with a parenthesis inside it included", () => {
+    const text = [
+      'let a = "\\(f(")")) // text"',
+      'let b = #"\\#(f(")"#)) // text"#',
+      'let c = #"\\(x) // text"#',
+      'let d = "\\(x /* code */)"',
+      'let e = """',
+      "  \\(x // code",
+      "  )",
+      '  """',
+    ].join("\n");
+    expect(swiftComments("a.swift", text)).toEqual(
+      read([
+        { line: 4, text: "/* code */" },
+        { line: 6, text: "// code" },
+      ]),
+    );
+  });
+
+  test("reads slashes in regex literals and division as code", () => {
+    const text = [
+      "let a = #/https?:\\/\\/x/#",
+      "let b = /a\\/\\//",
+      "let c = a / b / c",
+      "let d = ##/a/#b/##",
+      "let e = #/",
+      "  a # extended // text",
+      "  /#",
+      "let f = try? / a\\/* b/",
+      "let g = values.reduce(1, /)",
+      "let h = (/)",
+      "let i = x.split(separator: /,/) // real",
+      "static func / (lhs: A, rhs: A) -> A { A(lhs.v/rhs.v) }",
+      "prefix operator /",
+      "#if DEBUG",
+      "#elseif",
+      "/ a\\/* b/",
+      "#endif",
+      "/ a\\/* b/",
+    ].join("\n");
+    expect(swiftComments("a.swift", text)).toEqual(read([{ line: 11, text: "// real" }]));
+  });
+
+  test("reads a first-line interpreter line as the script's, not a comment", () => {
+    expect(swiftComments("a.swift", "#!/usr/bin/env swift // x\nprint(1) // y\n")).toEqual(
+      read([{ line: 2, text: "// y" }]),
+    );
+  });
+
+  test("names the line where a literal, comment or bracket that never closes opens", () => {
+    for (const [open, reason] of [
+      ['let a = "open;\nb\n', "Unterminated string"],
+      ['let a = "open\nlet b = 1 // c "\n', "Unterminated string"],
+      ['let a = """\nopen\n', "Unterminated string"],
+      ['let a = #"open"\nb\n', "Unterminated raw string"],
+      ['let a = ##"""\nx"""#\n', "Unterminated raw string"],
+      ['let a = "\\(x\n)"\n', "Unterminated string"],
+      ["/* open /* nested */\nb\n", "Unterminated comment"],
+      ["let r = #/a\nb\n", "Unterminated regex"],
+      ["let r = #/\n  a\n", "Unterminated regex"],
+      ["func f() {\nb\n", "Unterminated brace"],
+      ["f(a\nb\n", "Unterminated parenthesis"],
+      ["let a = [1\nb\n", "Unterminated bracket"],
+      ["f(a))\nb\n", 'Unexpected ")"'],
+    ] as const)
+      expect([open, swiftComments("a.swift", `let z = 1\n${open}`)]).toEqual([open, unparsed(2, reason)]);
+  });
+});
+
 describe("the no-comments doc", () => {
   test("shows keep lines that each keep the comment beside them, install's lines among them", () => {
     const doc = readFileSync(join(import.meta.dir, "../docs/no-comments.md"), "utf8");
@@ -1268,7 +1382,7 @@ describe("the pre-commit hook", () => {
     expect(commit(dir)).toEqual({
       status: 1,
       stderr:
-        "no-comments: .no-comments-keep line 3 names no language the gates read: cobol # y; write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python, yaml), one space and a regex that compiles, blank lines aside\n",
+        "no-comments: .no-comments-keep line 3 names no language the gates read: cobol # y; write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python, yaml, swift), one space and a regex that compiles, blank lines aside\n",
     });
   });
 
@@ -1823,7 +1937,7 @@ describe("install and doctor", () => {
       name: "no-comments backlog",
       state: "fail",
       detail: ".no-comments-keep line 4 holds a regex that does not compile: javascript (",
-      fix: "write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python, yaml), one space and a regex that compiles, blank lines aside",
+      fix: "write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python, yaml, swift), one space and a regex that compiles, blank lines aside",
     });
   });
 

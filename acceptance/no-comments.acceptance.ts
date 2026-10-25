@@ -30,6 +30,7 @@ import {
   javascriptRefusal,
   KEPT_JAVASCRIPT,
   KEPT_PYTHON,
+  KEPT_SWIFT,
   REMOVE,
 } from "./no-comments";
 
@@ -131,7 +132,7 @@ test("AC-20 refuses a comment the change edited, split, joined, duplicated, copi
 });
 
 test("AC-21 skips what is not code, and routes a file by its extension or shebang", () => {
-  const dir = gated(["no-comments-javascript", "no-comments-python"], {
+  const dir = gated(["no-comments-javascript", "no-comments-python", "no-comments-swift"], {
     ".gitattributes": "generated.ts linguist-generated\nvendor/** linguist-vendored\n",
   });
   symlinkSync("// a link", join(dir, "link.ts"));
@@ -151,14 +152,16 @@ test("AC-21 skips what is not code, and routes a file by its extension or sheban
       "bin/node-tool": "#!/usr/bin/env -S node --no-warnings\n// node\n",
       "bin/python-tool": "#!/usr/bin/python3.12\n# python\n",
       "bin/uv-tool": "#!/usr/bin/env uv run --script\n# uv\n",
+      "bin/swift-tool": "#!/usr/bin/env swift\n// swift\nprint(1)\n",
     }),
   ).toEqual(
     refusedWith(
       commentReply(
-        [KEPT_JAVASCRIPT, KEPT_PYTHON],
+        [KEPT_JAVASCRIPT, KEPT_PYTHON, KEPT_SWIFT],
         [
           ["bin/node-tool", ["2  // node"]],
           ["bin/python-tool", ["2  # python"]],
+          ["bin/swift-tool", ["2  // swift"]],
           ["bin/uv-tool", ["2  # uv"]],
         ],
       ),
@@ -192,6 +195,10 @@ test("AC-22 refuses a file that does not parse, at the line where it stops", () 
       "Flow sequence in block collection must be sufficiently indented and end with a ]",
     ],
     ["b.yml", 'key: "a\nnext: 1\n', 3, 'Missing closing "quote'],
+    ["a.swift", 'let a = 1\nlet s = #"abc"\n', 2, "Unterminated raw string"],
+    ["b.swift", "let a = 1\n/* never /* nested */\n", 2, "Unterminated comment"],
+    ["c.swift", "let a = 1\nlet r = #/abc\n", 2, "Unterminated regex"],
+    ["d.swift", "func f() {\n  print(1))\n}\n", 2, 'Unexpected ")"'],
   ] as const) {
     expect(commitFiles(restart(dir), { [path]: text })).toEqual(unparsedRefusal(path, line, reason));
   }
