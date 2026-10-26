@@ -84,7 +84,6 @@ describe("install format", () => {
       name: "format command",
       state: "ok",
       detail: "`sh fmt.sh`; sh is on PATH",
-      fix: null,
     });
     expect(notOk(dir)).toEqual([]);
   });
@@ -111,7 +110,7 @@ describe("install format", () => {
     expect(installGates(dir, [], NO_FILLS).files.every(({ state }) => state === "installed")).toBe(true);
     const again = installGates(dir, [], { command: "cargo fmt", prefixes: null });
     expect(again.fills).toEqual({ command: "cargo fmt", prefixes: null });
-    expect(again.files[0]).toEqual({ target: HOOK, state: "reconfigured", backup: null });
+    expect(again.files[0]).toEqual({ target: HOOK, state: "reconfigured" });
     expect(read(dir, HOOK)).toContain("\ncommand='cargo fmt'\n");
   });
 

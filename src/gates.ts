@@ -96,8 +96,6 @@ type Marker = { readonly part: Part; readonly version: number };
 
 type Found = { readonly text: string; readonly executable: boolean };
 
-type Action = "skip" | "write" | "set-aside-and-write";
-
 type PlannedAt = {
   readonly target: string;
   readonly file: GateFile;
@@ -121,13 +119,14 @@ export type HooksPathState =
   | { readonly kind: "unset" }
   | { readonly kind: "occupied"; readonly refusal: Refusal };
 
-type InstalledFile = {
-  readonly target: string;
-  readonly state: WritableState;
-  readonly backup: string | null;
-};
+export type InstalledFile =
+  | { readonly target: string; readonly state: Exclude<WritableState, "changed"> }
+  | { readonly target: string; readonly state: "changed"; readonly backup: string };
+
+type FileCounts = { readonly [State in WritableState]: number };
 
 type GatesInstalled = {
+  readonly counts: FileCounts;
   readonly gates: readonly GateName[];
   readonly files: readonly InstalledFile[];
   readonly prepare: Exclude<PrepareState["kind"], "occupied" | "unparseable">;
@@ -258,23 +257,6 @@ export function stepsState(root: string, planned: readonly PlannedFile[]): Steps
   return { steps, unchecked };
 }
 
-function actionFor(state: WritableState): Action {
-  switch (state) {
-    case "installed":
-    case "ahead":
-      return "skip";
-    case "missing":
-    case "behind":
-    case "not-executable":
-    case "reconfigured":
-      return "write";
-    case "changed":
-      return "set-aside-and-write";
-    default:
-      return unreachable(state);
-  }
-}
-
 function writing<T>(path: string, write: () => T): T {
   try {
     return write();
@@ -283,22 +265,50 @@ function writing<T>(path: string, write: () => T): T {
   }
 }
 
-function applied(root: string, { file, path, source, state }: WritableFile): string | null {
-  const action = actionFor(state);
-  if (action === "skip") return null;
-  const backup =
-    action === "set-aside-and-write"
-      ? relative(
-          root,
-          writing(path, () => copyAside(path)),
-        )
-      : null;
+function written({ file, path, source }: WritableFile): void {
   writing(path, () => {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, source);
     chmodSync(path, file.executable ? EXECUTABLE_MODE : FILE_MODE);
   });
-  return backup;
+}
+
+function applied(root: string, planned: WritableFile): InstalledFile {
+  const { target, path, state } = planned;
+  switch (state) {
+    case "installed":
+    case "ahead":
+      return { target, state };
+    case "missing":
+    case "behind":
+    case "not-executable":
+    case "reconfigured":
+      written(planned);
+      return { target, state };
+    case "changed": {
+      const backup = relative(
+        root,
+        writing(path, () => copyAside(path)),
+      );
+      written(planned);
+      return { target, state, backup };
+    }
+    default:
+      return unreachable(state);
+  }
+}
+
+function fileCounts(files: readonly InstalledFile[]): FileCounts {
+  const count = (state: WritableState) => files.filter((file) => file.state === state).length;
+  return {
+    installed: count("installed"),
+    missing: count("missing"),
+    behind: count("behind"),
+    changed: count("changed"),
+    ahead: count("ahead"),
+    "not-executable": count("not-executable"),
+    reconfigured: count("reconfigured"),
+  };
 }
 
 type KeepPlan =
@@ -340,20 +350,16 @@ export function installGates(root: string, named: readonly GateName[], given: Fi
   const prepare = prepareState(root);
   if (prepare.kind === "occupied" || prepare.kind === "unparseable") throw prepare.refusal;
   const keep = keepsComments(gates) ? keepPlan(root) : null;
-  const files: InstalledFile[] = toWrite.map((planned) => ({
-    target: planned.target,
-    state: planned.state,
-    backup: applied(root, planned),
-  }));
+  const files = toWrite.map((planned) => applied(root, planned));
   if (keep !== null) {
     if (keep.state !== "installed") {
       const { path, text } = keep;
       writing(path, () => writeFileSync(path, text));
     }
-    files.push({ target: KEEP_FILE, state: keep.state, backup: null });
+    files.push({ target: KEEP_FILE, state: keep.state });
   }
   if (prepare.kind === "missing" || prepare.kind === "behind")
     writing(prepare.path, () => writeFileSync(prepare.path, prepare.wired));
   if (hooksPath.kind === "unset") setConfig(root, "core.hooksPath", HOOKS_DIR);
-  return { gates, files, prepare: prepare.kind, fills: fillsOf(toWrite) };
+  return { counts: fileCounts(files), gates, files, prepare: prepare.kind, fills: fillsOf(toWrite) };
 }

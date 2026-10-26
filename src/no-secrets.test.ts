@@ -477,7 +477,6 @@ describe("the doctor", () => {
       name: "no-secrets backlog",
       state: "ok",
       detail: "the tracked files hold no secret",
-      fix: null,
     });
     writeFileSync(join(dir, NO_SECRETS_SCANNER.target), "// agent-gate:no-secrets:1\n");
     expect(check()).toEqual({

@@ -45,14 +45,13 @@ import { countsOf as unpinnedCountsOf } from "./pinned-actions-report";
 import { SWEEP_ALL } from "./scanner-call";
 import { judgedTextOf } from "./scanner-change";
 
-type Health = {
-  readonly name: string;
-  readonly state: "ok" | "warn" | "fail";
-  readonly detail: string;
-  readonly fix: string | null;
-};
+export type Health =
+  | { readonly name: string; readonly state: "ok"; readonly detail: string }
+  | { readonly name: string; readonly state: "warn" | "fail"; readonly detail: string; readonly fix: string };
 
-type DoctorReport = { readonly checks: readonly Health[]; readonly failing: number };
+type HealthCounts = { readonly [State in Health["state"]]: number };
+
+type DoctorReport = { readonly counts: HealthCounts; readonly checks: readonly Health[] };
 
 function refusedHealth(name: string, error: Refusal): Health {
   return { name, state: "fail", detail: error.message, fix: error.resolve };
@@ -62,7 +61,7 @@ function fileHealth(planned: PlannedFile): Health {
   const name = planned.target;
   switch (planned.state) {
     case "installed":
-      return { name, state: "ok", detail: "installed", fix: null };
+      return { name, state: "ok", detail: "installed" };
     case "missing":
       return { name, state: "fail", detail: "missing, so the gate does not run", fix: REINSTALL };
     case "not-executable":
@@ -108,7 +107,7 @@ function unsetHealth(fill: Fill): Health[] {
     case "required":
       return [];
     case "defaulted":
-      return [{ name: check, state: "ok", detail: unset.detail, fix: null }];
+      return [{ name: check, state: "ok", detail: unset.detail }];
     default:
       return unreachable(unset);
   }
@@ -117,10 +116,9 @@ function unsetHealth(fill: Fill): Health[] {
 function fillHealth(fill: Fill, value: string | null): Health[] {
   const { check, program } = FILLS[fill];
   if (value === null) return unsetHealth(fill);
-  if (program === null) return [{ name: check, state: "ok", detail: `\`${value}\``, fix: null }];
+  if (program === null) return [{ name: check, state: "ok", detail: `\`${value}\`` }];
   const named = programOf(value);
-  if (onPath(named))
-    return [{ name: check, state: "ok", detail: `\`${value}\`; ${named} is on PATH`, fix: null }];
+  if (onPath(named)) return [{ name: check, state: "ok", detail: `\`${value}\`; ${named} is on PATH` }];
   return [
     {
       name: check,
@@ -174,7 +172,6 @@ function languagesHealth(root: string, installed: readonly Language[]): Health[]
         name: LANGUAGES_CHECK,
         state: "ok",
         detail: `${installed.join(", ")}, as the tracked files need`,
-        fix: null,
       },
     ];
   return [
@@ -217,7 +214,7 @@ function backlogOf(
   if (stale.length > 0) return { name, state: "warn", detail: notCounted(runs, stale), fix: REINSTALL };
   const count = counted();
   if (count.kind === "refused") return refusedHealth(name, count.refusal);
-  if (count.clean) return { name, state: "ok", detail: count.detail, fix: null };
+  if (count.clean) return { name, state: "ok", detail: count.detail };
   return {
     name,
     state: "warn",
@@ -271,7 +268,7 @@ const STEPS_CHECK = "hook steps";
 function stepsHealth({ steps, unchecked }: StepsState): Health[] {
   if (steps.length === 0) return [];
   if (unchecked.length === 0)
-    return [{ name: STEPS_CHECK, state: "ok", detail: `a workflow runs ${steps.join(", ")}`, fix: null }];
+    return [{ name: STEPS_CHECK, state: "ok", detail: `a workflow runs ${steps.join(", ")}` }];
   return [
     {
       name: STEPS_CHECK,
@@ -286,7 +283,7 @@ function hooksPathHealth(hooksPath: HooksPathState): Health {
   const name = "hooksPath";
   switch (hooksPath.kind) {
     case "wired":
-      return { name, state: "ok", detail: `core.hooksPath is ${HOOKS_DIR}`, fix: null };
+      return { name, state: "ok", detail: `core.hooksPath is ${HOOKS_DIR}` };
     case "unset":
       return {
         name,
@@ -309,10 +306,9 @@ function prepareHealth(prepare: PrepareState): Health {
         name,
         state: "ok",
         detail: `no package.json, so each contributor runs git config core.hooksPath ${HOOKS_DIR} once`,
-        fix: null,
       };
     case "wired":
-      return { name, state: "ok", detail: "package.json's prepare wires the hooks on install", fix: null };
+      return { name, state: "ok", detail: "package.json's prepare wires the hooks on install" };
     case "missing":
       return {
         name,
@@ -346,7 +342,7 @@ function judged(root: string): Health[] {
   const planned = plannedFiles(root, gates, NO_FILLS);
   const fills = fillsOf(planned);
   return [
-    { name: "gates", state: "ok", detail: gates.join(", "), fix: null },
+    { name: "gates", state: "ok", detail: gates.join(", ") },
     ...planned.map(fileHealth),
     hooksPathHealth(hooksPathState(root)),
     prepareHealth(prepareState(root)),
@@ -361,5 +357,6 @@ function judged(root: string): Health[] {
 
 export function gatesDoctor(root: string): DoctorReport {
   const checks = judged(root);
-  return { checks, failing: checks.filter(({ state }) => state === "fail").length };
+  const count = (state: Health["state"]) => checks.filter((check) => check.state === state).length;
+  return { counts: { ok: count("ok"), warn: count("warn"), fail: count("fail") }, checks };
 }

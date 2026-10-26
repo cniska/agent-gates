@@ -1,9 +1,9 @@
 import { parseArgs } from "node:util";
 import { unreachable } from "./assert";
-import { checkArity, usageError } from "./cli-args";
+import { checkArity, FULL_FLAG, fullOf, usageError } from "./cli-args";
 import type { Command } from "./cli-contract";
 import { type GateName, isGateName } from "./gate-parts";
-import { installGates, trackedLanguageGates } from "./gates";
+import { type InstalledFile, installGates, trackedLanguageGates } from "./gates";
 import {
   EACH_TRACKED_LANGUAGE,
   eachFill,
@@ -11,8 +11,8 @@ import {
   FILLS,
   type Fill,
   type Fills,
+  GATE_CHOICES,
   GATES,
-  INSTALL_USAGE,
 } from "./gates-contract";
 import { checkoutRoot } from "./git";
 
@@ -81,16 +81,33 @@ function parsed(args: readonly string[], usage: string) {
   }
 }
 
+function fullFile(file: InstalledFile) {
+  const backup = file.state === "changed" ? file.backup : null;
+  return { target: file.target, state: file.state, backup };
+}
+
+function backups(files: readonly InstalledFile[]) {
+  return files.flatMap((file) =>
+    file.state === "changed" ? [{ target: file.target, backup: file.backup }] : [],
+  );
+}
+
+const INSTALL_USAGE = `agent-gates install [<gate>] [${FILLS.command.flag} <format command>] [${FILLS.prefixes.flag} ${FILLS.prefixes.placeholder}] [${FULL_FLAG}], choosing from ${GATE_CHOICES}`;
+
 export const installCommand: Command = {
   name: "install",
   usage: INSTALL_USAGE,
   summary: "install the named gate, and bring the installed ones up to date",
   run(args) {
-    const { values, positionals } = parsed(args, this.usage);
+    const { full, rest } = fullOf(args);
+    const { values, positionals } = parsed(rest, this.usage);
     checkArity(positionals, [0, 1], this);
     const named = namedIn(positionals[0], this.usage);
     const given: Fills = eachFill((fill) => fillOf(values, fill, named, this.usage));
     const root = checkoutRoot(process.cwd());
-    return { value: installGates(root, gatesOf(named, root), given), exitCode: 0 };
+    const { counts, gates, files, prepare, fills } = installGates(root, gatesOf(named, root), given);
+    if (full) return { value: { counts, gates, files: files.map(fullFile), prepare, fills }, exitCode: 0 };
+    const listed = files.map(({ target, state }) => ({ target, state }));
+    return { value: { counts, gates, files: listed, backups: backups(files), prepare, fills }, exitCode: 0 };
   },
 };

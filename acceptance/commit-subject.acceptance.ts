@@ -15,6 +15,7 @@ import {
   gitRan,
   install,
   installed,
+  installs,
   NO_COMMIT,
   type Outcome,
   PASSED,
@@ -267,7 +268,7 @@ test("AC-18 judges every commit the pushed range holds in CI", () => {
 test("AC-43 keeps the prefixes a reinstall is not given, rewrites a new list, and upgrades the earlier hook", () => {
   const dir = checkout();
   install(dir, ["commit-subject", "--prefixes", "feat,fix"]);
-  expect(installed(dir, [])).toEqual({
+  installs(dir, [], {
     gates: ["commit-subject"],
     files: each("installed", COMMIT_SUBJECT_FILES),
     prepare: "absent",

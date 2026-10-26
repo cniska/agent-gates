@@ -15,8 +15,8 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 ### 2.1 The CLI
 
 - **FR-1** — `agent-gates` with no command prints the commands, each with its name, usage and summary, and `--version` (FR-115) the same way as a flag, and exits 0.
-- **FR-2** — A command that succeeds prints one JSON line on stdout naming the command, with `ok: true` and its result.
-- **FR-3** — A command that fails prints one JSON line on stderr naming the command, with `ok: false` and an error carrying its kind, code, message, meta and resolve, and prints nothing on stdout.
+- **FR-2** — A command that succeeds prints TOON on stdout naming the command, with `ok: true` and its result.
+- **FR-3** — A command that fails prints TOON on stderr naming the command, with `ok: false` and an error carrying its kind, code, message, meta and resolve, and prints nothing on stdout.
 - **FR-4** — An error exits 2 for the kind `usage`, 1 for `refusal` and 3 for `fault`.
 - **FR-5** — An unknown command, a wrong number of arguments and an unknown gate name are usage errors whose resolve is the usage to follow.
 - **FR-6** — A command acts on the root of the git checkout it runs in, from any directory below it; outside a checkout it is refused as `not_a_checkout`.
@@ -36,7 +36,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **FR-17** — A file whose marker names a later version of its part is `ahead`, and install leaves it.
 - **FR-18** — A hook holding the current bytes without its executable bit is `not-executable`, and install restores the bit without a backup.
 - **FR-19** — An executable gate file, a hook or a hook step, with no `agent-gate` marker is `occupied`, and install is refused as `hook_occupied`, writing nothing. A gate file that is not executable and has no marker is `changed`.
-- **FR-20** — Install's result names the gates it installed, each file's path, the file's state before install acted and its backup, the `prepare` script's state, and the format command and the commit prefixes installed, each `null` when there is none.
+- **FR-20** — Install's result leads with how many files are in each state, zeros included, then names the gates it installed, each file's path and its state before install acted, each backup install made with its file's path, the `prepare` script's state, and the format command and the commit prefixes installed, each `null` when there is none.
 - **FR-21** — Install sets `core.hooksPath` to `.githooks` when it is unset, and accepts any value that resolves to `.githooks`.
 - **FR-22** — When `core.hooksPath` names another directory, install is refused as `hooks_path_occupied`, writing nothing.
 - **FR-23** — With a `package.json`, install sets its `prepare` script to one that wires `core.hooksPath` in a git checkout and does nothing outside one, keeping every other key, the keys' order and the file's indent. An earlier wiring is replaced the same way. Without a `package.json`, install writes none.
@@ -46,7 +46,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ### 2.3 Doctor
 
-- **FR-27** — `doctor` reports its checks, each with a name, a state of `ok`, `warn` or `fail`, a detail and a fix (`null` when it passes), and how many fail. It exits 1 when a check fails and 0 otherwise.
+- **FR-27** — `doctor` leads with how many checks are in each state of `ok`, `warn` and `fail`, zeros included, then reports its checks, each with a name, a state and a detail, then the fix of each check that does not pass, with its name. It exits 1 when a check fails and 0 otherwise.
 - **FR-28** — With no gate installed, `doctor` warns that no gate is installed, with the install usage as its fix.
 - **FR-29** — With a gate installed, `doctor` reports the installed gates, each of their files, `core.hooksPath` and the `prepare` script, in that order.
 - **FR-30** — A file passes when `installed`, warns when `behind`, `changed` or `ahead`, and fails when `missing` or `not-executable`; an `occupied` hook, and a format hook that holds no command, fail with install's refusal as their detail and fix.
@@ -179,7 +179,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ### 2.18 The version
 
-- **FR-115** — `agent-gates --version` prints the running build's version, as `package.json` states it, alone on one line and exits 0; with an argument after it, it is the usage error `wrong_arity`. It is the one invocation that prints no JSON line (FR-2), so an installer and a package manager's test can read it.
+- **FR-115** — `agent-gates --version` prints the running build's version, as `package.json` states it, alone on one line and exits 0; with an argument after it, it is the usage error `wrong_arity`. It is the one invocation that prints no TOON (FR-2), so an installer and a package manager's test can read it.
 
 ### 2.19 The release build
 
@@ -234,6 +234,10 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 - **FR-147** — `.swift` files are Swift, read as Swift 6 language mode reads them, with bare-slash regex literals on: `//`, `///`, `/* */` and `/** */` are comments, block comments nest, and a `#!` line opening the file is its interpreter line. Nothing inside a string is a comment, a multi-line `"""` string or a raw string with any number of `#` included, except inside an interpolation `\( )` or `\#( )`, which is code. `#/…/#` with any number of `#` is a regex literal, and so is `/…/` where the Swift parser reads one, so `a / b / c` is division.
 
+### 2.26 The CLI's lists
+
+- **FR-148** — `install` and `doctor` print no `null` in a list by default; with `--full`, anywhere among their arguments, each file carries its backup and each check its fix, `null` when there is none, in place of the separate list of backups or fixes.
+
 ## 3. Non-functional requirements
 
 - **NF-1** — The installed gates run with git, a POSIX shell and `node` alone: nothing installed in the project, and neither agent-gates nor Bun on `PATH`. The `format` gate also runs the project's own format command.
@@ -258,7 +262,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 - **AC-1** — Run `agent-gates` alone, an unknown command, `doctor` with an argument and `install` with an unknown gate: the listing, with `--version` among its flags, on stdout with exit 0, then three usage errors on stderr, each exiting 2 with its usage as the resolve and nothing on stdout, and nothing written. (FR-1, FR-3, FR-4, FR-5)
 - **AC-2** — Run `doctor` and `install` outside a git checkout, and with no git on `PATH`: a `not_a_checkout` refusal exiting 1, and a `git_unavailable` fault exiting 3. (FR-4, FR-6, FR-7)
-- **AC-3** — `install commit-subject` from a subdirectory of a fresh checkout: its six files at the checkout's root, the hooks and the step alone executable, each carrying its marker, `.githooks/.gitattributes` giving the hooks LF endings and marking only the bundles generated, `core.hooksPath` set to `.githooks`, and one JSON line naming the gate, each file `missing` with no backup, and `prepare` `absent`. (FR-2, FR-6, FR-10, FR-12, FR-13, FR-14, FR-20, FR-21)
+- **AC-3** — `install commit-subject` from a subdirectory of a fresh checkout: its six files at the checkout's root, the hooks and the step alone executable, each carrying its marker, `.githooks/.gitattributes` giving the hooks LF endings and marking only the bundles generated, `core.hooksPath` set to `.githooks`, and TOON naming the gate, each file `missing`, no backup, and `prepare` `absent`. (FR-2, FR-6, FR-10, FR-12, FR-13, FR-14, FR-20, FR-21)
 - **AC-4** — Install each `no-comments-<language>` gate: its nine files; then `install` with no gate named reinstalls every one, and after one adapter is deleted, `doctor` no longer names its gate. (FR-8, FR-9, FR-11, FR-13)
 - **AC-5** — `install` with no gate named in a checkout with none installed: refused as `no_gates_chosen`, and nothing written. `install` naming two gates, `no-comments` among them or with `--command`: `wrong_arity`, writing nothing. (FR-5, FR-9)
 - **AC-6** — Over an install, put an earlier release's bytes in one file, edit another by hand, mark a third with a later version and clear the hook's executable bit: `doctor` warns `behind`, `changed` and `ahead` and fails `not-executable`, exiting 1; `install` reports each state, restores the behind and not-executable files without a backup, sets the changed one aside before replacing it, and leaves the ahead one. Edit the same file again and install: the second backup takes the next free name. (FR-15, FR-16, FR-17, FR-18, FR-20, FR-30)
@@ -326,6 +330,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **AC-65** — Push a commit adding an unpinned action from a clone: refused with the reply, the remote unchanged; the workflow's step over the same range exits 1, annotating the finding at its file and line on stdout with the reply on stderr; a pinned commit pushes. (FR-110, FR-111, FR-139, FR-143)
 - **AC-66** — `scan.cjs --all` over a tracked unpinned action: the reply says the tracked files hold it. `scan.cjs --file <path>` exits 2 with the usage; the hook and `judge-push` without `node` on `PATH` exit 3, naming the fix. (FR-139, FR-144)
 - **AC-67** — With `pinned-actions` installed over a tracked unpinned action, `doctor` warns with the count and the sweep as its fix; pinned, it passes; with the installed scanner edited, it warns that nothing was counted. (FR-145)
+- **AC-68** — Run `install commit-subject` over a hand-edited `commits.yml`, then `install --full`, then unset `core.hooksPath` and run `doctor` and `doctor --full`: the first install leads with each file state's count, zeros included, lists each file with its state and the one backup apart, and prints no `null` in a list; `--full` lists every file with its backup, `null` where there is none, and no separate backups; `doctor` leads with 9 `ok`, 0 `warn` and 1 `fail`, lists each check with no fix and then the failing check's fix, printing no `null`, and `doctor --full` gives each check its fix, `null` where it passes, with no separate fixes. (FR-2, FR-20, FR-27, FR-148)
 
 ## 6. Deliverables
 
@@ -340,7 +345,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 - **C-1** — The CLI is TypeScript on Bun; the installed gates are POSIX shell and CommonJS run by `node`.
 - **C-2** — No config file: a gate's state is the installed files with their markers, and the project's own `.no-secrets-allow` and `.no-comments-keep` (FR-68).
-- **C-3** — Every CLI command's output is one JSON line, for agents to read; `--version` alone prints plain text (FR-115).
+- **C-3** — Every CLI command's output is TOON, encoded by the `@toon-format/toon` package, for agents to read; `--version` alone prints plain text (FR-115).
 
 ## 8. Open decisions (left to the builder)
 

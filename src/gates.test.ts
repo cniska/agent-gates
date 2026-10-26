@@ -142,14 +142,23 @@ describe("install", () => {
   test("writes the gate, wires the hooks and reports the plan it acted on", () => {
     const dir = repo();
     expect(installGates(dir, ["commit-subject"], NO_FILLS)).toEqual({
+      counts: {
+        installed: 0,
+        missing: 6,
+        behind: 0,
+        changed: 0,
+        ahead: 0,
+        "not-executable": 0,
+        reconfigured: 0,
+      },
       gates: ["commit-subject"],
       files: [
-        { target: ".githooks/commit-msg", state: "missing", backup: null },
-        { target: ".github/workflows/commits.yml", state: "missing", backup: null },
-        { target: ".githooks/.gitattributes", state: "missing", backup: null },
-        { target: ".githooks/pre-push", state: "missing", backup: null },
-        { target: ".githooks/pre-push.d/commit-subject", state: "missing", backup: null },
-        { target: ".githooks/judge-push", state: "missing", backup: null },
+        { target: ".githooks/commit-msg", state: "missing" },
+        { target: ".github/workflows/commits.yml", state: "missing" },
+        { target: ".githooks/.gitattributes", state: "missing" },
+        { target: ".githooks/pre-push", state: "missing" },
+        { target: ".githooks/pre-push.d/commit-subject", state: "missing" },
+        { target: ".githooks/judge-push", state: "missing" },
       ],
       prepare: "absent",
       fills: { command: null, prefixes: null },
@@ -162,28 +171,26 @@ describe("install", () => {
     expect(modeOf(dir, ".githooks/judge-push")).toBe(0o644);
     expect(gatesDoctor(dir)).toEqual({
       checks: [
-        { name: "gates", state: "ok", detail: "commit-subject", fix: null },
-        { name: ".githooks/commit-msg", state: "ok", detail: "installed", fix: null },
-        { name: ".github/workflows/commits.yml", state: "ok", detail: "installed", fix: null },
-        { name: ".githooks/.gitattributes", state: "ok", detail: "installed", fix: null },
-        { name: ".githooks/pre-push", state: "ok", detail: "installed", fix: null },
-        { name: ".githooks/pre-push.d/commit-subject", state: "ok", detail: "installed", fix: null },
-        { name: ".githooks/judge-push", state: "ok", detail: "installed", fix: null },
-        { name: "hooksPath", state: "ok", detail: "core.hooksPath is .githooks", fix: null },
+        { name: "gates", state: "ok", detail: "commit-subject" },
+        { name: ".githooks/commit-msg", state: "ok", detail: "installed" },
+        { name: ".github/workflows/commits.yml", state: "ok", detail: "installed" },
+        { name: ".githooks/.gitattributes", state: "ok", detail: "installed" },
+        { name: ".githooks/pre-push", state: "ok", detail: "installed" },
+        { name: ".githooks/pre-push.d/commit-subject", state: "ok", detail: "installed" },
+        { name: ".githooks/judge-push", state: "ok", detail: "installed" },
+        { name: "hooksPath", state: "ok", detail: "core.hooksPath is .githooks" },
         {
           name: "prepare",
           state: "ok",
           detail: "no package.json, so each contributor runs git config core.hooksPath .githooks once",
-          fix: null,
         },
         {
           name: "commit prefixes",
           state: "ok",
           detail: "none installed, so the gate allows its default set",
-          fix: null,
         },
       ],
-      failing: 0,
+      counts: { ok: 10, warn: 0, fail: 0 },
     });
     expect(new Set(Object.values(statesOf(installGates(dir, [], NO_FILLS))))).toEqual(new Set(["installed"]));
   });
@@ -298,16 +305,16 @@ describe("file states", () => {
       "commit prefixes": "ok",
     });
     expect(installGates(dir, [], NO_FILLS).files).toEqual([
-      { target: ".githooks/commit-msg", state: "missing", backup: null },
+      { target: ".githooks/commit-msg", state: "missing" },
       {
         target: ".github/workflows/commits.yml",
         state: "changed",
         backup: ".github/workflows/commits.yml.agent-gates-backup",
       },
-      { target: ".githooks/.gitattributes", state: "behind", backup: null },
-      { target: ".githooks/pre-push", state: "installed", backup: null },
-      { target: ".githooks/pre-push.d/commit-subject", state: "installed", backup: null },
-      { target: ".githooks/judge-push", state: "installed", backup: null },
+      { target: ".githooks/.gitattributes", state: "behind" },
+      { target: ".githooks/pre-push", state: "installed" },
+      { target: ".githooks/pre-push.d/commit-subject", state: "installed" },
+      { target: ".githooks/judge-push", state: "installed" },
     ]);
     expect(read(dir, ".github/workflows/commits.yml.agent-gates-backup")).toEndWith("# local\n");
     expect(modeOf(dir, ".github/workflows/commits.yml.agent-gates-backup") & 0o111).toBe(0);
@@ -329,12 +336,11 @@ describe("file states", () => {
     const dir = repo();
     installGates(dir, ["commit-subject"], NO_FILLS);
     chmodSync(join(dir, ".githooks/commit-msg"), 0o644);
-    expect(gatesDoctor(dir)).toMatchObject({ failing: 1 });
+    expect(gatesDoctor(dir)).toMatchObject({ counts: { fail: 1 } });
     expect(checks(dir)[".githooks/commit-msg"]).toBe("fail");
     expect(installGates(dir, [], NO_FILLS).files[0]).toEqual({
       target: ".githooks/commit-msg",
       state: "not-executable",
-      backup: null,
     });
     expect(modeOf(dir, ".githooks/commit-msg")).toBe(0o755);
   });
@@ -354,9 +360,11 @@ describe("file states", () => {
 
   test("a file without a marker is changed and set aside", () => {
     const dir = repo({ ".github/workflows/commits.yml": "name: Commits\n" });
-    expect(installGates(dir, ["commit-subject"], NO_FILLS).files[1]?.backup).toBe(
-      ".github/workflows/commits.yml.agent-gates-backup",
-    );
+    expect(installGates(dir, ["commit-subject"], NO_FILLS).files[1]).toEqual({
+      target: ".github/workflows/commits.yml",
+      state: "changed",
+      backup: ".github/workflows/commits.yml.agent-gates-backup",
+    });
     expect(read(dir, ".github/workflows/commits.yml.agent-gates-backup")).toBe("name: Commits\n");
   });
 });
@@ -385,7 +393,7 @@ describe("hooks path", () => {
       detail: "core.hooksPath is unset, so git never runs the gates in .githooks",
       fix: "agent-gates install",
     });
-    expect(gatesDoctor(dir).failing).toBe(1);
+    expect(gatesDoctor(dir).counts.fail).toBe(1);
   });
 });
 
@@ -400,7 +408,7 @@ describe("doctor", () => {
           fix: "agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments-yaml, no-comments-swift, no-secrets, pinned-actions, no-comments (each language the tracked files hold)",
         },
       ],
-      failing: 0,
+      counts: { ok: 0, warn: 1, fail: 0 },
     });
   });
 
@@ -410,11 +418,13 @@ describe("doctor", () => {
     execFileSync("git", ["-C", dir, "config", "core.hooksPath", ".husky"]);
     writeFileSync(join(dir, "package.json"), "{ not json");
     const report = gatesDoctor(dir);
-    expect(report.failing).toBe(2);
-    expect(report.checks.find(({ name }) => name === "hooksPath")?.fix).toContain(
-      "hooks must move to .githooks",
-    );
-    expect(report.checks.find(({ name }) => name === "prepare")?.fix).toContain("must parse");
+    expect(report.counts.fail).toBe(2);
+    expect(report.checks.find((check) => check.name === "hooksPath")).toMatchObject({
+      fix: expect.stringContaining("hooks must move to .githooks"),
+    });
+    expect(report.checks.find((check) => check.name === "prepare")).toMatchObject({
+      fix: expect.stringContaining("must parse"),
+    });
   });
 });
 

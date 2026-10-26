@@ -14,13 +14,13 @@ import {
   type InstallResult,
   install,
   installs,
-  jsonLine,
   modeOf,
   readText,
   refuses,
   removeScratchDirs,
   scratchDir,
   shell,
+  toonOf,
   usageCode,
   writeFiles,
 } from "./cli";
@@ -330,9 +330,9 @@ test("AC-8 accepts the hooks path however it is spelled, and refuses another", (
   const unset = checkout();
   install(unset, ["commit-subject"]);
   git(unset, ["config", "--unset", "core.hooksPath"]);
-  const ran = agentGates(unset, ["doctor"]);
+  const ran = agentGates(unset, ["doctor", "--full"]);
   expect([ran.status, ran.stderr]).toEqual([1, ""]);
-  expect(jsonLine(ran.stdout)).toEqual({
+  expect(toonOf(ran.stdout)).toEqual({
     command: "doctor",
     ok: true,
     result: {
@@ -358,7 +358,7 @@ test("AC-8 accepts the hooks path however it is spelled, and refuses another", (
           fix: null,
         },
       ],
-      failing: 1,
+      counts: { ok: 9, warn: 0, fail: 1 },
     },
   });
 });
@@ -406,7 +406,7 @@ test("AC-9 wires the prepare script, keeping the manifest's shape, and refuses a
   const brokenPath = join(broken, "package.json");
   const brokenRun = agentGates(broken, ["install", "commit-subject"]);
   expect([brokenRun.status, brokenRun.stdout]).toEqual([1, ""]);
-  expect(jsonLine(brokenRun.stderr)).toEqual({
+  expect(toonOf(brokenRun.stderr)).toEqual({
     command: "install",
     ok: false,
     error: {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import { decode } from "@toon-format/toon";
 import { removeScratchDirs, scratchDir } from "../src/repo.test-support";
 import { launcher, PLATFORMS } from "./build-npm";
 
@@ -21,9 +22,11 @@ const STUB = [
   "",
 ].join("\n");
 
-const UNSUPPORTED_UNAME = ["#!/bin/sh", 'case "$1" in -s) echo Plan9 ;; -m) echo mips ;; esac', ""].join(
-  "\n",
-);
+const UNSUPPORTED_UNAME = [
+  "#!/bin/sh",
+  `case "$1" in -s) printf '%s\\n' 'Plan"9\\' ;; -m) echo mips ;; esac`,
+  "",
+].join("\n");
 
 type Layout = "nested" | "hoisted";
 
@@ -84,10 +87,8 @@ async function run(
 }
 
 function refusal(ran: Ran): unknown {
-  expect([ran.status, ran.stdout]).toEqual([1, ""]);
-  const lines = ran.stderr.split("\n");
-  expect(lines).toHaveLength(2);
-  return JSON.parse(lines[0] ?? "");
+  expect([ran.status, ran.stdout, ran.stderr.endsWith("\n")]).toEqual([1, "", true]);
+  return decode(ran.stderr.slice(0, -1));
 }
 
 describe.each<Layout>(["nested", "hoisted"])("the launcher over the %s layout", (layout) => {
@@ -112,7 +113,7 @@ describe.each<Layout>(["nested", "hoisted"])("the launcher over the %s layout", 
       error: {
         kind: "refusal",
         code: "no_build_for_platform",
-        message: "agent-gates ships no build for Plan9-mips, only darwin-arm64 and linux-x64",
+        message: 'agent-gates ships no build for Plan"9\\-mips, only darwin-arm64 and linux-x64',
         meta: {},
         resolve: "build agent-gates from source with Bun, as its docs/development.md says",
       },

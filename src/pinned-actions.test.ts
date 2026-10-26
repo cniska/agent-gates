@@ -224,7 +224,6 @@ describe("the doctor", () => {
       name: "pinned-actions backlog",
       state: "ok",
       detail: "the tracked files hold no unpinned action",
-      fix: null,
     });
   });
 });

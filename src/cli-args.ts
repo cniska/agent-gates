@@ -43,6 +43,16 @@ export const usageError = usageErrors<{
   },
 });
 
+export const FULL_FLAG = "--full";
+
+export function fullOf(args: readonly string[]): {
+  readonly full: boolean;
+  readonly rest: readonly string[];
+} {
+  const rest = args.filter((arg) => arg !== FULL_FLAG);
+  return { full: rest.length < args.length, rest };
+}
+
 export function checkArity(
   args: readonly string[],
   [min, max]: readonly [min: number, max: number],

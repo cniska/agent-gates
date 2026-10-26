@@ -19,7 +19,7 @@ Only an entry, such as `cli.ts`, reads the environment; it passes what a module 
 
 | Prefix | Responsibility |
 | --- | --- |
-| `cli` | Dispatch a command and print its result or error as JSON |
+| `cli` | Dispatch a command and print its result or error as TOON |
 | `install` | The `install` command |
 | `doctor` | Report the installed gates' health: their files, the hooks path, `prepare`, the format command, the commit prefixes, the project's own hook steps no workflow runs, the comments tracked files already hold that `.no-comments-keep` does not keep, the secrets they hold that `.no-secrets-allow` does not name, and the unpinned actions their workflow and action files hold |
 | `gates` | The registry of gate files, their text embedded in the build, the commands and prefixes install writes into them, and installing them into a project |

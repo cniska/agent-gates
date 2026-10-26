@@ -10,8 +10,8 @@ main() {
   cd "$project"
   git init -q
   printf 'made-up content\n' > notes.txt
-  "$executable" install commit-subject | grep -q '"ok":true'
-  "$executable" doctor | grep -q '"failing":0'
+  "$executable" install commit-subject | grep -qx 'ok: true'
+  "$executable" doctor | grep -qx '    fail: 0'
 }
 
 main "$@"

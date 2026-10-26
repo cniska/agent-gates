@@ -13,9 +13,9 @@ import {
   hooksPath,
   install,
   installs,
-  jsonLine,
   refuses,
   removeScratchDirs,
+  toonOf,
   writeFiles,
 } from "./cli";
 
@@ -38,9 +38,11 @@ const NO_COMMENTS_FILES = [
 ];
 
 function doctorReports(dir: string, checks: readonly Check[]): void {
-  const ran = agentGates(dir, ["doctor"]);
+  const ran = agentGates(dir, ["doctor", "--full"]);
   expect([ran.status, ran.stderr]).toEqual([0, ""]);
-  expect(jsonLine(ran.stdout)).toEqual({ command: "doctor", ok: true, result: { checks, failing: 0 } });
+  const count = (state: string) => checks.filter((check) => check.state === state).length;
+  const counts = { ok: count("ok"), warn: count("warn"), fail: count("fail") };
+  expect(toonOf(ran.stdout)).toEqual({ command: "doctor", ok: true, result: { counts, checks } });
 }
 
 function passing(name: string, detail: string): Check {

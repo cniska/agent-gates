@@ -14,6 +14,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import { decode } from "@toon-format/toon";
 
 const CLI = join(import.meta.dir, "..", "src", "cli.ts");
 
@@ -126,10 +127,10 @@ export function curlServing(bin: string, assets: string): string {
   return bin;
 }
 
-export function jsonLine(text: string): unknown {
-  const split = text.split("\n");
-  if (split.length !== 2 || split[1] !== "") throw new Error(`expected one JSON line, got: ${text}`);
-  return JSON.parse(split[0] ?? "");
+export function toonOf(text: string): unknown {
+  if (!text.endsWith("\n") || text.endsWith("\n\n"))
+    throw new Error(`expected TOON ending in one newline, got: ${text}`);
+  return decode(text.slice(0, -1));
 }
 
 function field(value: unknown, key: string): unknown {
@@ -143,9 +144,9 @@ export function packageVersion(): string {
 }
 
 export function doctor(dir: string): Judged {
-  const ran = agentGates(dir, ["doctor"]);
+  const ran = agentGates(dir, ["doctor", "--full"]);
   if (ran.stderr !== "") throw new Error(`doctor wrote to stderr: ${ran.stderr}`);
-  const checks = field(field(jsonLine(ran.stdout), "result"), "checks");
+  const checks = field(field(toonOf(ran.stdout), "result"), "checks");
   if (!Array.isArray(checks)) throw new Error(`doctor printed no checks: ${ran.stdout}`);
   return { status: ran.status, checks };
 }
@@ -175,6 +176,14 @@ export type InstallResult = {
 
 const NO_FILLS: Fills = { command: null, prefixes: null };
 
+const FILE_STATES = ["installed", "missing", "behind", "changed", "ahead", "not-executable", "reconfigured"];
+
+function fileCounts(files: readonly FileResult[]): Readonly<Record<string, number>> {
+  return Object.fromEntries(
+    FILE_STATES.map((state) => [state, files.filter((file) => file.state === state).length]),
+  );
+}
+
 export const COMMIT_SUBJECT_FILES = [
   ".githooks/commit-msg",
   ".github/workflows/commits.yml",
@@ -186,7 +195,7 @@ export const COMMIT_SUBJECT_FILES = [
 
 export function usageCode(dir: string, args: readonly string[]): readonly unknown[] {
   const ran = agentGates(dir, ["install", ...args]);
-  return [args, ran.status, field(field(jsonLine(ran.stderr), "error"), "code")];
+  return [args, ran.status, field(field(toonOf(ran.stderr), "error"), "code")];
 }
 
 export function each(state: string, targets: readonly string[]): FileResult[] {
@@ -194,21 +203,21 @@ export function each(state: string, targets: readonly string[]): FileResult[] {
 }
 
 export function installed(dir: string, args: readonly string[]): unknown {
-  const ran = agentGates(dir, ["install", ...args]);
+  const ran = agentGates(dir, ["install", "--full", ...args]);
   expect([ran.status, ran.stderr]).toEqual([0, ""]);
-  const reply = jsonLine(ran.stdout);
+  const reply = toonOf(ran.stdout);
   expect([field(reply, "command"), field(reply, "ok")]).toEqual(["install", true]);
   return field(reply, "result");
 }
 
 export function installs(dir: string, args: readonly string[], result: InstallResult): void {
-  expect(installed(dir, args)).toEqual({ fills: NO_FILLS, ...result });
+  expect(installed(dir, args)).toEqual({ counts: fileCounts(result.files), fills: NO_FILLS, ...result });
 }
 
 export function refuses(dir: string, args: readonly string[], error: object): void {
   const ran = agentGates(dir, ["install", ...args]);
   expect([ran.status, ran.stdout]).toEqual([1, ""]);
-  expect(jsonLine(ran.stderr)).toEqual({ command: "install", ok: false, error });
+  expect(toonOf(ran.stderr)).toEqual({ command: "install", ok: false, error });
 }
 
 export function hooksPath(dir: string): string {

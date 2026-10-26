@@ -5,7 +5,6 @@ import {
   checkout,
   compiledBinary,
   curlServing,
-  jsonLine,
   packageVersion,
   pathOf,
   releaseAssets,
@@ -14,6 +13,7 @@ import {
   SYSTEM_PATH,
   scratchDir,
   shell,
+  toonOf,
 } from "./cli";
 
 afterEach(removeScratchDirs);
@@ -63,11 +63,15 @@ test(
 
     const installed = run("agent-gates", ["install", "commit-subject"], dir, { PATH: path });
     expect([installed.status, installed.stderr]).toEqual([0, ""]);
-    expect(jsonLine(installed.stdout)).toMatchObject({ command: "install", ok: true });
+    expect(toonOf(installed.stdout)).toMatchObject({ command: "install", ok: true });
 
     const judged = run("agent-gates", ["doctor"], dir, { PATH: path });
     expect([judged.status, judged.stderr]).toEqual([0, ""]);
-    expect(jsonLine(judged.stdout)).toMatchObject({ command: "doctor", ok: true, result: { failing: 0 } });
+    expect(toonOf(judged.stdout)).toMatchObject({
+      command: "doctor",
+      ok: true,
+      result: { counts: { fail: 0 } },
+    });
   },
   BUILD_TIMEOUT_MS,
 );
@@ -147,7 +151,7 @@ test(
       PATH: `${unameSaying("Plan9", "mips")}:${path}`,
     });
     expect([unsupported.status, unsupported.stdout]).toEqual([1, ""]);
-    expect(jsonLine(unsupported.stderr)).toMatchObject({
+    expect(toonOf(unsupported.stderr)).toMatchObject({
       command: "agent-gates",
       ok: false,
       error: { kind: "refusal", code: "no_build_for_platform" },
@@ -155,7 +159,7 @@ test(
 
     const missing = run("agent-gates", ["--version"], project, { PATH: path });
     expect([missing.status, missing.stdout]).toEqual([1, ""]);
-    expect(jsonLine(missing.stderr)).toMatchObject({
+    expect(toonOf(missing.stderr)).toMatchObject({
       command: "agent-gates",
       ok: false,
       error: { kind: "refusal", code: "platform_package_missing" },
@@ -167,7 +171,7 @@ test(
     chmodSync(platformBinary, 0o644);
     const unstartable = run("agent-gates", ["--version"], project, { PATH: path });
     expect([unstartable.status, unstartable.stdout]).toEqual([1, ""]);
-    expect(jsonLine(unstartable.stderr)).toMatchObject({
+    expect(toonOf(unstartable.stderr)).toMatchObject({
       command: "agent-gates",
       ok: false,
       error: { kind: "refusal", code: "binary_failed" },
@@ -181,14 +185,14 @@ test(
     });
     const extra = run("agent-gates", ["--version", "now"], project, { PATH: path });
     expect([extra.status, extra.stdout]).toEqual([2, ""]);
-    expect(jsonLine(extra.stderr)).toMatchObject({
+    expect(toonOf(extra.stderr)).toMatchObject({
       command: "agent-gates",
       ok: false,
       error: { kind: "usage", code: "wrong_arity", resolve: "agent-gates --version" },
     });
     const installed = run("agent-gates", ["install", "commit-subject"], project, { PATH: path });
     expect([installed.status, installed.stderr]).toEqual([0, ""]);
-    expect(jsonLine(installed.stdout)).toMatchObject({ command: "install", ok: true });
+    expect(toonOf(installed.stdout)).toMatchObject({ command: "install", ok: true });
   },
   BUILD_TIMEOUT_MS,
 );

@@ -1823,7 +1823,7 @@ describe("install and doctor", () => {
     const dir = gated({ "a.ts": "export {};\n" });
     writeFileSync(join(dir, ".githooks/pre-commit"), "#!/bin/sh\nmake check\n");
     const report = gatesDoctor(dir);
-    expect(report.failing).toBe(1);
+    expect(report.counts.fail).toBe(1);
     expect(report.checks.find(({ name }) => name === ".githooks/pre-commit")).toEqual({
       name: ".githooks/pre-commit",
       state: "fail",
@@ -1845,7 +1845,6 @@ describe("install and doctor", () => {
       name: "no-comments languages",
       state: "ok",
       detail: "javascript, shell, yaml, as the tracked files need",
-      fix: null,
     });
     git(dir, ["rm", "-q", "-f", "a.ts", "bin/tool"]);
     writeFiles(dir, { ".gitattributes": "gen.ts linguist-generated\n", "gen.ts": "export {};\n" });
@@ -1921,7 +1920,6 @@ describe("install and doctor", () => {
       name: "no-comments backlog",
       state: "ok",
       detail: "the tracked files hold no comment",
-      fix: null,
     });
   });
 
@@ -1947,7 +1945,6 @@ describe("install and doctor", () => {
     expect(installed.files.find(({ target }) => target === KEEP_FILE)).toEqual({
       target: KEEP_FILE,
       state: "behind",
-      backup: null,
     });
     const merged =
       "javascript // own\nsql -- own\nshell # agent-gate:[a-z-]+:[0-9]+\nyaml # agent-gate:[a-z-]+:[0-9]+\nyaml # v?[0-9]+(\\.[0-9]+)*(-[0-9A-Za-z.]+)?\n";
