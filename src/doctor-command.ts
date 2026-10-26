@@ -3,13 +3,9 @@ import type { Command } from "./cli-contract";
 import { gatesDoctor, type Health } from "./doctor";
 import { checkoutRoot } from "./git";
 
-function fullCheck(check: Health) {
+function checkRecord(check: Health) {
   const fix = check.state === "ok" ? null : check.fix;
   return { name: check.name, state: check.state, detail: check.detail, fix };
-}
-
-function fixes(checks: readonly Health[]) {
-  return checks.flatMap((check) => (check.state === "ok" ? [] : [{ name: check.name, fix: check.fix }]));
 }
 
 export const doctorCommand: Command = {
@@ -20,9 +16,7 @@ export const doctorCommand: Command = {
     const { full, rest } = fullOf(args);
     checkArity(rest, [0, 0], this);
     const { counts, checks } = gatesDoctor(checkoutRoot(process.cwd()));
-    const exitCode = counts.fail === 0 ? 0 : 1;
-    if (full) return { value: { counts, checks: checks.map(fullCheck) }, exitCode };
-    const listed = checks.map(({ name, state, detail }) => ({ name, state, detail }));
-    return { value: { counts, checks: listed, fixes: fixes(checks) }, exitCode };
+    const listed = full ? checks : checks.filter(({ state }) => state !== "ok");
+    return { value: { counts, checks: listed.map(checkRecord) }, exitCode: counts.fail === 0 ? 0 : 1 };
   },
 };

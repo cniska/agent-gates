@@ -47,10 +47,8 @@ describe("the cli", () => {
         "    ok: 0",
         "    warn: 1",
         "    fail: 0",
-        "  checks[1]{name,state,detail}:",
-        "    gates,warn,no gate is installed",
-        "  fixes[1]{name,fix}:",
-        `    gates,"${INSTALL_GATES}"`,
+        "  checks[1]{name,state,detail,fix}:",
+        `    gates,warn,no gate is installed,"${INSTALL_GATES}"`,
         "",
       ].join("\n"),
       stderr: "",
@@ -97,7 +95,7 @@ describe("the cli", () => {
     expect(decode(cliIn(changed, "install").stdout)).toMatchObject({ result: { backups: [] } });
     const full = decode(cliIn(changed, "doctor", "--full").stdout);
     expect(full).toMatchObject({ result: { counts: { ok: 10, warn: 0, fail: 0 } } });
-    expect(full).not.toHaveProperty("result.fixes");
+    expect(decode(cliIn(changed, "doctor").stdout)).toMatchObject({ result: { checks: [] } });
     expect(full).toMatchObject({
       result: {
         checks: expect.arrayContaining([{ name: "gates", state: "ok", detail: "commit-subject", fix: null }]),
@@ -116,7 +114,9 @@ describe("the cli", () => {
       ok: true,
       result: {
         counts: { fail: 1 },
-        fixes: [{ name: "hooksPath", fix: "agent-gates install" }],
+        checks: [
+          { name: "hooksPath", state: "fail", detail: expect.any(String), fix: "agent-gates install" },
+        ],
       },
     });
     cli("install");

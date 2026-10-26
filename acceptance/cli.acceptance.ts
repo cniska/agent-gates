@@ -174,21 +174,36 @@ test("AC-68 lists no null field by default, every field with --full, and leads w
   git(dir, ["config", "--unset", "core.hooksPath"]);
   const judged = agentGates(dir, ["doctor"]);
   expect([judged.status, judged.stderr]).toEqual([1, ""]);
-  expect(judged.stdout).toContain(
+  expect(toonOf(judged.stdout)).toEqual({
+    command: "doctor",
+    ok: true,
+    result: {
+      counts: { ok: 9, warn: 0, fail: 1 },
+      checks: [
+        {
+          name: "hooksPath",
+          state: "fail",
+          detail: "core.hooksPath is unset, so git never runs the gates in .githooks",
+          fix: "agent-gates install",
+        },
+      ],
+    },
+  });
+  expect(judged.stdout).toEndWith(
     [
-      "result:",
-      "  counts:",
-      "    ok: 9",
-      "    warn: 0",
-      "    fail: 1",
-      "  checks[10]{name,state,detail}:",
-      "    gates,ok,commit-subject",
+      "  checks[1]{name,state,detail,fix}:",
+      '    hooksPath,fail,"core.hooksPath is unset, so git never runs the gates in .githooks",agent-gates install',
+      "",
     ].join("\n"),
   );
-  expect(judged.stdout).toEndWith(
-    ["  fixes[1]{name,fix}:", "    hooksPath,agent-gates install", ""].join("\n"),
-  );
   expect(judged.stdout).not.toContain("null");
+  git(dir, ["config", "core.hooksPath", ".githooks"]);
+  const passed = agentGates(dir, ["doctor"]);
+  expect([passed.status, passed.stderr]).toEqual([0, ""]);
+  expect(passed.stdout).toEndWith(
+    ["    ok: 10", "    warn: 0", "    fail: 0", "  checks: []", ""].join("\n"),
+  );
+  git(dir, ["config", "--unset", "core.hooksPath"]);
   const fullJudged = agentGates(dir, ["doctor", "--full"]);
   expect([fullJudged.status, fullJudged.stderr]).toEqual([1, ""]);
   expect(fullJudged.stdout).toContain(
@@ -198,5 +213,4 @@ test("AC-68 lists no null field by default, every field with --full, and leads w
       "    .githooks/commit-msg,ok,installed,null",
     ].join("\n"),
   );
-  expect(fullJudged.stdout).not.toContain("fixes[");
 });

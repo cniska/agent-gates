@@ -46,9 +46,9 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ### 2.3 Doctor
 
-- **FR-27** — `doctor` leads with how many checks are in each state of `ok`, `warn` and `fail`, zeros included, then reports its checks, each with a name, a state and a detail, then the fix of each check that does not pass, with its name. It exits 1 when a check fails and 0 otherwise.
+- **FR-27** — `doctor` leads with how many checks are in each state of `ok`, `warn` and `fail`, zeros included, then lists each check that does not pass with its name, state, detail and fix, an empty list when every check passes. It exits 1 when a check fails and 0 otherwise.
 - **FR-28** — With no gate installed, `doctor` warns that no gate is installed, with the install usage as its fix.
-- **FR-29** — With a gate installed, `doctor` reports the installed gates, each of their files, `core.hooksPath` and the `prepare` script, in that order.
+- **FR-29** — With a gate installed, `doctor` checks the installed gates, each of their files, `core.hooksPath` and the `prepare` script, in that order.
 - **FR-30** — A file passes when `installed`, warns when `behind`, `changed` or `ahead`, and fails when `missing` or `not-executable`; an `occupied` hook, and a format hook that holds no command, fail with install's refusal as their detail and fix.
 - **FR-31** — An unset `core.hooksPath` fails, and one naming another directory fails with install's refusal.
 - **FR-32** — The `prepare` check passes with no `package.json` or a wired script, warns when the script is missing or an earlier wiring, and fails with install's refusal when it is occupied or the manifest does not parse.
@@ -138,7 +138,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **FR-92** — A file the commit leaves out that the command changed stays in the worktree unstaged, and the hook lists it.
 - **FR-93** — The `format` hook does not run during a merge.
 - **FR-94** — The `format` hook with `--run`, from any directory of the checkout, runs the command from the checkout's root and exits with its status, staging nothing.
-- **FR-95** — `doctor` fails when the format command's program is not on `PATH`. It reports the installed commit prefixes, or, with none installed, that the default set applies, and checks no `PATH` for them.
+- **FR-95** — `doctor` fails when the format command's program is not on `PATH`. Its check of the commit prefixes passes, naming the installed list, or, with none installed, that the default set applies, and checks no `PATH` for them.
 
 ### 2.12 No comments: one file
 
@@ -236,7 +236,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ### 2.26 The CLI's lists
 
-- **FR-148** — `install` and `doctor` print no `null` in a list by default; with `--full`, anywhere among their arguments, each file carries its backup and each check its fix, `null` when there is none, in place of the separate list of backups or fixes.
+- **FR-148** — `install` and `doctor` print no `null` in a list by default; with `--full`, anywhere among their arguments, `install` gives each file its backup, `null` when there is none, in place of the separate list of backups, and `doctor` lists every check with its fix, `null` where it passes.
 
 ## 3. Non-functional requirements
 
@@ -330,7 +330,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **AC-65** — Push a commit adding an unpinned action from a clone: refused with the reply, the remote unchanged; the workflow's step over the same range exits 1, annotating the finding at its file and line on stdout with the reply on stderr; a pinned commit pushes. (FR-110, FR-111, FR-139, FR-143)
 - **AC-66** — `scan.cjs --all` over a tracked unpinned action: the reply says the tracked files hold it. `scan.cjs --file <path>` exits 2 with the usage; the hook and `judge-push` without `node` on `PATH` exit 3, naming the fix. (FR-139, FR-144)
 - **AC-67** — With `pinned-actions` installed over a tracked unpinned action, `doctor` warns with the count and the sweep as its fix; pinned, it passes; with the installed scanner edited, it warns that nothing was counted. (FR-145)
-- **AC-68** — Run `install commit-subject` over a hand-edited `commits.yml`, then `install --full`, then unset `core.hooksPath` and run `doctor` and `doctor --full`: the first install leads with each file state's count, zeros included, lists each file with its state and the one backup apart, and prints no `null` in a list; `--full` lists every file with its backup, `null` where there is none, and no separate backups; `doctor` leads with 9 `ok`, 0 `warn` and 1 `fail`, lists each check with no fix and then the failing check's fix, printing no `null`, and `doctor --full` gives each check its fix, `null` where it passes, with no separate fixes. (FR-2, FR-20, FR-27, FR-148)
+- **AC-68** — Run `install commit-subject` over a hand-edited `commits.yml`, then `install --full`, then unset `core.hooksPath` and run `doctor` and `doctor --full`: the first install leads with each file state's count, zeros included, lists each file with its state and the one backup apart, and prints no `null` in a list; `--full` lists every file with its backup, `null` where there is none, and no separate backups; `doctor` leads with 9 `ok`, 0 `warn` and 1 `fail`, lists only the failing check with its fix, printing no `null`, and lists no check once `core.hooksPath` is set again; `doctor --full` lists every check with its fix, `null` where it passes. (FR-2, FR-20, FR-27, FR-148)
 
 ## 6. Deliverables
 
