@@ -93,3 +93,11 @@ The optional [plugin](docs/plugin.md) tells the agent at session start which gat
 - [Claude Code plugin](docs/plugin.md): what the plugin does and how to install it.
 - [Development](docs/development.md): setup, checks, layout and adding a language, for working on this repo.
 - [Releasing](docs/releasing.md): the release workflow, what a release guarantees and how to check a download, the owner's one-time setup and each release's steps.
+
+## Related
+
+agent-gates works on its own in any agent workflow, and is one of the optional add-ons to [agent-skills](https://github.com/cniska/agent-skills), engineering skills for coding agents. The other add-ons:
+
+- [agent-task](https://github.com/cniska/agent-task): task tracking for coding agents, the tasks running, in review and waiting to run
+- [agent-record](https://github.com/cniska/agent-record): a session record for coding agents, every past session queryable and joined to its commits
+- [agent-worktree](https://github.com/cniska/agent-worktree): task worktrees for coding agents, one checkout per task, set up and torn down by the project's own commands
