@@ -7,6 +7,8 @@ readonly UNREAD="so the session was not told which gates are installed"
 readonly HEADING="cniska-gates: the gates installed in this checkout:"
 readonly SKIP_DENIED="The plugin denies a git command that skips the gates, such as \`git commit --no-verify\`."
 readonly RUNNING_CLOSING="Each refusal names what to fix. $SKIP_DENIED"
+readonly FORMAT_AT_COMMIT="At commit the gate stages what it changed in each file the commit stages whole, and refuses the commit when the command fails, showing its output, or when it changes a partly staged file: stage that file whole or not at all."
+readonly FORMAT_INSTALL="\`agent-gates install\` updates the hook so the plugin runs it after each edit."
 readonly IDLE_CLOSING="They do not run in this clone until \`core.hooksPath\` is \`.githooks\`, so none refuses a commit or a push: \`git config core.hooksPath .githooks\` sets it. $SKIP_DENIED"
 
 source "${BASH_SOURCE[0]%/*}/installed.sh"
@@ -26,17 +28,40 @@ push_sentence() {
 format_line() {
   local root="$1" running="$2" hook="$1/$FORMAT_HOOK"
   marker_version "$hook" format >/dev/null || return 0
-  local command after_edit="the plugin runs it after each edit" joint=", and"
+  local command
   command="$(filled_value "$hook" command)"
-  if ! formats_edits "$root"; then
-    after_edit="the plugin does not run it after an edit until \`agent-gates install\` updates the hook"
-    joint=";"
-  fi
-  if [ "$running" = no ]; then
-    lines+=("- format runs \`$command\`: $after_edit.")
+  if formats_edits "$root"; then
+    format_after_edit_line "$command" "$running"
+    edit_tools_line "$root"
     return 0
   fi
-  lines+=("- format runs \`$command\`: $after_edit$joint at commit the gate runs it again and stages what it changed in each file the commit stages whole. It refuses the commit when the command fails, showing its output, or when it changes a partly staged file: stage that file whole or not at all.")
+  format_at_commit_line "$command" "$running"
+}
+
+format_after_edit_line() {
+  local command="$1" running="$2"
+  if [ "$running" = no ]; then
+    lines+=("- format: \`$command\` runs after each edit, so never run it yourself after an edit.")
+    return 0
+  fi
+  lines+=("- format: \`$command\` runs after each edit and again at commit, so never run it yourself. $FORMAT_AT_COMMIT")
+}
+
+format_at_commit_line() {
+  local command="$1" running="$2"
+  if [ "$running" = no ]; then
+    lines+=("- format: nothing runs \`$command\` in this clone, so run it yourself before committing. $FORMAT_INSTALL")
+    return 0
+  fi
+  lines+=("- format: \`$command\` runs at commit only, so never run it yourself before committing. $FORMAT_INSTALL $FORMAT_AT_COMMIT")
+}
+
+edit_tools_line() {
+  local root="$1" checked="formatted"
+  if scans_edits "$root"; then
+    checked="formatted and scanned for comments"
+  fi
+  lines+=("- Edit files with the Edit or Write tool, never through Bash: only those edits are $checked after the edit.")
 }
 
 no_comments_line() {

@@ -419,7 +419,15 @@ function noted(lines: readonly string[], closing = WIRED) {
 }
 
 const AT_COMMIT_FORMATS =
-  "at commit the gate runs it again and stages what it changed in each file the commit stages whole. It refuses the commit when the command fails, showing its output, or when it changes a partly staged file: stage that file whole or not at all.";
+  "At commit the gate stages what it changed in each file the commit stages whole, and refuses the commit when the command fails, showing its output, or when it changes a partly staged file: stage that file whole or not at all.";
+
+const FORMAT_INSTALL = "`agent-gates install` updates the hook so the plugin runs it after each edit.";
+
+const EDIT_TOOLS_SCANNED =
+  "- Edit files with the Edit or Write tool, never through Bash: only those edits are formatted and scanned for comments after the edit.";
+
+const EDIT_TOOLS =
+  "- Edit files with the Edit or Write tool, never through Bash: only those edits are formatted after the edit.";
 
 const NO_COMMENTS_GATES =
   "- no-comments-javascript, no-comments-shell: after each edit the plugin names the comments the edit added.";
@@ -456,11 +464,21 @@ test("AC-51 tells the agent at session start which gates the checkout installs a
 
   expect(sessionStarted(join(dir, "src"), tools)).toEqual(
     noted([
-      `- format runs \`node 'fmt.cjs'\`: the plugin runs it after each edit, and ${AT_COMMIT_FORMATS}`,
+      `- format: \`node 'fmt.cjs'\` runs after each edit and again at commit, so never run it yourself. ${AT_COMMIT_FORMATS}`,
+      EDIT_TOOLS_SCANNED,
       `${NO_COMMENTS_GATES} At commit and at push, a change that adds a comment is refused: ${REMOVE_COMMENTS}`,
       `- commit-subject, allowing the types feat, fix: ${SUBJECT_AT_COMMIT} ${SUBJECT_AT_PUSH}`,
       `- no-secrets: ${SECRETS_AT_COMMIT} ${SECRETS_AT_PUSH}`,
       `- pinned-actions: ${ACTIONS_AT_COMMIT} ${ACTIONS_AT_PUSH}`,
+    ]),
+  );
+
+  const formatOnly = checkout({ "src/a.ts": "export const a = 1;\n" });
+  install(formatOnly, ["format", "--command", "make fmt"]);
+  expect(sessionStarted(formatOnly, tools)).toEqual(
+    noted([
+      `- format: \`make fmt\` runs after each edit and again at commit, so never run it yourself. ${AT_COMMIT_FORMATS}`,
+      EDIT_TOOLS,
     ]),
   );
 
@@ -471,7 +489,7 @@ test("AC-51 tells the agent at session start which gates the checkout installs a
   rmSync(join(dir, ".githooks/pre-push.d/pinned-actions"));
   expect(sessionStarted(dir, tools)).toEqual(
     noted([
-      `- format runs \`make fmt\`: the plugin does not run it after an edit until \`agent-gates install\` updates the hook; ${AT_COMMIT_FORMATS}`,
+      `- format: \`make fmt\` runs at commit only, so never run it yourself before committing. ${FORMAT_INSTALL} ${AT_COMMIT_FORMATS}`,
       `${NO_COMMENTS_GATES} At commit, a change that adds a comment is refused: ${REMOVE_COMMENTS} ${PUSH_UNJUDGED}`,
       `- no-secrets: ${SECRETS_AT_COMMIT} ${PUSH_UNJUDGED}`,
       `- pinned-actions: ${ACTIONS_AT_COMMIT} ${PUSH_UNJUDGED}`,
@@ -483,7 +501,7 @@ test("AC-51 tells the agent at session start which gates the checkout installs a
   writeFiles(dir, { ".githooks/pinned-actions/scan.cjs": "module.exports = {};\n" });
   expect(sessionStarted(dir, tools)).toEqual(
     noted([
-      `- format runs \`make fmt\`: the plugin does not run it after an edit until \`agent-gates install\` updates the hook; ${AT_COMMIT_FORMATS}`,
+      `- format: \`make fmt\` runs at commit only, so never run it yourself before committing. ${FORMAT_INSTALL} ${AT_COMMIT_FORMATS}`,
       `- no-comments-javascript, no-comments-shell: the plugin does not name the comments an edit added until \`agent-gates install\` updates the scanner. At commit, a change that adds a comment is refused: ${REMOVE_COMMENTS} ${PUSH_UNJUDGED}`,
     ]),
   );
@@ -509,7 +527,8 @@ test("AC-53 names no refusal at session start while core.hooksPath does not reso
   const tools = bare(["bash", "git", "jq"]);
   const unwired = noted(
     [
-      "- format runs `node 'fmt.cjs'`: the plugin runs it after each edit.",
+      "- format: `node 'fmt.cjs'` runs after each edit, so never run it yourself after an edit.",
+      EDIT_TOOLS_SCANNED,
       NO_COMMENTS_GATES,
       "- commit-subject, allowing the types feat, fix.",
       "- no-secrets.",
@@ -526,12 +545,28 @@ test("AC-53 names no refusal at session start while core.hooksPath does not reso
   git(dir, ["config", "core.hooksPath", "./.githooks/"]);
   expect(sessionStarted(join(dir, "src"), tools)).toEqual(
     noted([
-      `- format runs \`node 'fmt.cjs'\`: the plugin runs it after each edit, and ${AT_COMMIT_FORMATS}`,
+      `- format: \`node 'fmt.cjs'\` runs after each edit and again at commit, so never run it yourself. ${AT_COMMIT_FORMATS}`,
+      EDIT_TOOLS_SCANNED,
       `${NO_COMMENTS_GATES} At commit and at push, a change that adds a comment is refused: ${REMOVE_COMMENTS}`,
       `- commit-subject, allowing the types feat, fix: ${SUBJECT_AT_COMMIT} ${SUBJECT_AT_PUSH}`,
       `- no-secrets: ${SECRETS_AT_COMMIT} ${SECRETS_AT_PUSH}`,
       `- pinned-actions: ${ACTIONS_AT_COMMIT} ${ACTIONS_AT_PUSH}`,
     ]),
+  );
+
+  writeFiles(dir, { [FORMAT_HOOK]: FORMAT_HOOK_V2.replace("command=''", "command='make fmt'") });
+  git(dir, ["config", "--unset", "core.hooksPath"]);
+  expect(sessionStarted(join(dir, "src"), tools)).toEqual(
+    noted(
+      [
+        `- format: nothing runs \`make fmt\` in this clone, so run it yourself before committing. ${FORMAT_INSTALL}`,
+        NO_COMMENTS_GATES,
+        "- commit-subject, allowing the types feat, fix.",
+        "- no-secrets.",
+        "- pinned-actions.",
+      ],
+      UNWIRED,
+    ),
   );
 });
 
