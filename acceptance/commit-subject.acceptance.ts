@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   bypassing,
   COMMIT_SUBJECT_FILES,
+  check,
   checkout,
   cloneOf,
   commitAs,
@@ -21,6 +22,7 @@ import {
   PASSED,
   readText,
   refusedWith,
+  refuses,
   removeScratchDirs,
   restart,
   scratchDir,
@@ -296,6 +298,39 @@ test("AC-43 keeps the prefixes a reinstall is not given, rewrites a new list, an
     true,
   ]);
   expect(git(remote, ["rev-parse", "main"])).toBe(start);
+
+  expect(installed(dir, ["--prefixes", "feat,fix"])).toMatchObject({
+    files: [
+      { target: HOOK, state: "reconfigured", backup: null },
+      ...each("installed", COMMIT_SUBJECT_FILES).slice(1),
+    ],
+    fills: { prefixes: "feat,fix" },
+  });
+  const unreadable = readText(dir, HOOK).replace("prefixes='feat,fix'", "prefixes='Feat,fix'");
+  writeFiles(dir, { [HOOK]: unreadable });
+  const refusal = {
+    kind: "refusal",
+    code: "fill_unreadable",
+    message: `${HOOK} records the commit prefixes as Feat,fix, which is not lowercase words joined by commas`,
+    meta: { target: HOOK, fill: "prefixes", value: "Feat,fix", form: "lowercase words joined by commas" },
+    resolve: `agent-gates install commit-subject --prefixes "<a,b,c>", such as --prefixes "feat,fix,docs" rewrites it`,
+  };
+  refuses(dir, [], refusal);
+  expect(readText(dir, HOOK)).toBe(unreadable);
+  expect(check(dir, HOOK)).toEqual({
+    name: HOOK,
+    state: "fail",
+    detail: refusal.message,
+    fix: refusal.resolve,
+  });
+  expect(check(dir, "commit prefixes")).toBeUndefined();
+  expect(installed(dir, ["--prefixes", "feat"])).toMatchObject({
+    files: [
+      { target: HOOK, state: "reconfigured", backup: null },
+      ...each("installed", COMMIT_SUBJECT_FILES).slice(1),
+    ],
+    fills: { prefixes: "feat" },
+  });
 
   const earlier = checkout();
   install(earlier, ["commit-subject"]);

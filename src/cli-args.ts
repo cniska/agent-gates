@@ -30,7 +30,7 @@ export const usageError = usageErrors<{
   },
   flag_misplaced: {
     message: ({ flag }) =>
-      `agent-gates install takes ${flag} once, followed by its value, and only with a gate named that runs it`,
+      `agent-gates install takes ${flag} once, followed by its value, and only with a gate that runs it named, or with none named and one installed`,
     resolve: ({ usage }) => usage,
   },
   fill_malformed: {

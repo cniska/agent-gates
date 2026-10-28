@@ -94,6 +94,10 @@ test("AC-31 keeps the command a reinstall is not given, and rewrites one it is",
     fills: { command: "cargo fmt" },
   });
   expect(readText(dir, HOOK)).toContain("\ncommand='cargo fmt'\n");
+  expect(installed(dir, ["--command", "sh fmt.sh"])).toMatchObject({
+    files: [{ target: HOOK, state: "reconfigured", backup: null }, ...each("installed", FILES).slice(1)],
+    fills: { command: "sh fmt.sh" },
+  });
   expect(readdirSync(join(dir, ".githooks/pre-commit.d"))).toEqual(["format"]);
 
   const bare = checkout();

@@ -1,3 +1,4 @@
+import { invariant } from "./assert";
 import { GATE_NAMES, type GateName, noCommentsGate, type Part } from "./gate-parts";
 import type { Language } from "./no-comments-languages";
 
@@ -40,7 +41,6 @@ export function eachFill<T>(of: (fill: Fill) => T): Readonly<Record<Fill, T>> {
 export const NO_FILLS: Fills = eachFill(() => null);
 
 type FillSpec = {
-  readonly gate: GateName;
   readonly flag: string;
   readonly placeholder: string;
   readonly example: string;
@@ -52,7 +52,6 @@ type FillSpec = {
 
 export const FILLS: Readonly<Record<Fill, FillSpec>> = {
   command: {
-    gate: "format",
     flag: "--command",
     placeholder: "<command>",
     example: "npm run lint:fix",
@@ -62,7 +61,6 @@ export const FILLS: Readonly<Record<Fill, FillSpec>> = {
     unset: { kind: "required" },
   },
   prefixes: {
-    gate: "commit-subject",
     flag: "--prefixes",
     placeholder: "<a,b,c>",
     example: "feat,fix,docs",
@@ -72,11 +70,6 @@ export const FILLS: Readonly<Record<Fill, FillSpec>> = {
     unset: { kind: "defaulted", detail: "none installed, so the gate allows its default set" },
   },
 };
-
-export function nameTheFill(fill: Fill): string {
-  const { gate, flag, placeholder, example } = FILLS[fill];
-  return `agent-gates install ${gate} ${flag} "${placeholder}", such as ${flag} "${example}"`;
-}
 
 type GateVersion = { readonly version: number; readonly sha256: string };
 
@@ -570,6 +563,30 @@ export const GATES: Readonly<Record<GateName, readonly GateFile[]>> = {
   "no-secrets": NO_SECRETS_FILES,
   "pinned-actions": PINNED_ACTIONS_FILES,
 };
+
+export function gatesFilling(fill: Fill): readonly GateName[] {
+  return GATE_NAMES.filter((gate) => GATES[gate].some((file) => file.fills === fill));
+}
+
+export function fillTarget(fill: Fill): string {
+  const file = Object.values(GATES)
+    .flat()
+    .find((held) => held.fills === fill);
+  invariant(file !== undefined, `no gate file carries the ${fill} fill`);
+  return file.target;
+}
+
+export function fillGate(fill: Fill): GateName {
+  const [gate] = gatesFilling(fill);
+  invariant(gate !== undefined, `no gate carries the ${fill} fill`);
+  return gate;
+}
+
+export function nameTheFill(fill: Fill): string {
+  const { flag, placeholder, example } = FILLS[fill];
+  const gate = fillGate(fill);
+  return `agent-gates install ${gate} ${flag} "${placeholder}", such as ${flag} "${example}"`;
+}
 
 export const EACH_TRACKED_LANGUAGE = "no-comments";
 

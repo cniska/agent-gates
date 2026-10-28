@@ -4,12 +4,14 @@ import { invariant, unreachable } from "./assert";
 import type { Refusal } from "./coded-error";
 import { type GateName, noCommentsGate } from "./gate-parts";
 import {
-  fillsOf,
   type HooksPathState,
   hooksPathState,
   installedGates,
   type PlannedFile,
   plannedFiles,
+  type ResolvedFill,
+  type ResolvedFills,
+  resolvedFills,
   type StepsState,
   stepsState,
 } from "./gates";
@@ -19,7 +21,6 @@ import {
   FILL_NAMES,
   FILLS,
   type Fill,
-  type Fills,
   type GateFile,
   HOOKS_DIR,
   INSTALL_GATES,
@@ -113,9 +114,8 @@ function unsetHealth(fill: Fill): Health[] {
   }
 }
 
-function fillHealth(fill: Fill, value: string | null): Health[] {
+function setHealth(fill: Fill, value: string): Health[] {
   const { check, program } = FILLS[fill];
-  if (value === null) return unsetHealth(fill);
   if (program === null) return [{ name: check, state: "ok", detail: `\`${value}\`` }];
   const named = programOf(value);
   if (onPath(named)) return [{ name: check, state: "ok", detail: `\`${value}\`; ${named} is on PATH` }];
@@ -129,9 +129,22 @@ function fillHealth(fill: Fill, value: string | null): Health[] {
   ];
 }
 
-function fillsHealth(planned: readonly PlannedFile[], fills: Fills): Health[] {
+function fillHealth(fill: Fill, resolved: ResolvedFill): Health[] {
+  switch (resolved.kind) {
+    case "set":
+      return setHealth(fill, resolved.value);
+    case "unset":
+      return unsetHealth(fill);
+    case "unreadable":
+      return [];
+    default:
+      return unreachable(resolved);
+  }
+}
+
+function fillsHealth(planned: readonly PlannedFile[], resolved: ResolvedFills): Health[] {
   return FILL_NAMES.filter((fill) => planned.some(({ file }) => file.fills === fill)).flatMap((fill) =>
-    fillHealth(fill, fills[fill]),
+    fillHealth(fill, resolved[fill]),
   );
 }
 
@@ -339,14 +352,14 @@ function judged(root: string): Health[] {
       ...languagesHealth(root, []),
     ];
   const languages = installedLanguages(gates);
-  const planned = plannedFiles(root, gates, NO_FILLS);
-  const fills = fillsOf(planned);
+  const resolved = resolvedFills(root, NO_FILLS);
+  const planned = plannedFiles(root, gates, resolved);
   return [
     { name: "gates", state: "ok", detail: gates.join(", ") },
     ...planned.map(fileHealth),
     hooksPathHealth(hooksPathState(root)),
     prepareHealth(prepareState(root)),
-    ...fillsHealth(planned, fills),
+    ...fillsHealth(planned, resolved),
     ...stepsHealth(stepsState(root, planned)),
     ...languagesHealth(root, languages),
     ...backlogHealth(root, languages, planned),

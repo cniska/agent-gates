@@ -8,7 +8,7 @@ import { gatesDoctor } from "./doctor";
 import { ourMarker } from "./gate-marker";
 import { isGateName } from "./gate-parts";
 import { installGates } from "./gates";
-import { FILL_NAMES, FILLS, GATES, NO_FILLS } from "./gates-contract";
+import { FILL_NAMES, fillTarget, GATES, NO_FILLS } from "./gates-contract";
 import { SOURCE_DIR } from "./gates-sources";
 import { commit, refusalOf, removeScratchDirs, repo, scratchDir } from "./repo.test-support";
 
@@ -64,12 +64,15 @@ describe("the gate registry", () => {
     }
   });
 
-  test("names for each fill the one gate whose file it is written into", () => {
+  test("writes each fill into one file, at one target", () => {
     for (const fill of FILL_NAMES) {
-      const holders = Object.entries(GATES)
-        .filter(([, held]) => held.some((file) => file.fills === fill))
-        .map(([gate]) => gate);
-      expect([fill, holders]).toEqual([fill, [FILLS[fill].gate]]);
+      const targets = new Set(
+        Object.values(GATES)
+          .flat()
+          .filter((file) => file.fills === fill)
+          .map((file) => file.target),
+      );
+      expect([fill, [...targets]]).toEqual([fill, [fillTarget(fill)]]);
     }
   });
 

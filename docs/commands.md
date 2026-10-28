@@ -25,4 +25,6 @@ Each command prints [TOON](https://toonformat.dev): the command, `ok`, then its 
 
 With a `no-comments` gate installed, `install` also reports `.no-comments-keep`: `installed` when it holds every line install writes, `missing` when install creates it, and `behind` when install appends the lines it lacks, leaving the project's own lines as they are ([kept comments](no-comments.md#kept-comments)).
 
-`install` also refuses when `core.hooksPath` or `prepare` already hold something else, when `package.json` does not parse, when no gate is named and none is installed, and, for `format`, when no command is given or installed. `commit-subject` owns `.githooks/commit-msg`.
+`install` also refuses when `core.hooksPath` or `prepare` already hold something else, when `package.json` does not parse, when no gate is named and none is installed, when a hook records a value of another form than its flag takes, such as a hand-edited prefix list, and, for `format`, when no command is given or installed. `commit-subject` owns `.githooks/commit-msg`.
+
+`--command` and `--prefixes` go with the gate that runs them, or, with no gate named, with that gate installed: `agent-gates install --prefixes feat,fix` rewrites the list of an installed `commit-subject`.

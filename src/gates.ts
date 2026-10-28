@@ -27,6 +27,8 @@ import {
   type FileState,
   type Fill,
   type Fills,
+  fillGate,
+  fillTarget,
   GATES,
   type GateFile,
   HOOKS_DIR,
@@ -55,6 +57,12 @@ const gatesRefusal = refusals<{
   readonly hook_occupied: { readonly root: string; readonly target: string };
   readonly write_failed: { readonly path: string; readonly detail: string };
   readonly fill_missing: { readonly root: string; readonly fill: Fill };
+  readonly fill_unreadable: {
+    readonly target: string;
+    readonly fill: Fill;
+    readonly value: string;
+    readonly form: string;
+  };
 }>({
   no_gates_chosen: {
     message: ({ root }) =>
@@ -83,8 +91,13 @@ const gatesRefusal = refusals<{
   },
   fill_missing: {
     message: ({ root, fill }) =>
-      `${root}'s ${FILLS[fill].gate} gate runs the project's own ${FILLS[fill].check}, and none was given with ${FILLS[fill].flag}`,
+      `${root}'s ${fillGate(fill)} gate runs the project's own ${FILLS[fill].check}, and none was given with ${FILLS[fill].flag}`,
     resolve: ({ fill }) => nameTheFill(fill),
+  },
+  fill_unreadable: {
+    message: ({ target, fill, value, form }) =>
+      `${target} records the ${FILLS[fill].check} as ${value}, which is not ${form}`,
+    resolve: ({ fill }) => `${nameTheFill(fill)} rewrites it`,
   },
 });
 
@@ -105,8 +118,14 @@ type PlannedAt = {
 type WritableFile = PlannedAt & {
   readonly state: WritableState;
   readonly source: string;
-  readonly filled: string | null;
 };
+
+export type ResolvedFill =
+  | { readonly kind: "set"; readonly value: string }
+  | { readonly kind: "unset" }
+  | { readonly kind: "unreadable"; readonly refusal: Refusal };
+
+export type ResolvedFills = Readonly<Record<Fill, ResolvedFill>>;
 
 export type PlannedFile =
   | WritableFile
@@ -170,50 +189,71 @@ function stateOf(file: GateFile, template: string, source: string, found: Found 
 }
 
 type Rendered =
-  | { readonly kind: "rendered"; readonly source: string; readonly filled: string | null }
+  | { readonly kind: "rendered"; readonly source: string }
   | { readonly kind: "refused"; readonly refusal: Refusal };
 
-function rendered(
-  root: string,
-  file: GateFile,
-  template: string,
-  given: Fills,
-  found: Found | null,
-): Rendered {
-  if (file.fills === null) return { kind: "rendered", source: template, filled: null };
-  const filled = given[file.fills] ?? (found === null ? null : filledIn(found.text, file.fills));
-  if (filled !== null) return { kind: "rendered", source: withFill(template, file.fills, filled), filled };
-  if (FILLS[file.fills].unset.kind === "required")
-    return { kind: "refused", refusal: gatesRefusal("fill_missing", { root, fill: file.fills }) };
-  return { kind: "rendered", source: template, filled: null };
+function recordedFill(root: string, fill: Fill): ResolvedFill {
+  const target = fillTarget(fill);
+  const found = foundAt(join(root, target));
+  const value = found === null ? null : filledIn(found.text, fill);
+  if (value === null) return { kind: "unset" };
+  const { pattern } = FILLS[fill];
+  if (pattern === null || pattern.matches.test(value)) return { kind: "set", value };
+  const meta = { target, fill, value, form: pattern.form };
+  return { kind: "unreadable", refusal: gatesRefusal("fill_unreadable", meta) };
 }
 
-function plannedFile(root: string, file: GateFile, given: Fills): PlannedFile {
+export function resolvedFills(root: string, given: Fills): ResolvedFills {
+  return eachFill((fill): ResolvedFill => {
+    const value = given[fill];
+    return value === null ? recordedFill(root, fill) : { kind: "set", value };
+  });
+}
+
+function fillValues(resolved: ResolvedFills): Fills {
+  return eachFill((fill) => {
+    const at = resolved[fill];
+    return at.kind === "set" ? at.value : null;
+  });
+}
+
+function rendered(root: string, file: GateFile, template: string, resolved: ResolvedFills): Rendered {
+  if (file.fills === null) return { kind: "rendered", source: template };
+  const fill = resolved[file.fills];
+  switch (fill.kind) {
+    case "set":
+      return { kind: "rendered", source: withFill(template, file.fills, fill.value) };
+    case "unreadable":
+      return { kind: "refused", refusal: fill.refusal };
+    case "unset":
+      if (FILLS[file.fills].unset.kind === "required")
+        return { kind: "refused", refusal: gatesRefusal("fill_missing", { root, fill: file.fills }) };
+      return { kind: "rendered", source: template };
+    default:
+      return unreachable(fill);
+  }
+}
+
+function plannedFile(root: string, file: GateFile, resolved: ResolvedFills): PlannedFile {
   const path = join(root, file.target);
   const template = SOURCES[file.source];
   invariant(template !== undefined, `the build embeds no gates/${file.source}`);
-  const found = foundAt(path);
-  const render = rendered(root, file, template, given, found);
+  const render = rendered(root, file, template, resolved);
   const at = { target: file.target, file, path };
   if (render.kind === "refused") return { ...at, state: "refused", refusal: render.refusal };
-  const state = stateOf(file, template, render.source, found);
+  const state = stateOf(file, template, render.source, foundAt(path));
   if (state === "occupied")
     return { ...at, state: "refused", refusal: gatesRefusal("hook_occupied", { root, target: file.target }) };
-  return { ...at, state, source: render.source, filled: render.filled };
+  return { ...at, state, source: render.source };
 }
 
-function filledFor(planned: readonly PlannedFile[], fill: Fill): string | null {
-  for (const file of planned) if (file.state !== "refused" && file.file.fills === fill) return file.filled;
-  return null;
-}
-
-export function fillsOf(planned: readonly PlannedFile[]): Fills {
-  return eachFill((fill) => filledFor(planned, fill));
-}
-
-export function plannedFiles(root: string, gates: readonly GateName[], given: Fills): PlannedFile[] {
+export function plannedFiles(
+  root: string,
+  gates: readonly GateName[],
+  resolved: ResolvedFills,
+): PlannedFile[] {
   const files = new Map(gates.flatMap((gate) => GATES[gate]).map((file) => [file.target, file]));
-  return [...files.values()].map((file) => plannedFile(root, file, given));
+  return [...files.values()].map((file) => plannedFile(root, file, resolved));
 }
 
 export function installedGates(root: string): GateName[] {
@@ -343,7 +383,8 @@ export function installGates(root: string, named: readonly GateName[], given: Fi
   if (gates.length === 0) throw gatesRefusal("no_gates_chosen", { root });
   const hooksPath = hooksPathState(root);
   if (hooksPath.kind === "occupied") throw hooksPath.refusal;
-  const toWrite = plannedFiles(root, gates, given).map((planned) => {
+  const resolved = resolvedFills(root, given);
+  const toWrite = plannedFiles(root, gates, resolved).map((planned) => {
     if (planned.state === "refused") throw planned.refusal;
     return planned;
   });
@@ -361,5 +402,5 @@ export function installGates(root: string, named: readonly GateName[], given: Fi
   if (prepare.kind === "missing" || prepare.kind === "behind")
     writing(prepare.path, () => writeFileSync(prepare.path, prepare.wired));
   if (hooksPath.kind === "unset") setConfig(root, "core.hooksPath", HOOKS_DIR);
-  return { counts: fileCounts(files), gates, files, prepare: prepare.kind, fills: fillsOf(toWrite) };
+  return { counts: fileCounts(files), gates, files, prepare: prepare.kind, fills: fillValues(resolved) };
 }

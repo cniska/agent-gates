@@ -2,8 +2,8 @@ import { parseArgs } from "node:util";
 import { unreachable } from "./assert";
 import { checkArity, FULL_FLAG, fullOf, usageError } from "./cli-args";
 import type { Command } from "./cli-contract";
-import { type GateName, isGateName } from "./gate-parts";
-import { type InstalledFile, installGates, trackedLanguageGates } from "./gates";
+import { type GateName, isGateName, noCommentsGate } from "./gate-parts";
+import { type InstalledFile, installedGates, installGates, trackedLanguageGates } from "./gates";
 import {
   EACH_TRACKED_LANGUAGE,
   eachFill,
@@ -12,9 +12,10 @@ import {
   type Fill,
   type Fills,
   GATE_CHOICES,
-  GATES,
+  gatesFilling,
 } from "./gates-contract";
 import { checkoutRoot } from "./git";
+import { LANGUAGE_NAMES } from "./no-comments-languages";
 
 type Named =
   | { readonly kind: "none" }
@@ -45,16 +46,29 @@ function gatesOf(named: Named, root: string): readonly GateName[] {
   }
 }
 
+function admitting(named: Named, root: string): readonly GateName[] {
+  switch (named.kind) {
+    case "none":
+      return installedGates(root);
+    case "gate":
+      return [named.gate];
+    case "each-tracked-language":
+      return LANGUAGE_NAMES.map(noCommentsGate);
+    default:
+      return unreachable(named);
+  }
+}
+
 function fillOf(
   values: Readonly<Partial<Record<Fill, readonly string[]>>>,
   fill: Fill,
-  named: Named,
+  admitted: () => readonly GateName[],
   usage: string,
 ): string | null {
   const given = values[fill];
   if (given === undefined) return null;
   const [value, ...more] = given;
-  const used = named.kind === "gate" && GATES[named.gate].some((file) => file.fills === fill);
+  const used = admitted().some((gate) => gatesFilling(fill).includes(gate));
   const { flag, pattern } = FILLS[fill];
   if (value === undefined || value.trim() === "" || more.length > 0 || !used)
     throw usageError("flag_misplaced", { flag, usage });
@@ -103,8 +117,9 @@ export const installCommand: Command = {
     const { values, positionals } = parsed(rest, this.usage);
     checkArity(positionals, [0, 1], this);
     const named = namedIn(positionals[0], this.usage);
-    const given: Fills = eachFill((fill) => fillOf(values, fill, named, this.usage));
     const root = checkoutRoot(process.cwd());
+    const admitted = () => admitting(named, root);
+    const given: Fills = eachFill((fill) => fillOf(values, fill, admitted, this.usage));
     const { counts, gates, files, prepare, fills } = installGates(root, gatesOf(named, root), given);
     if (full) return { value: { counts, gates, files: files.map(fullFile), prepare, fills }, exitCode: 0 };
     const listed = files.map(({ target, state }) => ({ target, state }));
