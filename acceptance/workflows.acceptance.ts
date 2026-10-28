@@ -8,11 +8,11 @@ import {
   checkout,
   doctor,
   each,
+  ghCalls,
   git,
   install,
   installed,
   installs,
-  NO_ORIGIN,
   pathOf,
   readText,
   removeScratchDirs,
@@ -57,7 +57,7 @@ test("AC-69 installs the hooks without their workflows, keeps the choice, and tu
     files: each("missing", HOOKS_ONLY),
     prepare: "absent",
     fills: { command: null, prefixes: null, workflows: "off" },
-    workflows: { choice: "off", reason: "flag", detail: null },
+    workflows: { choice: "off", reason: "flag" },
   });
   expect(workflowsIn(dir)).toEqual([]);
   expect(readText(dir, JUDGE_PUSH)).toContain("\nworkflows='off'\n");
@@ -71,7 +71,7 @@ test("AC-69 installs the hooks without their workflows, keeps the choice, and tu
     files: each("installed", HOOKS_ONLY),
     prepare: "absent",
     fills: { command: null, prefixes: null, workflows: "off" },
-    workflows: { choice: "off", reason: "recorded", detail: null },
+    workflows: { choice: "off", reason: "recorded" },
   });
   install(dir, ["no-secrets"]);
   install(dir, ["no-comments"]);
@@ -158,65 +158,42 @@ function onGitHub(repo: string): string {
   return dir;
 }
 
-test("AC-71 a private repository installs the hooks alone by default, a public or unreadable one keeps its workflows, and a flag wins", () => {
-  const secret = onGitHub("private");
-  installs(secret, ["commit-subject"], {
+test("AC-71 install writes the workflows by default whatever origin is, reading no visibility, a recorded off holds, and a flag wins", () => {
+  for (const dir of [onGitHub("private"), onGitHub("public"), onGitHub("gone"), checkout()]) {
+    installs(dir, ["commit-subject"], {
+      gates: ["commit-subject"],
+      files: each("missing", COMMIT_SUBJECT_FILES),
+      prepare: "absent",
+      fills: { command: null, prefixes: null, workflows: null },
+      workflows: { choice: "on", reason: "default" },
+    });
+    expect(workflowsIn(dir)).toEqual(["commits.yml"]);
+    expect(readText(dir, JUDGE_PUSH)).toContain("\nworkflows=''\n");
+    expect(installed(dir, [])).toMatchObject({ workflows: { choice: "on", reason: "default" } });
+  }
+  const noGh = onGitHub("private");
+  const ran = agentGates(noGh, ["install", "commit-subject"], { PATH: pathOf(["git"]) });
+  expect([ran.status, ran.stderr]).toEqual([0, ""]);
+  expect(toonOf(ran.stdout)).toMatchObject({ result: { workflows: { choice: "on", reason: "default" } } });
+  expect(workflowsIn(noGh)).toEqual(["commits.yml"]);
+  expect(ghCalls()).toBe("");
+
+  const declined = onGitHub("public");
+  installs(declined, ["commit-subject", "--workflows", "off"], {
     gates: ["commit-subject"],
     files: each("missing", HOOKS_ONLY),
     prepare: "absent",
     fills: { command: null, prefixes: null, workflows: "off" },
-    workflows: { choice: "off", reason: "private", detail: null },
+    workflows: { choice: "off", reason: "flag" },
   });
-  expect(workflowsIn(secret)).toEqual([]);
-  expect(readText(secret, JUDGE_PUSH)).toContain("\nworkflows='off'\n");
-  expect(installed(secret, [])).toMatchObject({
+  expect(installed(declined, [])).toMatchObject({
     fills: { workflows: "off" },
-    workflows: { choice: "off", reason: "recorded", detail: null },
+    workflows: { choice: "off", reason: "recorded" },
   });
-
-  const open = onGitHub("public");
-  installs(open, ["commit-subject"], {
-    gates: ["commit-subject"],
-    files: each("missing", COMMIT_SUBJECT_FILES),
-    prepare: "absent",
-    workflows: { choice: "on", reason: "public", detail: null },
-  });
-  expect(workflowsIn(open)).toEqual(["commits.yml"]);
-  expect(readText(open, JUDGE_PUSH)).toContain("\nworkflows=''\n");
-
-  const gone = onGitHub("gone");
-  expect(installed(gone, ["commit-subject"])).toMatchObject({
-    fills: { workflows: null },
-    workflows: {
-      choice: "on",
-      reason: "unreadable",
-      detail: "gh repo view of origin exited 1: HTTP 404: Not Found (https://api.github.com/graphql)",
-    },
-  });
-  expect(workflowsIn(gone)).toEqual(["commits.yml"]);
-  expect(installed(checkout(), ["commit-subject"])).toMatchObject({ workflows: NO_ORIGIN });
-  const noGh = onGitHub("private");
-  const ran = agentGates(noGh, ["install", "commit-subject"], { PATH: pathOf(["git"]) });
-  expect([ran.status, ran.stderr]).toEqual([0, ""]);
-  expect(toonOf(ran.stdout)).toMatchObject({
-    result: {
-      workflows: {
-        choice: "on",
-        reason: "unreadable",
-        detail: expect.stringMatching(/^gh could not run: /),
-      },
-    },
-  });
-  expect(workflowsIn(noGh)).toEqual(["commits.yml"]);
-
-  const chosen = onGitHub("private");
-  expect(installed(chosen, ["commit-subject", "--workflows", "on"])).toMatchObject({
+  expect(workflowsIn(declined)).toEqual([]);
+  expect(installed(declined, ["--workflows", "on"])).toMatchObject({
     fills: { workflows: "on" },
-    workflows: { choice: "on", reason: "flag", detail: null },
+    workflows: { choice: "on", reason: "flag" },
   });
-  expect(installed(chosen, [])).toMatchObject({
-    fills: { workflows: "on" },
-    workflows: { choice: "on", reason: "recorded", detail: null },
-  });
-  expect(workflowsIn(chosen)).toEqual(["commits.yml"]);
+  expect(workflowsIn(declined)).toEqual(["commits.yml"]);
 });

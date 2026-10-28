@@ -3,7 +3,6 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { CodedError } from "./coded-error";
-import type { Visibility } from "./github";
 
 export const NO_COMMIT = "0000000000000000000000000000000000000000";
 
@@ -70,8 +69,3 @@ export function refusalOf(run: () => unknown): string | null {
     return error.code;
   }
 }
-
-export const NOT_ON_GITHUB = (): Visibility => ({
-  kind: "unreadable",
-  detail: "the checkout has no origin remote",
-});

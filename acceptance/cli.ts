@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -50,19 +51,9 @@ const scratchDirs: string[] = [];
 
 let home: string | null = null;
 
-const GH_STUB = [
-  "#!/bin/sh",
-  'if [ "$#" -ne 7 ] || [ "$1 $2 $4 $5 $6 $7" != "repo view --json isPrivate --jq .isPrivate" ]; then',
-  '  echo "unexpected gh call: $*" >&2',
-  "  exit 2",
-  "fi",
-  'case "$3" in',
-  "  https://github.com/acme/private.git) echo true ;;",
-  "  https://github.com/acme/public.git) echo false ;;",
-  '  *) echo "HTTP 404: Not Found (https://api.github.com/graphql)" >&2; exit 1 ;;',
-  "esac",
-  "",
-].join("\n");
+const GH_CALLS = "gh-calls";
+
+const GH_STUB = ["#!/bin/sh", `echo "$*" >> "$HOME/${GH_CALLS}"`, "exit 2", ""].join("\n");
 
 export function scratchDir(): string {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "agent-gates-acceptance-")));
@@ -83,6 +74,11 @@ function gitHome(): string {
   writeFileSync(join(home, "bin", "gh"), GH_STUB);
   chmodSync(join(home, "bin", "gh"), 0o755);
   return home;
+}
+
+export function ghCalls(): string {
+  const at = join(gitHome(), GH_CALLS);
+  return existsSync(at) ? readFileSync(at, "utf8") : "";
 }
 
 function hermetic(env: Env): Env {
@@ -193,19 +189,14 @@ export type InstallResult = {
   readonly workflows?: WorkflowsTaken | null;
 };
 
-export type WorkflowsTaken = {
+type WorkflowsTaken = {
   readonly choice: string;
   readonly reason: string;
-  readonly detail: string | null;
 };
 
 const NO_FILLS: Fills = { command: null, prefixes: null, workflows: null };
 
-export const NO_ORIGIN: WorkflowsTaken = {
-  choice: "on",
-  reason: "unreadable",
-  detail: "the checkout has no origin remote",
-};
+const DEFAULT_WORKFLOWS: WorkflowsTaken = { choice: "on", reason: "default" };
 
 const FILE_STATES = [
   "installed",
@@ -254,7 +245,7 @@ export function installs(dir: string, args: readonly string[], result: InstallRe
   expect(installed(dir, args)).toEqual({
     counts: fileCounts(result.files),
     fills: NO_FILLS,
-    workflows: NO_ORIGIN,
+    workflows: DEFAULT_WORKFLOWS,
     ...result,
   });
 }

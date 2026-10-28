@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { GATE_NAMES } from "./gate-parts";
 import { installGates } from "./gates";
 import { GATES, NO_FILLS, type Workflows } from "./gates-contract";
-import { NOT_ON_GITHUB, removeScratchDirs, repo } from "./repo.test-support";
+import { removeScratchDirs, repo } from "./repo.test-support";
 
 afterEach(removeScratchDirs);
 
@@ -15,12 +15,7 @@ function shellTargets(): readonly string[] {
 
 function installedWith(workflows: Workflows): string {
   const dir = repo();
-  installGates(
-    dir,
-    { kind: "gates", gates: [...GATE_NAMES] },
-    { ...NO_FILLS, command: "true", workflows },
-    NOT_ON_GITHUB,
-  );
+  installGates(dir, { kind: "gates", gates: [...GATE_NAMES] }, { ...NO_FILLS, command: "true", workflows });
   return dir;
 }
 

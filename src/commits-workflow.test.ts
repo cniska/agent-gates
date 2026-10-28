@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { installGates } from "./gates";
 import { NO_FILLS } from "./gates-contract";
 import { SOURCE_DIR } from "./gates-sources";
-import { commitPastHooks, NO_COMMIT, NOT_ON_GITHUB, removeScratchDirs, repo } from "./repo.test-support";
+import { commitPastHooks, NO_COMMIT, removeScratchDirs, repo } from "./repo.test-support";
 
 function field(value: unknown, key: string): unknown {
   return typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined;
@@ -26,7 +26,7 @@ const AUTOSQUASH = {
 
 function gated(): string {
   const dir = repo();
-  installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB);
+  installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS);
   return dir;
 }
 

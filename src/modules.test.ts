@@ -15,7 +15,6 @@ const PUBLIC_FILES: Readonly<Record<string, readonly string[]>> = {
   gate: ["gate-bundles", "gate-marker", "gate-parts"],
   gates: ["gates", "gates-contract", "gates-sources"],
   git: ["git"],
-  github: ["github"],
   install: ["install-command"],
   "no-comments": [
     "no-comments-installed",

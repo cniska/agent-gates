@@ -80,7 +80,7 @@ test("AC-11 reports no gate, then every check passing", () => {
     passing("hooksPath", "core.hooksPath is .githooks"),
     passing("prepare", NO_PACKAGE_JSON),
     passing("commit prefixes", "none installed, so the gate allows its default set"),
-    passing("workflows", "none installed, so install asks GitHub whether origin is private"),
+    passing("workflows", "none installed, so install writes the gates' workflows"),
     passing("no-comments languages", "javascript, shell, yaml, as the tracked files need"),
     passing("no-comments backlog", "the tracked files hold no comment"),
   ]);
@@ -98,7 +98,7 @@ test("AC-12 warns of tracked languages without a gate and gates without a langua
     ),
     passing("hooksPath", "core.hooksPath is .githooks"),
     passing("prepare", NO_PACKAGE_JSON),
-    passing("workflows", "none installed, so install asks GitHub whether origin is private"),
+    passing("workflows", "none installed, so install writes the gates' workflows"),
     {
       name: "no-comments languages",
       state: "warn",

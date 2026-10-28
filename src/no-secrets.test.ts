@@ -14,7 +14,7 @@ import { compiled, secretsIn } from "./no-secrets-match";
 import { allowPattern, rulePattern } from "./no-secrets-pattern";
 import { annotations, reply } from "./no-secrets-report";
 import { GITLEAKS, gitleaksLicense, shippedRules } from "./no-secrets-rules";
-import { commitPastHooks, NO_COMMIT, NOT_ON_GITHUB, refusalOf, repo, writeFiles } from "./repo.test-support";
+import { commitPastHooks, NO_COMMIT, refusalOf, repo, writeFiles } from "./repo.test-support";
 import { judgedTextOf } from "./scanner-change";
 
 describe("the pattern translation", () => {
@@ -460,7 +460,7 @@ describe("the doctor", () => {
     execFileSync("git", ["-C", dir, "add", "-A"]);
     const check = () => gatesDoctor(dir).checks.find(({ name }) => name === "no-secrets backlog");
     expect(check()).toBeUndefined();
-    installGates(dir, { kind: "gates", gates: ["no-secrets"] }, NO_FILLS, NOT_ON_GITHUB);
+    installGates(dir, { kind: "gates", gates: ["no-secrets"] }, NO_FILLS);
     expect(check()).toEqual({
       name: "no-secrets backlog",
       state: "warn",

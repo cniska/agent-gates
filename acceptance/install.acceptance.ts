@@ -360,7 +360,7 @@ test("AC-8 accepts the hooks path however it is spelled, and refuses another", (
         {
           name: "workflows",
           state: "ok",
-          detail: "none installed, so install asks GitHub whether origin is private",
+          detail: "none installed, so install writes the gates' workflows",
           fix: null,
         },
       ],
