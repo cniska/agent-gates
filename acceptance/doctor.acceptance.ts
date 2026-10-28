@@ -274,7 +274,7 @@ test("AC-59 counts the secrets tracked files hold that the allow file does not n
   });
 });
 
-test("AC-74 fails its node check while node is missing or older than 20, and has none without a gate that runs node", () => {
+test("AC-74 fails its node check while node is missing, cannot report its version or is older than 20, and has none without a gate that runs node", () => {
   const dir = checkout();
   install(dir, ["no-secrets"]);
   git(dir, ["add", "-A"]);
@@ -293,6 +293,30 @@ test("AC-74 fails its node check while node is missing or older than 20, and has
     name: "node",
     state: "fail",
     detail: "node is not on PATH, so no-secrets judges nothing",
+    fix: "install Node.js 20 or later",
+  });
+
+  const failingNode = pathOf(["git", "sh"]);
+  writeFiles(failingNode, { node: "#!/bin/sh\necho 'no version is set' >&2\nexit 126\n" });
+  chmodSync(join(failingNode, "node"), 0o755);
+  const failing = doctor(dir, { PATH: failingNode });
+  expect(failing.status).toBe(1);
+  expect(failing.checks.find(({ name }) => name === "node")).toEqual({
+    name: "node",
+    state: "fail",
+    detail: "node --version exits 126, so no-secrets judges nothing",
+    fix: "install Node.js 20 or later",
+  });
+
+  const unrunnableNode = pathOf(["git", "sh"]);
+  writeFiles(unrunnableNode, { node: "#!/nonexistent/sh\n" });
+  chmodSync(join(unrunnableNode, "node"), 0o755);
+  const unrunnable = doctor(dir, { PATH: unrunnableNode });
+  expect(unrunnable.status).toBe(1);
+  expect(unrunnable.checks.find(({ name }) => name === "node")).toEqual({
+    name: "node",
+    state: "fail",
+    detail: "node --version cannot run: ENOENT, so no-secrets judges nothing",
     fix: "install Node.js 20 or later",
   });
 

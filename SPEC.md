@@ -251,7 +251,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ### 2.29 The node the gates run
 
-- **FR-154** — With a gate installed that runs `node`, a `no-comments` gate, `no-secrets` or `pinned-actions`, `doctor` checks the `node` on `PATH`: it passes naming the version `node --version` prints when that is 20 or later, and fails when `node` is not on `PATH` or prints another version, naming installing Node.js 20 or later as the fix. With no such gate installed, `doctor` has no `node` check.
+- **FR-154** — With a gate installed that runs `node`, a `no-comments` gate, `no-secrets` or `pinned-actions`, `doctor` checks the `node` on `PATH`: it passes naming the version `node --version` prints when that is 20 or later, and fails when `node` is not on `PATH`, when `node --version` cannot run, is killed or exits other than 0, or when it prints anything but a version 20 or later, naming installing Node.js 20 or later as the fix. With no such gate installed, `doctor` has no `node` check.
 
 ## 3. Non-functional requirements
 
@@ -351,7 +351,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **AC-71** — `install commit-subject` with no workflows choice, where `origin` is on a private GitHub repository, a public one, one GitHub does not find, or absent, and with no `gh` on `PATH`: every file written, the workflow included, `judge-push` recording nothing, no call to `gh`, and the workflows choice `on` for `default`; `install` alone: `on` for `default` again. Where `--workflows off` was given: `off` for `flag`, then `install` alone: `off` for `recorded`, the workflow still absent; then `install --workflows on`: `on` for `flag`, the workflow written. (FR-20, FR-150)
 - **AC-72** — With `no-comments-javascript`, `no-secrets` and `pinned-actions` installed and a staged change each would refuse, run each one's pre-commit step, `judge-push` and `scan.cjs --all` with `node` 18.20.4 on `PATH`: each exits 3 naming that version and installing Node.js 20 or later as the fix, and judges nothing. (FR-67, FR-135, FR-144, NF-1)
 - **AC-73** — Run the `PostToolUse` hook after an edit adding a comment, with a `node` on `PATH` whose `node --version` prints `v18.20.4`: it exits 0, prints nothing, and writes a note naming that version and why the edit's comments were not judged. (FR-106, NF-2)
-- **AC-74** — With `no-secrets` installed, `doctor` with a `node` on `PATH` whose `node --version` prints `v18.20.4`, then with no `node` on `PATH`: its `node` check fails, naming the version, then that `node` is not on `PATH`, each with installing Node.js 20 or later as its fix, and `doctor` exits 1; with the system's `node` 20 or later, the check passes naming its version. With only `commit-subject` installed, `doctor` has no `node` check. (FR-154)
+- **AC-74** — With `no-secrets` installed, `doctor`'s `node` check fails naming the version with a `node` whose `node --version` prints `v18.20.4`; naming that `node` is not on `PATH` with none there; naming the exit with one whose `node --version` exits 126; and naming why it cannot run with one whose interpreter is missing. Each names installing Node.js 20 or later as its fix, and `doctor` exits 1. With the system's `node` 20 or later, the check passes naming its version. With only `commit-subject` installed, `doctor` has no `node` check. (FR-154)
 
 ## 6. Deliverables
 

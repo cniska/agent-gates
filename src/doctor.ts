@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
-import { impossible, unreachable } from "./assert";
+import { impossible, invariant, unreachable } from "./assert";
 import type { Refusal } from "./coded-error";
 import { type GateName, noCommentsGate } from "./gate-parts";
 import {
@@ -160,25 +160,60 @@ const NODE_CHECK = "node";
 
 const NODE_SCANNERS: readonly GateFile[] = [SCANNER_FILE, NO_SECRETS_SCANNER, PINNED_ACTIONS_SCANNER];
 
+type NodeFound =
+  | { readonly kind: "off-path" }
+  | { readonly kind: "unrunnable"; readonly reason: string }
+  | { readonly kind: "killed"; readonly signal: string }
+  | { readonly kind: "exited"; readonly status: number }
+  | { readonly kind: "silent" }
+  | { readonly kind: "unsupported"; readonly version: string }
+  | { readonly kind: "supported"; readonly version: string };
+
+function spawnFailure(error: Error): string {
+  const code: unknown = Reflect.get(error, "code");
+  return typeof code === "string" ? code : error.message;
+}
+
+function nodeFound(): NodeFound {
+  if (!onPath("node")) return { kind: "off-path" };
+  const run = spawnSync("node", ["--version"], { encoding: "utf8" });
+  if (run.error) return { kind: "unrunnable", reason: spawnFailure(run.error) };
+  if (run.signal !== null) return { kind: "killed", signal: run.signal };
+  invariant(run.status !== null, "node --version, neither failing to start nor killed, exits with a status");
+  if (run.status !== 0) return { kind: "exited", status: run.status };
+  const version = run.stdout.trim();
+  if (version === "") return { kind: "silent" };
+  if (!isSupportedNode(version)) return { kind: "unsupported", version };
+  return { kind: "supported", version };
+}
+
+function nodeFault(found: Exclude<NodeFound, { readonly kind: "supported" }>): string {
+  switch (found.kind) {
+    case "off-path":
+      return "node is not on PATH";
+    case "unrunnable":
+      return `node --version cannot run: ${found.reason}`;
+    case "killed":
+      return `node --version is killed by ${found.signal}`;
+    case "exited":
+      return `node --version exits ${found.status}`;
+    case "silent":
+      return "node --version prints no version";
+    case "unsupported":
+      return `node --version prints ${found.version}, not ${NODE_MINIMUM} or later`;
+    default:
+      return unreachable(found);
+  }
+}
+
 function nodeHealth(gates: readonly GateName[]): Health[] {
   const running = gates.filter((gate) => GATES[gate].some((file) => NODE_SCANNERS.includes(file)));
   if (running.length === 0) return [];
+  const found = nodeFound();
+  if (found.kind === "supported")
+    return [{ name: NODE_CHECK, state: "ok", detail: `node ${found.version} is on PATH` }];
   const judgeNothing = `so ${running.join(", ")} ${running.length === 1 ? "judges" : "judge"} nothing`;
-  if (!onPath("node"))
-    return [
-      { name: NODE_CHECK, state: "fail", detail: `node is not on PATH, ${judgeNothing}`, fix: NODE_FIX },
-    ];
-  const version = spawnSync("node", ["--version"], { encoding: "utf8" }).stdout.trim();
-  if (isSupportedNode(version))
-    return [{ name: NODE_CHECK, state: "ok", detail: `node ${version} is on PATH` }];
-  return [
-    {
-      name: NODE_CHECK,
-      state: "fail",
-      detail: `node --version prints ${version}, not ${NODE_MINIMUM} or later, ${judgeNothing}`,
-      fix: NODE_FIX,
-    },
-  ];
+  return [{ name: NODE_CHECK, state: "fail", detail: `${nodeFault(found)}, ${judgeNothing}`, fix: NODE_FIX }];
 }
 
 const LANGUAGES_CHECK = "no-comments languages";
