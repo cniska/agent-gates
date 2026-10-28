@@ -514,15 +514,15 @@ describe("refusals", () => {
   });
 });
 
+function withOrigin(url: string | null): string {
+  const dir = repo();
+  if (url !== null) execFileSync("git", ["-C", dir, "remote", "add", "origin", url]);
+  return dir;
+}
+
 describe("the workflows default", () => {
   const COMMIT_SUBJECT = { kind: "gates", gates: ["commit-subject"] } as const;
   const WORKFLOW = ".github/workflows/commits.yml";
-
-  function withOrigin(url: string | null): string {
-    const dir = repo();
-    if (url !== null) execFileSync("git", ["-C", dir, "remote", "add", "origin", url]);
-    return dir;
-  }
 
   test.each([
     ["no origin", null],

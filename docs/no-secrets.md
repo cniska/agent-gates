@@ -2,7 +2,7 @@
 
 What the `no-secrets` gate judges, the rules it matches, what a refusal holds and how a reviewed false positive is allowed.
 
-A coding agent that pastes a key into a config file, a test or a script leaks it with the first push, and rotating it costs more than refusing the commit. The gate refuses a commit, a push and, in CI, a pull request whose change adds a secret; it needs `node` on `PATH` and nothing installed in the project.
+A coding agent that pastes a key into a config file, a test or a script leaks it with the first push, and rotating it costs more than refusing the commit. The gate refuses a commit, a push and, in CI, a pull request whose change adds a secret; it needs `node` 20 or later on `PATH` and nothing installed in the project.
 
 ## What is judged
 

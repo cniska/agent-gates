@@ -40,7 +40,7 @@ const NO_COMMENTS_FILES = [
 function doctorReports(dir: string, checks: readonly Check[]): void {
   const ran = agentGates(dir, ["doctor", "--full"]);
   expect([ran.status, ran.stderr]).toEqual([0, ""]);
-  const count = (state: string) => checks.filter((check) => check.state === state).length;
+  const count = (state: string) => checks.filter((reported) => reported.state === state).length;
   const counts = { ok: count("ok"), warn: count("warn"), fail: count("fail") };
   expect(toonOf(ran.stdout)).toEqual({ command: "doctor", ok: true, result: { counts, checks } });
 }
@@ -201,7 +201,7 @@ test("AC-29 installs the gate of each tracked language and of the files it write
     meta: { root: untyped },
     resolve: `stop and ask the owner which gates the project runs, then ${INSTALL_USAGE}`,
   });
-  expect(readdirSync(untyped).sort()).toEqual([".git", "notes.txt"]);
+  expect(readdirSync(untyped).toSorted()).toEqual([".git", "notes.txt"]);
   expect(hooksPath(untyped)).toBe("");
 });
 

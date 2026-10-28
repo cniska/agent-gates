@@ -76,8 +76,8 @@ function commentSpans(text: string): Lexed {
   let prefersRegex = false;
 
   const charAt = (index: number): string => {
-    const code = text.codePointAt(index);
-    return code === undefined ? "" : String.fromCodePoint(code);
+    const point = text.codePointAt(index);
+    return point === undefined ? "" : String.fromCodePoint(point);
   };
 
   function bump(): void {

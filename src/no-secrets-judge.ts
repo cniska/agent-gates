@@ -56,7 +56,7 @@ function judged({ heads, bases }: JudgedChange, judging: Judging): readonly File
   return heads
     .filter(({ path }) => !judging.skipped.some((skipped) => isUnder(path, skipped)))
     .flatMap((head) => fileSecretsOf(head, judging, known) ?? [])
-    .sort(byPath);
+    .toSorted(byPath);
 }
 
 export function secretsAdded(

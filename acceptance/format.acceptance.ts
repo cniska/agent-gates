@@ -57,7 +57,7 @@ test("AC-30 refuses format without --command, which then installs a working gate
     meta: { root: declared, fill: "command" },
     resolve: NAME_THE_COMMAND,
   });
-  expect(readdirSync(declared).sort()).toEqual([".git", "Makefile", "bun.lock", "package.json"]);
+  expect(readdirSync(declared).toSorted()).toEqual([".git", "Makefile", "bun.lock", "package.json"]);
 
   const dir = checkout({ "fmt.sh": UPPERCASE, Makefile: "fmt:\n\t@sh fmt.sh\n" });
   const before = git(dir, ["status", "--porcelain", "--untracked-files=all"]);

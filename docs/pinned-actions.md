@@ -2,7 +2,7 @@
 
 What the `pinned-actions` gate judges, which references pass, and what a refusal holds.
 
-A workflow that pulls an action by a tag runs whatever that tag points at next, and a tag moves with one push to the action's repository, by its owner or by whoever takes the account. Pinned to a commit SHA, the workflow runs the code that was reviewed. The gate refuses a commit, a push and, in CI, a pull request that leaves a workflow or action file with an unpinned reference; it needs `node` on `PATH` and nothing installed in the project.
+A workflow that pulls an action by a tag runs whatever that tag points at next, and a tag moves with one push to the action's repository, by its owner or by whoever takes the account. Pinned to a commit SHA, the workflow runs the code that was reviewed. The gate refuses a commit, a push and, in CI, a pull request that leaves a workflow or action file with an unpinned reference; it needs `node` 20 or later on `PATH` and nothing installed in the project.
 
 ## What is judged
 

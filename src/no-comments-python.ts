@@ -294,7 +294,7 @@ function commentSpans(text: string): Lexed {
   if (tokenized.kind === "stopped") return tokenized;
   const comments = tokenized.comments.map((comment) => ({ ...comment, style: "line" as const }));
   const strings = loneStrings(tokenized.code).map((comment) => ({ ...comment, style: "docstring" as const }));
-  const spans: Span[] = [...comments, ...strings].sort((a, b) => a.start - b.start);
+  const spans: Span[] = [...comments, ...strings].toSorted((a, b) => a.start - b.start);
   return { kind: "lexed", spans };
 }
 

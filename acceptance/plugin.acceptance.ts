@@ -403,13 +403,13 @@ const WIRED =
 const UNWIRED =
   "They do not run in this clone until `core.hooksPath` is `.githooks`, so none refuses a commit or a push: `git config core.hooksPath .githooks` sets it. The plugin denies a git command that skips the gates, such as `git commit --no-verify`.";
 
-function noted(lines: readonly string[], closing = WIRED) {
+function noted(notes: readonly string[], closing = WIRED) {
   return {
     status: 0,
     stdout: `${JSON.stringify({
       hookSpecificOutput: {
         hookEventName: "SessionStart",
-        additionalContext: ["cniska-gates: the gates installed in this checkout:", ...lines, closing].join(
+        additionalContext: ["cniska-gates: the gates installed in this checkout:", ...notes, closing].join(
           "\n",
         ),
       },

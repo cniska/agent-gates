@@ -68,7 +68,7 @@ function* commentsOf(token: CST.Token | null | undefined): Iterable<Span> {
       yield* commentsOfEach(token.end);
       return;
     default:
-      return unreachable(token);
+      unreachable(token);
   }
 }
 

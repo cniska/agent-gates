@@ -185,5 +185,5 @@ export function secretsIn(path: string, text: string, table: CompiledTable): rea
   const found = table.rules
     .filter((rule) => applies(rule, path, lowered))
     .flatMap((rule) => secretsByRule(rule, path, text, table.global));
-  return withoutGenericRepeats(found).sort(byLineThenRule);
+  return withoutGenericRepeats(found).toSorted(byLineThenRule);
 }

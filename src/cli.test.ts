@@ -36,6 +36,10 @@ function cli(...args: string[]) {
   return cliIn(dir, ...args);
 }
 
+function stateOf(target: string) {
+  return target === ".github/workflows/commits.yml" ? "changed" : "missing";
+}
+
 describe("the cli", () => {
   test("prints TOON naming the command and its result, leading a list with the count in each state", () => {
     expect(cli("doctor")).toEqual({
@@ -70,7 +74,6 @@ describe("the cli", () => {
       ".githooks/judge-push",
     ];
     const backup = ".github/workflows/commits.yml.agent-gates-backup";
-    const stateOf = (target: string) => (target === ".github/workflows/commits.yml" ? "changed" : "missing");
     expect(decode(cliIn(changed, "install", "commit-subject").stdout)).toEqual({
       command: "install",
       ok: true,

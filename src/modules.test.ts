@@ -45,7 +45,7 @@ function moduleOf(name: string): string | null {
   const owners = Object.keys(PUBLIC_FILES).filter(
     (prefix) => name === prefix || name.startsWith(`${prefix}-`),
   );
-  return owners.sort((a, b) => b.length - a.length)[0] ?? null;
+  return owners.toSorted((a, b) => b.length - a.length)[0] ?? null;
 }
 
 function nameOf(file: string): string {
@@ -72,7 +72,7 @@ function isSource(file: string): boolean {
 }
 
 function filesOf(pattern: string): readonly { readonly file: string; readonly text: string }[] {
-  return [...new Glob(pattern).scanSync(SRC)].sort().map((file) => ({
+  return [...new Glob(pattern).scanSync(SRC)].toSorted().map((file) => ({
     file,
     text: readFileSync(join(SRC, file), "utf8"),
   }));

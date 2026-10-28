@@ -13,11 +13,6 @@
     "typescript/no-floating-promises": "error",
     "typescript/switch-exhaustiveness-check": "error",
     "typescript/no-unsafe-type-assertion": "error",
-    "oxc/no-barrel-file": "error",
-    "unicorn/no-array-sort": "off",
-    "eslint/no-shadow": "off",
-    "eslint/no-new": "off",
-    "typescript/consistent-return": "off",
-    "unicorn/consistent-function-scoping": "off"
+    "oxc/no-barrel-file": "error"
   }
 }

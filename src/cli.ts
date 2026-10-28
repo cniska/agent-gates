@@ -11,9 +11,9 @@ const VERSION_USAGE = `agent-gates ${VERSION_FLAG}`;
 
 const FLAGS = [{ name: VERSION_FLAG, usage: VERSION_USAGE, summary: "print the version alone on one line" }];
 
-const [name, ...args] = process.argv.slice(2);
+const [asked, ...args] = process.argv.slice(2);
 
-if (name === undefined)
+if (asked === undefined)
   exitWithResult(
     "agent-gates",
     { commands: COMMANDS.map(({ name, usage, summary }) => ({ name, usage, summary })), flags: FLAGS },
@@ -29,24 +29,24 @@ function versionOrExited(): string {
   }
 }
 
-if (name === VERSION_FLAG) exitWithVersion(versionOrExited());
+if (asked === VERSION_FLAG) exitWithVersion(versionOrExited());
 
-const command = COMMANDS.find((known) => known.name === name);
+const command = COMMANDS.find((known) => known.name === asked);
 
 if (command === undefined)
   exitWithError(
     "agent-gates",
     usageError("unknown_command", {
-      name,
+      name: asked,
       usage: `agent-gates ${[...COMMANDS.map(({ name }) => name), VERSION_FLAG].join("|")}`,
     }),
   );
 
-function ranOrExited(command: Command): ReturnType<Command["run"]> {
+function ranOrExited(chosen: Command): ReturnType<Command["run"]> {
   try {
-    return command.run(args);
+    return chosen.run(args);
   } catch (error) {
-    return exitWithError(command.name, error);
+    return exitWithError(chosen.name, error);
   }
 }
 

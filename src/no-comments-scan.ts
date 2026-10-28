@@ -161,7 +161,7 @@ function crossFileFindings({ unmatched, leftovers }: OwnMatch): FileFindings[] {
     const [first, ...rest] = reading.comments
       .filter(({ text }) => !takenFrom(left, text))
       .map(({ line, text }) => ({ line, body: firstLine(text).trim() }))
-      .sort((a, b) => a.line - b.line);
+      .toSorted((a, b) => a.line - b.line);
     if (first !== undefined)
       found.push({ kind: "comments", path: file.path, language, comments: [first, ...rest] });
   }
@@ -169,5 +169,5 @@ function crossFileFindings({ unmatched, leftovers }: OwnMatch): FileFindings[] {
 }
 
 export function findings(change: JudgedChange, adapterOf: AdapterOf, keep: Keep): FileFindings[] {
-  return crossFileFindings(ownMatch(change, { adapterOf, keep })).sort(byPath);
+  return crossFileFindings(ownMatch(change, { adapterOf, keep })).toSorted(byPath);
 }

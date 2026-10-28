@@ -76,7 +76,7 @@ function read(path: string): Guarded {
 function guardedFiles(): readonly Guarded[] {
   return [...GUARDED_DIRS.flatMap(filesUnder), ...GUARDED_FILES]
     .filter((path) => path !== SELF)
-    .sort((a, b) => a.localeCompare(b))
+    .toSorted((a, b) => a.localeCompare(b))
     .map(read);
 }
 

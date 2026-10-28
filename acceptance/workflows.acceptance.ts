@@ -47,7 +47,7 @@ function stateOf(result: unknown, target: string): Listed | undefined {
 
 function workflowsIn(dir: string): readonly string[] {
   const at = join(dir, ".github/workflows");
-  return existsSync(at) ? readdirSync(at).sort() : [];
+  return existsSync(at) ? readdirSync(at).toSorted() : [];
 }
 
 test("AC-69 installs the hooks without their workflows, keeps the choice, and turns the workflows back on", () => {

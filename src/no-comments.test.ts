@@ -46,8 +46,8 @@ const pythonComments = ADAPTERS.python.comments;
 
 const swiftComments = ADAPTERS.swift.comments;
 
-function read(comments: readonly Comment[]): Reading {
-  return { kind: "read", comments };
+function read(found: readonly Comment[]): Reading {
+  return { kind: "read", comments: found };
 }
 
 function unparsed(line: number, reason: string): Reading {
@@ -1491,8 +1491,8 @@ describe("the pre-commit hook", () => {
     const bug =
       "no-comments: loaded; stop and hand this error to the owner as a bug in agent-gates; no command you run resolves it\n";
     expect(commit(dir, { add: ["a.ts"] })).toEqual({ status: 1, stderr: bug });
-    const scan = spawnSync("node", [".githooks/no-comments/scan.cjs"], { cwd: dir, encoding: "utf8" });
-    expect([scan.status, scan.stderr]).toEqual([3, bug]);
+    const direct = spawnSync("node", [".githooks/no-comments/scan.cjs"], { cwd: dir, encoding: "utf8" });
+    expect([direct.status, direct.stderr]).toEqual([3, bug]);
     rmSync(join(dir, ".githooks/no-comments/javascript.cjs"));
     expect(commit(dir, { add: ["a.ts"] })).toEqual({ status: 0, stderr: "" });
   });
@@ -1540,16 +1540,16 @@ describe("the pre-commit hook", () => {
   });
 });
 
-describe("the one-file scan", () => {
-  function fileScan(dir: string, path: string, cwd: string = dir) {
-    const run = spawnSync("node", [join(dir, ".githooks/no-comments/scan.cjs"), "--file", path], {
-      cwd,
-      encoding: "utf8",
-    });
-    expect(run.stdout).toBe("");
-    return { status: run.status, stderr: run.stderr };
-  }
+function fileScan(dir: string, path: string, cwd: string = dir) {
+  const run = spawnSync("node", [join(dir, ".githooks/no-comments/scan.cjs"), "--file", path], {
+    cwd,
+    encoding: "utf8",
+  });
+  expect(run.stdout).toBe("");
+  return { status: run.status, stderr: run.stderr };
+}
 
+describe("the one-file scan", () => {
   test("refuses the comments the working-tree file adds against HEAD, whatever the index holds", () => {
     const dir = gated({ "src/a.ts": "// old\nexport const a = 1;\n" });
     commitPastHooks(dir, "feat: start");
@@ -1645,29 +1645,33 @@ describe("the pre-commit dispatcher", () => {
   });
 });
 
+function judgeStep(): string {
+  const text = readFileSync(join(SOURCE_DIR, "no-comments.yml"), "utf8");
+  const run = /^ {8}run: (.+)$/m.exec(text)?.[1];
+  if (run === undefined) throw new Error("no-comments.yml runs no command");
+  return run;
+}
+
+function scanUsage(got: string): string {
+  return `no-comments: scan.cjs takes no arguments, --all, a base and a head, or --file and a path, each optionally after --format github, and got ${got}; node scan.cjs [--format github] [--all | <base> <head> | --file <path>]\n`;
+}
+
+function judged(dir: string, push: { base: string; head: string; ref: string }) {
+  const run = spawnSync("bash", ["-e", "-c", judgeStep()], {
+    cwd: dir,
+    env: {
+      ...process.env,
+      BASE_SHA: push.base,
+      HEAD_SHA: push.head,
+      PUSHED_REF: push.ref,
+      DEFAULT_BRANCH: "main",
+    },
+    encoding: "utf8",
+  });
+  return { status: run.status, stdout: run.stdout, stderr: run.stderr };
+}
+
 describe("the no-comments workflow", () => {
-  function judgeStep(): string {
-    const text = readFileSync(join(SOURCE_DIR, "no-comments.yml"), "utf8");
-    const run = /^ {8}run: (.+)$/m.exec(text)?.[1];
-    if (run === undefined) throw new Error("no-comments.yml runs no command");
-    return run;
-  }
-
-  function judged(dir: string, push: { base: string; head: string; ref: string }) {
-    const run = spawnSync("bash", ["-e", "-c", judgeStep()], {
-      cwd: dir,
-      env: {
-        ...process.env,
-        BASE_SHA: push.base,
-        HEAD_SHA: push.head,
-        PUSHED_REF: push.ref,
-        DEFAULT_BRANCH: "main",
-      },
-      encoding: "utf8",
-    });
-    return { status: run.status, stdout: run.stdout, stderr: run.stderr };
-  }
-
   test("judges the files changed since the merge base of the pushed base", () => {
     const dir = gated({ "a.ts": "// old\n" });
     const base = commitPastHooks(dir, "feat: start");
@@ -1741,29 +1745,27 @@ describe("the no-comments workflow", () => {
 
   test("exits 2 on a call that names a base without a head, or --all with one, or a flag it does not know", () => {
     const dir = gated();
-    const usage = (got: string) =>
-      `no-comments: scan.cjs takes no arguments, --all, a base and a head, or --file and a path, each optionally after --format github, and got ${got}; node scan.cjs [--format github] [--all | <base> <head> | --file <path>]\n`;
-    expect(scan(dir, ["--file"])).toEqual({ status: 2, stderr: usage("1: --file") });
+    expect(scan(dir, ["--file"])).toEqual({ status: 2, stderr: scanUsage("1: --file") });
     expect(scan(dir, ["--file", "a.ts", "b.ts"])).toEqual({
       status: 2,
-      stderr: usage("3: --file a.ts b.ts"),
+      stderr: scanUsage("3: --file a.ts b.ts"),
     });
-    expect(scan(dir, ["HEAD"])).toEqual({ status: 2, stderr: usage("1: HEAD") });
-    expect(scan(dir, ["--all", "HEAD"])).toEqual({ status: 2, stderr: usage("2: --all HEAD") });
-    expect(scan(dir, ["--format", "json"])).toEqual({ status: 2, stderr: usage("2: --format json") });
-    expect(scan(dir, ["--format"])).toEqual({ status: 2, stderr: usage("1: --format") });
+    expect(scan(dir, ["HEAD"])).toEqual({ status: 2, stderr: scanUsage("1: HEAD") });
+    expect(scan(dir, ["--all", "HEAD"])).toEqual({ status: 2, stderr: scanUsage("2: --all HEAD") });
+    expect(scan(dir, ["--format", "json"])).toEqual({ status: 2, stderr: scanUsage("2: --format json") });
+    expect(scan(dir, ["--format"])).toEqual({ status: 2, stderr: scanUsage("1: --format") });
     expect(scan(dir, ["--format", "github", "--format", "github"])).toEqual({
       status: 2,
-      stderr: usage("4: --format github --format github"),
+      stderr: scanUsage("4: --format github --format github"),
     });
-    expect(scan(dir, ["--json"])).toEqual({ status: 2, stderr: usage("1: --json") });
+    expect(scan(dir, ["--json"])).toEqual({ status: 2, stderr: scanUsage("1: --json") });
     expect(scan(dir, ["HEAD", "--format", "github", "HEAD"])).toEqual({
       status: 2,
-      stderr: usage("4: HEAD --format github HEAD"),
+      stderr: scanUsage("4: HEAD --format github HEAD"),
     });
     expect(scan(dir, ["--all", "--format", "github"])).toEqual({
       status: 2,
-      stderr: usage("3: --all --format github"),
+      stderr: scanUsage("3: --all --format github"),
     });
   });
 

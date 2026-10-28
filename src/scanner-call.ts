@@ -32,8 +32,8 @@ export const JUDGED_FORMS: readonly Form[] = [
 ];
 
 function listed(forms: readonly Form[]): string {
-  const said = ["no arguments", ...forms.map(({ said }) => said)];
-  return `${said.slice(0, -1).join(", ")}, or ${said.at(-1)}`;
+  const phrases = ["no arguments", ...forms.map(({ said }) => said)];
+  return `${phrases.slice(0, -1).join(", ")}, or ${phrases.at(-1)}`;
 }
 
 const scanUsageError = usageErrors<{

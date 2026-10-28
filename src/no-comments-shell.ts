@@ -43,14 +43,14 @@ type Heredoc = {
 
 type CaseState = "subject" | "in" | "pattern" | "body";
 
+function lineSpan(start: number, end: number): Span {
+  return { start, end, style: "line" };
+}
+
 function commentSpans(text: string): Lexed {
   const spans: Span[] = [];
   const pending: Heredoc[] = [];
   let at = 0;
-
-  function lineSpan(start: number, end: number): Span {
-    return { start, end, style: "line" };
-  }
 
   function comment(): void {
     const start = at;

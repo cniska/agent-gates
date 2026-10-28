@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
-import { invariant, unreachable } from "./assert";
+import { impossible, unreachable } from "./assert";
 import type { Refusal } from "./coded-error";
 import { type GateName, noCommentsGate } from "./gate-parts";
 import {
@@ -85,8 +85,7 @@ function fileHealth(planned: PlannedFile): Health {
         fix: `update agent-gates, then ${REINSTALL}`,
       };
     case "reconfigured":
-      invariant(false, "doctor gives no command, so no file is reconfigured");
-      break;
+      return impossible("doctor gives no command, so no file is reconfigured");
     case "unwanted":
       return {
         name,

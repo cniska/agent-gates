@@ -21,12 +21,16 @@ const KEEP = keepOf(
   ),
 );
 
+function numberedComments(count: number): Refused[] {
+  return Array.from({ length: count }, (_, index) => ({
+    line: index + 1,
+    body: `// reason number ${index}`,
+  }));
+}
+
 function manyComments(files: number, perFile: number): FileFindings[] {
   return Array.from({ length: files }, (_, file) =>
-    commented(
-      `src/file-${String(file).padStart(3, "0")}.ts`,
-      Array.from({ length: perFile }, (_, index) => ({ line: index + 1, body: `// reason number ${index}` })),
-    ),
+    commented(`src/file-${String(file).padStart(3, "0")}.ts`, numberedComments(perFile)),
   );
 }
 

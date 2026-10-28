@@ -251,8 +251,8 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ## 3. Non-functional requirements
 
-- **NF-1** — The installed gates run with git, a POSIX shell and `node` alone: nothing installed in the project, and neither agent-gates nor Bun on `PATH`. The `format` gate also runs the project's own format command.
-- **NF-2** — The plugin's hooks run with a POSIX shell, bash, git, `node`, `jq` and `sleep` alone; the format step runs the installed `format` hook with that shell, and the hook runs the project's own format command.
+- **NF-1** — The installed gates run with git, a POSIX shell and `node` 20 or later alone: nothing installed in the project, and neither agent-gates nor Bun on `PATH`. The `format` gate also runs the project's own format command.
+- **NF-2** — The plugin's hooks run with a POSIX shell, bash, git, `node` 20 or later, `jq` and `sleep` alone; the format step runs the installed `format` hook with that shell, and the hook runs the project's own format command.
 
 ## 4. Out of scope
 
@@ -357,7 +357,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ## 7. Constraints (fixed)
 
-- **C-1** — The CLI is TypeScript on Bun; the installed gates are POSIX shell and CommonJS run by `node`.
+- **C-1** — The CLI is TypeScript on Bun; the installed gates are POSIX shell and CommonJS run by `node` 20 or later.
 - **C-2** — No config file: a gate's state is the installed files with their markers, and the project's own `.no-secrets-allow` and `.no-comments-keep` (FR-68).
 - **C-3** — Every CLI command's output is TOON, encoded by the `@toon-format/toon` package, for agents to read; `--version` alone prints plain text (FR-115).
 

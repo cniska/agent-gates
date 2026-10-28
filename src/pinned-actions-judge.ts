@@ -41,5 +41,5 @@ export function unpinnedIn(root: string, judged: Judged): readonly FileUses[] {
       const [first, ...rest] = usesIn(text).filter(({ ref }) => !isPinned(ref));
       return first === undefined ? [] : [{ path, unpinned: [first, ...rest] }];
     })
-    .sort(byPath);
+    .toSorted(byPath);
 }

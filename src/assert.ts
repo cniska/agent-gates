@@ -15,6 +15,10 @@ export function unreachable(value: never): never {
   throw fault("unreachable", { value: JSON.stringify(value) });
 }
 
+export function impossible(message: string): never {
+  throw fault("invariant_failed", { condition: message });
+}
+
 export function invariant(condition: unknown, message: string): asserts condition {
-  if (!condition) throw fault("invariant_failed", { condition: message });
+  if (!condition) impossible(message);
 }

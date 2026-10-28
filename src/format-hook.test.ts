@@ -32,8 +32,8 @@ function git(dir: string, args: readonly string[]): string {
 }
 
 function sh(dir: string, args: readonly string[]) {
-  const run = spawnSync("sh", args, { cwd: dir, encoding: "utf8" });
-  return { status: run.status, stderr: run.stderr };
+  const ran = spawnSync("sh", args, { cwd: dir, encoding: "utf8" });
+  return { status: ran.status, stderr: ran.stderr };
 }
 
 function run(cwd: string, hook: string) {

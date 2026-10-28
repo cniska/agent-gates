@@ -85,7 +85,7 @@ function secretReply(
   const count = findings.reduce((total, [, found]) => total + found.length, 0);
   return lines([
     `no-secrets: ${lead} ${count} ${count === 1 ? "secret" : "secrets"}. ${FIX}`,
-    ...findings.flatMap(([path, found]) => [path, ...found.map((each) => `  ${finding(path, each)}`)]),
+    ...findings.flatMap(([path, found]) => [path, ...found.map((entry) => `  ${finding(path, entry)}`)]),
   ]);
 }
 

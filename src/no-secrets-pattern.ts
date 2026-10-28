@@ -146,12 +146,11 @@ function walked(re2: string): Walk {
   return inClass ? null : { out, flags };
 }
 
-function compiles(source: string, flags: string): boolean {
+function compiled(source: string, flags: string): RegExp | null {
   try {
-    new RegExp(source, flags);
-    return true;
+    return new RegExp(source, flags);
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -159,7 +158,7 @@ export function rulePattern(re2: string): Pattern | null {
   const walk = walked(re2);
   if (walk === null) return null;
   const flags = FLAG_ORDER.filter((flag) => walk.flags.has(flag)).join("");
-  return compiles(walk.out, flags) ? { source: walk.out, flags } : null;
+  return compiled(walk.out, flags) === null ? null : { source: walk.out, flags };
 }
 
 type Frame = { readonly altStart: number };

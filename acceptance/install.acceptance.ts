@@ -369,12 +369,11 @@ test("AC-8 accepts the hooks path however it is spelled, and refuses another", (
   });
 });
 
+function commitSubject(prepare: string): InstallResult {
+  return { gates: ["commit-subject"], files: each("missing", COMMIT_SUBJECT_FILES), prepare };
+}
+
 test("AC-9 wires the prepare script, keeping the manifest's shape, and refuses another", () => {
-  const commitSubject = (prepare: string): InstallResult => ({
-    gates: ["commit-subject"],
-    files: each("missing", COMMIT_SUBJECT_FILES),
-    prepare,
-  });
   const manifest = { name: "app", scripts: { test: "bun test" }, private: true };
   const fresh = checkout({ "package.json": `${JSON.stringify(manifest, null, 4)}\n` });
   installs(fresh, ["commit-subject"], commitSubject("missing"));
@@ -402,11 +401,9 @@ test("AC-9 wires the prepare script, keeping the manifest's shape, and refuses a
     ...occupiedError(occupiedPath),
     meta: { path: occupiedPath, prepare: "husky", wanted: PREPARE },
   });
-  expect([readdirSync(occupied).sort(), readText(occupied, "package.json"), hooksPath(occupied)]).toEqual([
-    [".git", "package.json"],
-    occupiedText,
-    "",
-  ]);
+  expect([readdirSync(occupied).toSorted(), readText(occupied, "package.json"), hooksPath(occupied)]).toEqual(
+    [[".git", "package.json"], occupiedText, ""],
+  );
 
   const broken = checkout({ "package.json": "{ nope\n" });
   const brokenPath = join(broken, "package.json");
@@ -425,7 +422,7 @@ test("AC-9 wires the prepare script, keeping the manifest's shape, and refuses a
       resolve: `stop and hand this error to the owner: ${brokenPath} must parse`,
     },
   });
-  expect([readdirSync(broken).sort(), hooksPath(broken)]).toEqual([[".git", "package.json"], ""]);
+  expect([readdirSync(broken).toSorted(), hooksPath(broken)]).toEqual([[".git", "package.json"], ""]);
 
   const judged = checkout();
   install(judged, ["commit-subject"]);
