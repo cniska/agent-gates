@@ -69,7 +69,7 @@ function refusalText(listing: readonly string[], kept: readonly string[] = [KEPT
 
 function gated(files: Record<string, string> = {}): string {
   const dir = repo(files);
-  installGates(dir, ["no-comments-javascript"], NO_FILLS);
+  installGates(dir, { kind: "gates", gates: ["no-comments-javascript"] }, NO_FILLS);
   return dir;
 }
 
@@ -1255,7 +1255,7 @@ describe("the pre-commit hook", () => {
   test("refuses only the comments a change adds, an edited one among them", () => {
     const dir = repo({ "a.ts": "// old\nexport const a = 1;\n" });
     expect(commit(dir).status).toBe(0);
-    installGates(dir, ["no-comments-javascript"], NO_FILLS);
+    installGates(dir, { kind: "gates", gates: ["no-comments-javascript"] }, NO_FILLS);
     expect(commit(dir).status).toBe(0);
     writeFiles(dir, { "a.ts": "// old\nexport const a = 2;\n" });
     expect(commit(dir)).toEqual({ status: 0, stderr: "" });
@@ -1352,7 +1352,11 @@ describe("the pre-commit hook", () => {
 
   test("refuses the comments a toolchain reads while no keep file lists them", () => {
     const dir = repo();
-    installGates(dir, ["no-comments-javascript", "no-comments-sql", "no-comments-shell"], NO_FILLS);
+    installGates(
+      dir,
+      { kind: "gates", gates: ["no-comments-javascript", "no-comments-sql", "no-comments-shell"] },
+      NO_FILLS,
+    );
     rmSync(join(dir, KEEP_FILE));
     commitPastHooks(dir, "chore: gates");
     writeFiles(dir, {
@@ -1390,7 +1394,16 @@ describe("the pre-commit hook", () => {
     const dir = repo();
     installGates(
       dir,
-      ["no-comments-dart", "no-comments-sql", "no-comments-shell", "no-comments-rust", "no-comments-python"],
+      {
+        kind: "gates",
+        gates: [
+          "no-comments-dart",
+          "no-comments-sql",
+          "no-comments-shell",
+          "no-comments-rust",
+          "no-comments-python",
+        ],
+      },
       NO_FILLS,
     );
     writeFiles(dir, {
@@ -1813,10 +1826,14 @@ describe("the no-comments workflow", () => {
 describe("install and doctor", () => {
   test("refuses a project's own pre-commit hook, and writes nothing", () => {
     const dir = repo({ ".githooks/pre-commit": "#!/bin/sh\nmake check\n" });
-    expect(refusalOf(() => installGates(dir, ["no-comments-javascript"], NO_FILLS))).toBe("hook_occupied");
+    expect(
+      refusalOf(() => installGates(dir, { kind: "gates", gates: ["no-comments-javascript"] }, NO_FILLS)),
+    ).toBe("hook_occupied");
     expect(existsSync(join(dir, ".githooks/no-comments"))).toBe(false);
     expect(readFileSync(join(dir, ".githooks/pre-commit"), "utf8")).toBe("#!/bin/sh\nmake check\n");
-    expect(installGates(dir, ["commit-subject"], NO_FILLS).gates).toEqual(["commit-subject"]);
+    expect(installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS).gates).toEqual([
+      "commit-subject",
+    ]);
   });
 
   test("doctor fails a project's own pre-commit hook with the move as the fix", () => {
@@ -1838,8 +1855,8 @@ describe("install and doctor", () => {
       "bin/tool": "#!/usr/bin/env node\n",
       "img.dart": "\0binary\n",
     });
-    installGates(dir, ["no-comments-shell"], NO_FILLS);
-    installGates(dir, ["no-comments-yaml"], NO_FILLS);
+    installGates(dir, { kind: "gates", gates: ["no-comments-shell"] }, NO_FILLS);
+    installGates(dir, { kind: "gates", gates: ["no-comments-yaml"] }, NO_FILLS);
     git(dir, ["add", "-A"]);
     expect(doctorCheck(dir, "no-comments languages")).toEqual({
       name: "no-comments languages",
@@ -1897,7 +1914,7 @@ describe("install and doctor", () => {
       detail: "javascript reads 1 tracked file, but no-comments-javascript is not installed",
       fix: "agent-gates install no-comments",
     });
-    installGates(dir, ["commit-subject"], NO_FILLS);
+    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS);
     expect(doctorCheck(dir, "no-comments languages")?.state).toBe("warn");
   });
 
@@ -1941,7 +1958,7 @@ describe("install and doctor", () => {
 
   test("install appends only the keep lines a project's keep file lacks, and a reinstall changes nothing", () => {
     const dir = repo({ [KEEP_FILE]: "javascript // own\nsql -- own" });
-    const installed = installGates(dir, ["no-comments-javascript"], NO_FILLS);
+    const installed = installGates(dir, { kind: "gates", gates: ["no-comments-javascript"] }, NO_FILLS);
     expect(installed.files.find(({ target }) => target === KEEP_FILE)).toEqual({
       target: KEEP_FILE,
       state: "behind",
@@ -1949,16 +1966,16 @@ describe("install and doctor", () => {
     const merged =
       "javascript // own\nsql -- own\nshell # agent-gate:[a-z-]+:[0-9]+\nyaml # agent-gate:[a-z-]+:[0-9]+\nyaml # v?[0-9]+(\\.[0-9]+)*(-[0-9A-Za-z.]+)?\n";
     expect(readFileSync(join(dir, KEEP_FILE), "utf8")).toBe(merged);
-    const again = installGates(dir, [], NO_FILLS);
+    const again = installGates(dir, { kind: "none" }, NO_FILLS);
     expect(again.files.find(({ target }) => target === KEEP_FILE)?.state).toBe("installed");
     expect(readFileSync(join(dir, KEEP_FILE), "utf8")).toBe(merged);
     const fresh = repo();
-    installGates(fresh, ["no-comments-shell"], NO_FILLS);
+    installGates(fresh, { kind: "gates", gates: ["no-comments-shell"] }, NO_FILLS);
     expect(readFileSync(join(fresh, KEEP_FILE), "utf8")).toBe(
       "shell # agent-gate:[a-z-]+:[0-9]+\nyaml # agent-gate:[a-z-]+:[0-9]+\nyaml # v?[0-9]+(\\.[0-9]+)*(-[0-9A-Za-z.]+)?\n",
     );
     const unkept = repo();
-    installGates(unkept, ["commit-subject"], NO_FILLS);
+    installGates(unkept, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS);
     expect(existsSync(join(unkept, KEEP_FILE))).toBe(false);
   });
 

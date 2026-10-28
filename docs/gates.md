@@ -14,12 +14,16 @@ The files `agent-gates install` writes, how the hooks and workflows run them, an
 
 Every gate also installs `.githooks/.gitattributes`. A file two gates list is installed once and shared.
 
+### Hooks without workflows
+
+`agent-gates install <gate> --workflows off`, with any gate that has a workflow, installs the hooks and leaves every gate's workflow out: a project whose GitHub Actions minutes are billed, such as a private repository, pays for nothing a workflow would add, since the pre-push steps already judge each push through the same `judge-push`. Install records the choice in `.githooks/judge-push` as `workflows='off'`, so it shows in the diff, and a reinstall without `--workflows` keeps it. The choice is the project's, not one gate's. Install removes each gate workflow already there that carries an `agent-gate` marker, setting aside one that matches no release first, and leaves a file without a marker, the project's own, alone. `--workflows on` records `on` and writes the workflows again. With workflows off, `install no-comments` adds `no-comments-yaml` only when the project tracks YAML, `doctor` neither expects a gate's workflow nor reports the project's own hook steps no workflow runs, and a contributor who skips the hooks is judged by nothing in CI.
+
 Installed files:
 
 - are committed with the project, so contributors and CI are gated without installing agent-gates;
 - carry a marker, `# agent-gate:<part>:<version>` (`//` in a `.cjs`), from which agent-gates reads back what is installed, so there is no config file. To remove a language, delete its `.githooks/no-comments/<language>.cjs`.
 
-Install also points `core.hooksPath` at `.githooks` in the current clone, and `.githooks/.gitattributes` gives every file under `.githooks` LF endings and marks only the `.cjs` bundles `linguist-generated`, so the hook scripts are judged and reviewed like any other code. Installing a `no-comments-<language>` gate appends install's lines to `.no-comments-keep` ([kept comments](no-comments.md#kept-comments)). With a `package.json`, install adds the same wiring to its `prepare` script, so a fresh clone wires itself. Without one, each contributor runs `git config core.hooksPath .githooks` once. CI checks every push either way.
+Install also points `core.hooksPath` at `.githooks` in the current clone, and `.githooks/.gitattributes` gives every file under `.githooks` LF endings and marks only the `.cjs` bundles `linguist-generated`, so the hook scripts are judged and reviewed like any other code. Installing a `no-comments-<language>` gate appends install's lines to `.no-comments-keep` ([kept comments](no-comments.md#kept-comments)). With a `package.json`, install adds the same wiring to its `prepare` script, so a fresh clone wires itself. Without one, each contributor runs `git config core.hooksPath .githooks` once. With workflows on, CI checks every push either way.
 
 ## How the hooks run
 

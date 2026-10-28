@@ -9,7 +9,7 @@ const CLI = resolve(import.meta.dir, "cli.ts");
 const dir = repo();
 
 const INSTALL_USAGE =
-  "agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>] [--full], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments-yaml, no-comments-swift, no-secrets, pinned-actions, no-comments (each language the tracked files hold)";
+  "agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>] [--workflows <on|off>] [--full], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments-yaml, no-comments-swift, no-secrets, pinned-actions, no-comments (each language the tracked files hold)";
 
 const INSTALL_GATES =
   "agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments-yaml, no-comments-swift, no-secrets, pinned-actions, no-comments (each language the tracked files hold)";
@@ -22,6 +22,7 @@ const NO_FILE_STATES = {
   ahead: 0,
   "not-executable": 0,
   reconfigured: 0,
+  unwanted: 0,
 };
 
 afterAll(removeScratchDirs);
@@ -79,7 +80,7 @@ describe("the cli", () => {
         files: files.map((target) => ({ target, state: stateOf(target) })),
         backups: [{ target: ".github/workflows/commits.yml", backup }],
         prepare: "absent",
-        fills: { command: null, prefixes: null },
+        fills: { command: null, prefixes: null, workflows: null },
       },
     });
     writeFileSync(join(changed, ".github/workflows/commits.yml"), "name: Commits\n");
@@ -94,7 +95,7 @@ describe("the cli", () => {
     });
     expect(decode(cliIn(changed, "install").stdout)).toMatchObject({ result: { backups: [] } });
     const full = decode(cliIn(changed, "doctor", "--full").stdout);
-    expect(full).toMatchObject({ result: { counts: { ok: 10, warn: 0, fail: 0 } } });
+    expect(full).toMatchObject({ result: { counts: { ok: 11, warn: 0, fail: 0 } } });
     expect(decode(cliIn(changed, "doctor").stdout)).toMatchObject({ result: { checks: [] } });
     expect(full).toMatchObject({
       result: {
@@ -200,7 +201,7 @@ describe("the cli", () => {
     const set = cliIn(bare, "install", "format", "--command", "cargo fmt");
     expect([set.status, decode(set.stdout)]).toMatchObject([
       0,
-      { result: { fills: { command: "cargo fmt", prefixes: null } } },
+      { result: { fills: { command: "cargo fmt", prefixes: null, workflows: null } } },
     ]);
   });
 

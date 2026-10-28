@@ -266,7 +266,7 @@ function denied(reason: string) {
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
         permissionDecision: "deny",
-        permissionDecisionReason: `cniska-gates: ${reason} Fix what the refusing gate names instead; CI refuses what the gates refuse anyway.`,
+        permissionDecisionReason: `cniska-gates: ${reason} Fix what the refusing gate names instead.`,
       },
     })}\n`,
     stderr: "",

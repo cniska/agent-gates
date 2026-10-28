@@ -26,7 +26,7 @@ const AUTOSQUASH = {
 
 function gated(): string {
   const dir = repo();
-  installGates(dir, ["commit-subject"], NO_FILLS);
+  installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS);
   return dir;
 }
 

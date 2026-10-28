@@ -3,7 +3,7 @@ import { unreachable } from "./assert";
 import { checkArity, FULL_FLAG, fullOf, usageError } from "./cli-args";
 import type { Command } from "./cli-contract";
 import { type GateName, isGateName, noCommentsGate } from "./gate-parts";
-import { type InstalledFile, installedGates, installGates, trackedLanguageGates } from "./gates";
+import { type InstalledFile, installedGates, installGates, type Named } from "./gates";
 import {
   EACH_TRACKED_LANGUAGE,
   eachFill,
@@ -17,11 +17,6 @@ import {
 import { checkoutRoot } from "./git";
 import { LANGUAGE_NAMES } from "./no-comments-languages";
 
-type Named =
-  | { readonly kind: "none" }
-  | { readonly kind: "gate"; readonly gate: GateName }
-  | { readonly kind: "each-tracked-language" };
-
 const OPTIONS = eachFill(() => ({ type: "string", multiple: true }) as const);
 
 const PARSE_ERROR = "ERR_PARSE_ARGS";
@@ -29,29 +24,16 @@ const PARSE_ERROR = "ERR_PARSE_ARGS";
 function namedIn(name: string | undefined, usage: string): Named {
   if (name === undefined) return { kind: "none" };
   if (name === EACH_TRACKED_LANGUAGE) return { kind: "each-tracked-language" };
-  if (isGateName(name)) return { kind: "gate", gate: name };
+  if (isGateName(name)) return { kind: "gates", gates: [name] };
   throw usageError("unknown_gate", { names: [name], usage });
-}
-
-function gatesOf(named: Named, root: string): readonly GateName[] {
-  switch (named.kind) {
-    case "none":
-      return [];
-    case "gate":
-      return [named.gate];
-    case "each-tracked-language":
-      return trackedLanguageGates(root);
-    default:
-      return unreachable(named);
-  }
 }
 
 function admitting(named: Named, root: string): readonly GateName[] {
   switch (named.kind) {
     case "none":
       return installedGates(root);
-    case "gate":
-      return [named.gate];
+    case "gates":
+      return named.gates;
     case "each-tracked-language":
       return LANGUAGE_NAMES.map(noCommentsGate);
     default:
@@ -96,17 +78,18 @@ function parsed(args: readonly string[], usage: string) {
 }
 
 function fullFile(file: InstalledFile) {
-  const backup = file.state === "changed" ? file.backup : null;
+  const backup = file.state === "changed" || file.state === "unwanted" ? file.backup : null;
   return { target: file.target, state: file.state, backup };
 }
 
 function backups(files: readonly InstalledFile[]) {
-  return files.flatMap((file) =>
-    file.state === "changed" ? [{ target: file.target, backup: file.backup }] : [],
-  );
+  return files.flatMap((file) => {
+    if (file.state !== "changed" && file.state !== "unwanted") return [];
+    return file.backup === null ? [] : [{ target: file.target, backup: file.backup }];
+  });
 }
 
-const INSTALL_USAGE = `agent-gates install [<gate>] [${FILLS.command.flag} <format command>] [${FILLS.prefixes.flag} ${FILLS.prefixes.placeholder}] [${FULL_FLAG}], choosing from ${GATE_CHOICES}`;
+const INSTALL_USAGE = `agent-gates install [<gate>] [${FILLS.command.flag} <format command>] [${FILLS.prefixes.flag} ${FILLS.prefixes.placeholder}] [${FILLS.workflows.flag} ${FILLS.workflows.placeholder}] [${FULL_FLAG}], choosing from ${GATE_CHOICES}`;
 
 export const installCommand: Command = {
   name: "install",
@@ -120,7 +103,7 @@ export const installCommand: Command = {
     const root = checkoutRoot(process.cwd());
     const admitted = () => admitting(named, root);
     const given: Fills = eachFill((fill) => fillOf(values, fill, admitted, this.usage));
-    const { counts, gates, files, prepare, fills } = installGates(root, gatesOf(named, root), given);
+    const { counts, gates, files, prepare, fills } = installGates(root, named, given);
     if (full) return { value: { counts, gates, files: files.map(fullFile), prepare, fills }, exitCode: 0 };
     const listed = files.map(({ target, state }) => ({ target, state }));
     return { value: { counts, gates, files: listed, backups: backups(files), prepare, fills }, exitCode: 0 };

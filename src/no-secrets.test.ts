@@ -460,7 +460,7 @@ describe("the doctor", () => {
     execFileSync("git", ["-C", dir, "add", "-A"]);
     const check = () => gatesDoctor(dir).checks.find(({ name }) => name === "no-secrets backlog");
     expect(check()).toBeUndefined();
-    installGates(dir, ["no-secrets"], NO_FILLS);
+    installGates(dir, { kind: "gates", gates: ["no-secrets"] }, NO_FILLS);
     expect(check()).toEqual({
       name: "no-secrets backlog",
       state: "warn",

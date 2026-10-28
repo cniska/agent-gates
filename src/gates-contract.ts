@@ -28,17 +28,21 @@ export type FileState =
 
 export type WritableState = Exclude<FileState, "occupied">;
 
-export const FILL_NAMES = ["command", "prefixes"] as const;
+export const FILL_NAMES = ["command", "prefixes", "workflows"] as const;
 
 export type Fill = (typeof FILL_NAMES)[number];
 
 export type Fills = { readonly [F in Fill]: string | null };
 
 export function eachFill<T>(of: (fill: Fill) => T): Readonly<Record<Fill, T>> {
-  return { command: of("command"), prefixes: of("prefixes") };
+  return { command: of("command"), prefixes: of("prefixes"), workflows: of("workflows") };
 }
 
 export const NO_FILLS: Fills = eachFill(() => null);
+
+export const WORKFLOWS = ["on", "off"] as const;
+
+export type Workflows = (typeof WORKFLOWS)[number];
 
 type FillSpec = {
   readonly flag: string;
@@ -68,6 +72,15 @@ export const FILLS: Readonly<Record<Fill, FillSpec>> = {
     pattern: { matches: /^[a-z]+(,[a-z]+)*$/, form: "lowercase words joined by commas" },
     program: null,
     unset: { kind: "defaulted", detail: "none installed, so the gate allows its default set" },
+  },
+  workflows: {
+    flag: "--workflows",
+    placeholder: `<${WORKFLOWS.join("|")}>`,
+    example: "off",
+    check: "workflows",
+    pattern: { matches: new RegExp(`^(${WORKFLOWS.join("|")})$`), form: WORKFLOWS.join(" or ") },
+    program: null,
+    unset: { kind: "defaulted", detail: "none installed, so each gate installs its workflow" },
   },
 };
 
@@ -121,11 +134,12 @@ const JUDGE_PUSH: GateFile = {
   source: "judge-push",
   target: `${HOOKS_DIR}/judge-push`,
   executable: false,
-  fills: null,
+  fills: "workflows",
   versions: [
     { version: 1, sha256: "96729bf4e237ca325315e1fe8f456d03b2b2705c501a4488fe7976b178f535eb" },
     { version: 2, sha256: "620f7d269ad6f3659d8f8ed8c83bdd639141b50a627ab4e6341467318b6f73dd" },
     { version: 3, sha256: "6819abb178ae0eac92b0a492576b131418a9f4b96c452f0e32af640685c48b5b" },
+    { version: 4, sha256: "621a3a83208a6af763be1961cbc90eab31098d6ce5909e3502db03c644d6c17b" },
   ],
 };
 

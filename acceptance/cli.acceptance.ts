@@ -5,7 +5,7 @@ import { agentGates, checkout, git, packageVersion, removeScratchDirs, scratchDi
 afterEach(removeScratchDirs);
 
 const INSTALL_USAGE =
-  "agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>] [--full], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments-yaml, no-comments-swift, no-secrets, pinned-actions, no-comments (each language the tracked files hold)";
+  "agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>] [--workflows <on|off>] [--full], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments-yaml, no-comments-swift, no-secrets, pinned-actions, no-comments (each language the tracked files hold)";
 
 test("AC-1 lists the commands and --version, and refuses a bad call with its usage and writes nothing", () => {
   const dir = checkout();
@@ -142,6 +142,7 @@ test("AC-68 lists no null field by default, every field with --full, and leads w
       "    ahead: 0",
       '    "not-executable": 0',
       "    reconfigured: 0",
+      "    unwanted: 0",
       "  gates[1]: commit-subject",
       "  files[6]{target,state}:",
       "    .githooks/commit-msg,missing",
@@ -156,6 +157,7 @@ test("AC-68 lists no null field by default, every field with --full, and leads w
       "  fills:",
       "    command: null",
       "    prefixes: null",
+      "    workflows: null",
       "",
     ].join("\n"),
     stderr: "",
@@ -178,7 +180,7 @@ test("AC-68 lists no null field by default, every field with --full, and leads w
     command: "doctor",
     ok: true,
     result: {
-      counts: { ok: 9, warn: 0, fail: 1 },
+      counts: { ok: 10, warn: 0, fail: 1 },
       checks: [
         {
           name: "hooksPath",
@@ -201,14 +203,14 @@ test("AC-68 lists no null field by default, every field with --full, and leads w
   const passed = agentGates(dir, ["doctor"]);
   expect([passed.status, passed.stderr]).toEqual([0, ""]);
   expect(passed.stdout).toEndWith(
-    ["    ok: 10", "    warn: 0", "    fail: 0", "  checks: []", ""].join("\n"),
+    ["    ok: 11", "    warn: 0", "    fail: 0", "  checks: []", ""].join("\n"),
   );
   git(dir, ["config", "--unset", "core.hooksPath"]);
   const fullJudged = agentGates(dir, ["doctor", "--full"]);
   expect([fullJudged.status, fullJudged.stderr]).toEqual([1, ""]);
   expect(fullJudged.stdout).toContain(
     [
-      "  checks[10]{name,state,detail,fix}:",
+      "  checks[11]{name,state,detail,fix}:",
       "    gates,ok,commit-subject,null",
       "    .githooks/commit-msg,ok,installed,null",
     ].join("\n"),

@@ -165,6 +165,7 @@ export type FileResult = { readonly target: string; readonly state: string; read
 type Fills = {
   readonly command: string | null;
   readonly prefixes: string | null;
+  readonly workflows: string | null;
 };
 
 export type InstallResult = {
@@ -174,9 +175,18 @@ export type InstallResult = {
   readonly fills?: Fills;
 };
 
-const NO_FILLS: Fills = { command: null, prefixes: null };
+const NO_FILLS: Fills = { command: null, prefixes: null, workflows: null };
 
-const FILE_STATES = ["installed", "missing", "behind", "changed", "ahead", "not-executable", "reconfigured"];
+const FILE_STATES = [
+  "installed",
+  "missing",
+  "behind",
+  "changed",
+  "ahead",
+  "not-executable",
+  "reconfigured",
+  "unwanted",
+];
 
 function fileCounts(files: readonly FileResult[]): Readonly<Record<string, number>> {
   return Object.fromEntries(

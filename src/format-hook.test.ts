@@ -10,7 +10,7 @@ import { commit, commitPastHooks, refusalOf, removeScratchDirs, repo } from "./r
 
 const UPPERCASE = 'for f in *.txt; do tr a-z A-Z < "$f" > "$f.tmp" && mv "$f.tmp" "$f"; done\n';
 
-const FORMAT = { command: "sh fmt.sh", prefixes: null };
+const FORMAT = { command: "sh fmt.sh", prefixes: null, workflows: null };
 
 const HOOK = ".githooks/pre-commit.d/format";
 
@@ -18,7 +18,7 @@ afterEach(removeScratchDirs);
 
 function formatted(files: Record<string, string> = {}): string {
   const dir = repo({ "fmt.sh": UPPERCASE, ...files });
-  installGates(dir, ["format"], FORMAT);
+  installGates(dir, { kind: "gates", gates: ["format"] }, FORMAT);
   commitPastHooks(dir, "feat: start");
   return dir;
 }
@@ -61,7 +61,7 @@ function notOk(dir: string) {
 describe("install format", () => {
   test("refuses without --command, naming it with an example, and writes nothing", () => {
     const dir = repo({ Makefile: "format:\n\ttrue\n", "package.json": '{ "scripts": { "format": "x" } }\n' });
-    expect(resolveOf(() => installGates(dir, ["format"], NO_FILLS))).toEqual({
+    expect(resolveOf(() => installGates(dir, { kind: "gates", gates: ["format"] }, NO_FILLS))).toEqual({
       code: "fill_missing",
       resolve: 'agent-gates install format --command "<command>", such as --command "npm run lint:fix"',
     });
@@ -70,8 +70,8 @@ describe("install format", () => {
 
   test("writes the command into the hook and reports it, installing no workflow, and doctor passes", () => {
     const dir = repo();
-    const installed = installGates(dir, ["format"], FORMAT);
-    expect(installed.fills).toEqual({ command: "sh fmt.sh", prefixes: null });
+    const installed = installGates(dir, { kind: "gates", gates: ["format"] }, FORMAT);
+    expect(installed.fills).toEqual({ command: "sh fmt.sh", prefixes: null, workflows: null });
     expect(installed.files.map(({ target }) => target)).toEqual([
       HOOK,
       ".githooks/.gitattributes",
@@ -90,9 +90,15 @@ describe("install format", () => {
 
   test("reaches a working gate in one more command where the task has another name, changing no project file", () => {
     const dir = repo({ "fmt.sh": UPPERCASE, Makefile: "fmt:\n\t@sh fmt.sh\n" });
-    expect(refusalOf(() => installGates(dir, ["format"], NO_FILLS))).toBe("fill_missing");
+    expect(refusalOf(() => installGates(dir, { kind: "gates", gates: ["format"] }, NO_FILLS))).toBe(
+      "fill_missing",
+    );
     const before = git(dir, ["status", "--porcelain", "--untracked-files=all"]);
-    installGates(dir, ["format"], { command: "make fmt", prefixes: null });
+    installGates(
+      dir,
+      { kind: "gates", gates: ["format"] },
+      { command: "make fmt", prefixes: null, workflows: null },
+    );
     expect(
       git(dir, ["status", "--porcelain", "--untracked-files=all", "--", ":!.githooks", ":!.github"]),
     ).toBe(before);
@@ -105,25 +111,43 @@ describe("install format", () => {
 
   test("keeps the command a reinstall is not given, and rewrites one it is given without a backup", () => {
     const dir = repo();
-    installGates(dir, ["format"], { command: `printf '%s' "it's"`, prefixes: null });
-    expect(installGates(dir, [], NO_FILLS).fills).toEqual({ command: `printf '%s' "it's"`, prefixes: null });
-    expect(installGates(dir, [], NO_FILLS).files.every(({ state }) => state === "installed")).toBe(true);
-    const again = installGates(dir, [], { command: "cargo fmt", prefixes: null });
-    expect(again.fills).toEqual({ command: "cargo fmt", prefixes: null });
+    installGates(
+      dir,
+      { kind: "gates", gates: ["format"] },
+      { command: `printf '%s' "it's"`, prefixes: null, workflows: null },
+    );
+    expect(installGates(dir, { kind: "none" }, NO_FILLS).fills).toEqual({
+      command: `printf '%s' "it's"`,
+      prefixes: null,
+      workflows: null,
+    });
+    expect(
+      installGates(dir, { kind: "none" }, NO_FILLS).files.every(({ state }) => state === "installed"),
+    ).toBe(true);
+    const again = installGates(
+      dir,
+      { kind: "none" },
+      { command: "cargo fmt", prefixes: null, workflows: null },
+    );
+    expect(again.fills).toEqual({ command: "cargo fmt", prefixes: null, workflows: null });
     expect(again.files[0]).toEqual({ target: HOOK, state: "reconfigured" });
     expect(read(dir, HOOK)).toContain("\ncommand='cargo fmt'\n");
   });
 
   test("sets aside a hand-edited hook, reading past its command line", () => {
     const dir = repo();
-    installGates(dir, ["format"], FORMAT);
+    installGates(dir, { kind: "gates", gates: ["format"] }, FORMAT);
     writeFileSync(join(dir, HOOK), `${read(dir, HOOK)}exit 0\n`);
-    expect(installGates(dir, [], NO_FILLS).files[0]?.state).toBe("changed");
+    expect(installGates(dir, { kind: "none" }, NO_FILLS).files[0]?.state).toBe("changed");
   });
 
   test("doctor fails a command whose program is not on PATH, and a hook whose command is gone", () => {
     const dir = repo();
-    installGates(dir, ["format"], { command: "no-such-formatter --write", prefixes: null });
+    installGates(
+      dir,
+      { kind: "gates", gates: ["format"] },
+      { command: "no-such-formatter --write", prefixes: null, workflows: null },
+    );
     expect(doctorCheck(dir, "format command")).toEqual({
       name: "format command",
       state: "fail",
@@ -203,7 +227,11 @@ describe("the format hook", () => {
 
   test("refuses when the task fails, showing its output", () => {
     const dir = repo({ "broken.sh": "echo broken >&2\nexit 3\n" });
-    installGates(dir, ["format"], { command: "sh broken.sh", prefixes: null });
+    installGates(
+      dir,
+      { kind: "gates", gates: ["format"] },
+      { command: "sh broken.sh", prefixes: null, workflows: null },
+    );
     commitPastHooks(dir, "feat: start");
     writeFileSync(join(dir, "a.txt"), "a\n");
     expect(commit(dir, { add: ["a.txt"] })).toEqual({

@@ -6,9 +6,9 @@ Each command prints [TOON](https://toonformat.dev): the command, `ok`, then its 
 
 | Command | Does |
 | --- | --- |
-| `agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>] [--full]` | Install the named gate, update the installed ones, and report each file's state before acting, the format command and the commit prefixes |
+| `agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>] [--workflows <on\|off>] [--full]` | Install the named gate, update the installed ones, and report each file's state before acting, the format command, the commit prefixes and the workflows choice |
 | `agent-gates --version` | Print the version alone on one line, the one output that is not TOON |
-| `agent-gates doctor [--full]` | Check each gate file, `core.hooksPath`, the `prepare` script and the format command, and check the commit prefixes; report each tracked language without its no-comments gate, each installed language with no files left to read, each of the project's own steps in `.githooks/pre-commit.d` or `pre-push.d` that no workflow runs, the comment count, the count of secrets `.no-secrets-allow` does not name and the count of unpinned actions; exit 1 on a failure |
+| `agent-gates doctor [--full]` | Check each gate file, `core.hooksPath`, the `prepare` script and the format command, and check the commit prefixes and the workflows choice; report each tracked language without its no-comments gate, each installed language with no files left to read, each of the project's own steps in `.githooks/pre-commit.d` or `pre-push.d` that no workflow runs while workflows are on, the comment count, the count of secrets `.no-secrets-allow` does not name and the count of unpinned actions; exit 1 on a failure |
 
 ## Gate file states
 
@@ -20,11 +20,12 @@ Each command prints [TOON](https://toonformat.dev): the command, `ok`, then its 
 | `changed` | matches no version | sets it aside as `<file>.agent-gates-backup`, then writes it |
 | `ahead` | written by a newer agent-gates | leaves it |
 | `not-executable` | a hook git would skip | writes it |
-| `reconfigured` | the current version, holding another command or list than `--command` or `--prefixes` gave | writes it |
+| `reconfigured` | the current version, holding another value than `--command`, `--prefixes` or `--workflows` gave | writes it |
+| `unwanted` | a gate's workflow, carrying its marker, while the project's workflows are off | removes it, setting it aside first when it matches no version |
 | `occupied` | a hook without an `agent-gate` marker | refuses, writing nothing |
 
 With a `no-comments` gate installed, `install` also reports `.no-comments-keep`: `installed` when it holds every line install writes, `missing` when install creates it, and `behind` when install appends the lines it lacks, leaving the project's own lines as they are ([kept comments](no-comments.md#kept-comments)).
 
 `install` also refuses when `core.hooksPath` or `prepare` already hold something else, when `package.json` does not parse, when no gate is named and none is installed, when a hook records a value of another form than its flag takes, such as a hand-edited prefix list, and, for `format`, when no command is given or installed. `commit-subject` owns `.githooks/commit-msg`.
 
-`--command` and `--prefixes` go with the gate that runs them, or, with no gate named, with that gate installed: `agent-gates install --prefixes feat,fix` rewrites the list of an installed `commit-subject`.
+`--command`, `--prefixes` and `--workflows` go with a gate that runs them, `--workflows` with any gate that has a workflow, or, with no gate named, with such a gate installed: `agent-gates install --prefixes feat,fix` rewrites the list of an installed `commit-subject`, and `agent-gates install --workflows off` installs the hooks alone ([hooks without workflows](gates.md#hooks-without-workflows)).

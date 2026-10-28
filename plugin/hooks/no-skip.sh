@@ -313,7 +313,7 @@ gates_for() {
 reason_for() {
   local root="$1" skip="$2"
   local kind="${skip%% *}" how="${skip#* }"
-  local fix="Fix what the refusing gate names instead; CI refuses what the gates refuse anyway."
+  local fix="Fix what the refusing gate names instead."
   case "$kind" in
     commit | push)
       printf '`git %s %s` skips the gates this repo runs on %s: %s. %s' "$kind" "$how" "$kind" "$(gates_for "$root" "$kind")" "$fix"

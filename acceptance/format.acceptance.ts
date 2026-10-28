@@ -65,7 +65,7 @@ test("AC-30 refuses format without --command, which then installs a working gate
     gates: ["format"],
     files: each("missing", FILES),
     prepare: "absent",
-    fills: { command: "make fmt", prefixes: null },
+    fills: { command: "make fmt", prefixes: null, workflows: null },
   });
   expect([existsSync(join(dir, ".github")), existsSync(join(dir, ".githooks/ci-setup"))]).toEqual([
     false,

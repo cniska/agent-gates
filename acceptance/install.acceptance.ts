@@ -357,8 +357,14 @@ test("AC-8 accepts the hooks path however it is spelled, and refuses another", (
           detail: "none installed, so the gate allows its default set",
           fix: null,
         },
+        {
+          name: "workflows",
+          state: "ok",
+          detail: "none installed, so each gate installs its workflow",
+          fix: null,
+        },
       ],
-      counts: { ok: 9, warn: 0, fail: 1 },
+      counts: { ok: 10, warn: 0, fail: 1 },
     },
   });
 });

@@ -1,12 +1,12 @@
 # agent-gates Specification
 
-> Gate your agents' work and save them round trips: git hooks refuse a bad commit locally and GitHub workflows refuse its subject, comments, secrets and unpinned actions again in CI, for every contributor, and an optional Claude Code plugin formats each edit and shows the agent the comments it added, right after the edit.
+> Gate your agents' work and save them round trips: git hooks refuse a bad commit locally and GitHub workflows refuse its subject, comments, secrets and unpinned actions again in CI unless the project installs the hooks alone, for every contributor, and an optional Claude Code plugin formats each edit and shows the agent the comments it added, right after the edit.
 
 This document states what must hold, not how. [`README.md`](README.md) lists every gate with a summary of what it refuses, [`docs/`](docs/) states those refusals in full, says how the gates judge and holds the commands, and [`src/README.md`](src/README.md) maps the modules that meet these requirements.
 
 ## 1. Purpose & context
 
-A coding agent excuses a workaround in a comment, writes a commit message nobody can scan, commits unformatted code that fails the project's check, pastes a key into a file, or pulls a GitHub action by a tag that can move, and a reviewer reading the diff tends to accept all of it. agent-gates installs gates that git hooks enforce on commit and push, for every developer: the commit subject, the format, no added comments, no added secrets and no unpinned action, and the hooks run the project's own check steps, which `doctor` holds CI to running. GitHub workflows enforce the commit subject, no added comments, no added secrets and no unpinned action again in CI. The format gate formats, so it runs only where code is written, on commit and after an agent's edit, and never in CI, where the project's own check refuses unformatted code. The gates are files committed with the project, so contributors and CI are gated without installing agent-gates; agent-gates installs them, brings them up to date, and judges their health. The optional `cniska-gates` Claude Code plugin optimizes the agent's loop: it formats each edit with the project's own command and shows the agent the comments the edit added, before a gate refuses the commit, denies a git command that skips the gates, and tells the agent at session start which gates the checkout installs and how each refuses.
+A coding agent excuses a workaround in a comment, writes a commit message nobody can scan, commits unformatted code that fails the project's check, pastes a key into a file, or pulls a GitHub action by a tag that can move, and a reviewer reading the diff tends to accept all of it. agent-gates installs gates that git hooks enforce on commit and push, for every developer: the commit subject, the format, no added comments, no added secrets and no unpinned action, and the hooks run the project's own check steps, which `doctor` holds CI to running. GitHub workflows enforce the commit subject, no added comments, no added secrets and no unpinned action again in CI; a project whose CI minutes are billed, such as a private repository, can install the hooks alone, since a workflow there repeats what the hooks already judged. The format gate formats, so it runs only where code is written, on commit and after an agent's edit, and never in CI, where the project's own check refuses unformatted code. The gates are files committed with the project, so contributors and CI are gated without installing agent-gates; agent-gates installs them, brings them up to date, and judges their health. The optional `cniska-gates` Claude Code plugin optimizes the agent's loop: it formats each edit with the project's own command and shows the agent the comments the edit added, before a gate refuses the commit, denies a git command that skips the gates, and tells the agent at session start which gates the checkout installs and how each refuses.
 
 **Primary user:** coding agents and their owner, installing gates into a project, reading why a commit was refused, and running the plugin in the agent's sessions. Not the audience: projects that want a configurable linter; a gate here has no options.
 
@@ -36,7 +36,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **FR-17** — A file whose marker names a later version of its part is `ahead`, and install leaves it.
 - **FR-18** — A hook holding the current bytes without its executable bit is `not-executable`, and install restores the bit without a backup.
 - **FR-19** — An executable gate file, a hook or a hook step, with no `agent-gate` marker is `occupied`, and install is refused as `hook_occupied`, writing nothing. A gate file that is not executable and has no marker is `changed`.
-- **FR-20** — Install's result leads with how many files are in each state, zeros included, then names the gates it installed, each file's path and its state before install acted, each backup install made with its file's path, the `prepare` script's state, and the format command and the commit prefixes installed, each `null` when there is none.
+- **FR-20** — Install's result leads with how many files are in each state, zeros included, then names the gates it installed, each file's path and its state before install acted, each backup install made with its file's path, the `prepare` script's state, and the format command, the commit prefixes and the workflows choice installed, each `null` when there is none.
 - **FR-21** — Install sets `core.hooksPath` to `.githooks` when it is unset, and accepts any value that resolves to `.githooks`.
 - **FR-22** — When `core.hooksPath` names another directory, install is refused as `hooks_path_occupied`, writing nothing.
 - **FR-23** — With a `package.json`, install sets its `prepare` script to one that wires `core.hooksPath` in a git checkout and does nothing outside one, keeping every other key, the keys' order and the file's indent. An earlier wiring is replaced the same way. Without a `package.json`, install writes none.
@@ -49,7 +49,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **FR-27** — `doctor` leads with how many checks are in each state of `ok`, `warn` and `fail`, zeros included, then lists each check that does not pass with its name, state, detail and fix, an empty list when every check passes. It exits 1 when a check fails and 0 otherwise.
 - **FR-28** — With no gate installed, `doctor` warns that no gate is installed, with the install usage as its fix.
 - **FR-29** — With a gate installed, `doctor` checks the installed gates, each of their files, `core.hooksPath` and the `prepare` script, in that order.
-- **FR-30** — A file passes when `installed`, warns when `behind`, `changed` or `ahead`, and fails when `missing` or `not-executable`; an `occupied` hook, and a format hook that holds no command, fail with install's refusal as their detail and fix.
+- **FR-30** — A file passes when `installed`, warns when `behind`, `changed`, `ahead` or `unwanted` (FR-151), and fails when `missing` or `not-executable`; an `occupied` hook, and a format hook that holds no command, fail with install's refusal as their detail and fix.
 - **FR-31** — An unset `core.hooksPath` fails, and one naming another directory fails with install's refusal.
 - **FR-32** — The `prepare` check passes with no `package.json` or a wired script, warns when the script is missing or an earlier wiring, and fails with install's refusal when it is occupied or the manifest does not parse.
 - **FR-33** — `doctor`, with or without a gate installed, warns in one check about each language the project tracks files of whose `no-comments` gate is not installed, and each installed language the project tracks no file of, with one fix that runs `agent-gates install no-comments` and deletes the second's adapters.
@@ -123,7 +123,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ### 2.10 Installing by language
 
-- **FR-83** — `install no-comments` installs the `no-comments-<language>` gate of each language the tracked files hold, and `no-comments-shell` and `no-comments-yaml` for the hooks and workflow it installs. With no tracked file a language's gate reads, it is refused as `no_language_tracked`, writing nothing.
+- **FR-83** — `install no-comments` installs the `no-comments-<language>` gate of each language the tracked files hold, and `no-comments-shell` and `no-comments-yaml` for the hooks and workflow it installs, or, with workflows off, `no-comments-shell` alone (FR-153). With no tracked file a language's gate reads, it is refused as `no_language_tracked`, writing nothing.
 
 ### 2.11 Format
 
@@ -159,7 +159,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ### 2.14 The project's own steps
 
-- **FR-107** — With a gate installed, `doctor` warns about each executable file in `.githooks/pre-commit.d/` or `.githooks/pre-push.d/` that is no gate file and carries no `agent-gate` marker, while no workflow in `.github/workflows/` names its path, so CI never runs it; once a workflow names each, the check passes, and with no such file it is not reported.
+- **FR-107** — With a gate installed and workflows on (FR-150), `doctor` warns about each executable file in `.githooks/pre-commit.d/` or `.githooks/pre-push.d/` that is no gate file and carries no `agent-gate` marker, while no workflow in `.github/workflows/` names its path, so CI never runs it; once a workflow names each, the check passes, and with no such file it is not reported.
 
 ### 2.15 Judging a push before it leaves
 
@@ -228,7 +228,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ### 2.24 No comments: reading YAML
 
-- **FR-146** — `.yml` and `.yaml` files, GitHub workflows included, are YAML, read with a YAML 1.2 parser: a comment is what YAML 1.2 calls one, a `#` at a line's start or after whitespace outside a quoted scalar and a block scalar's body, the comments the parser's syntax tree holds. A file the parser reports an error in, a duplicate key included, is refused at the error's line, which can be the line after the construct, with the parser's reason (FR-59). Every gate but `format` installs a workflow, so `doctor` warns that `no-comments-yaml` is missing (FR-33) in each gated project that does not install it.
+- **FR-146** — `.yml` and `.yaml` files, GitHub workflows included, are YAML, read with a YAML 1.2 parser: a comment is what YAML 1.2 calls one, a `#` at a line's start or after whitespace outside a quoted scalar and a block scalar's body, the comments the parser's syntax tree holds. A file the parser reports an error in, a duplicate key included, is refused at the error's line, which can be the line after the construct, with the parser's reason (FR-59). Every gate but `format` installs a workflow while workflows are on (FR-150), so `doctor` warns that `no-comments-yaml` is missing (FR-33) in each gated project that does not install it.
 
 ### 2.25 No comments: reading Swift
 
@@ -240,7 +240,14 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ### 2.27 The values the hooks record
 
-- **FR-149** — `install` and `doctor` read each value install writes into a hook, the commit prefixes among them, against the form its flag takes. A recorded value of another form is refused as `fill_unreadable`, naming the file and the value, and install writes nothing; `doctor` fails that file with the refusal and reports no check of the value. Install given the flag rewrites it.
+- **FR-149** — `install` and `doctor` read each value install writes into a gate file, the commit prefixes and the workflows choice among them, against the form its flag takes. A recorded value of another form is refused as `fill_unreadable`, naming the file and the value, and install writes nothing; `doctor` fails that file with the refusal and reports no check of the value. Install given the flag rewrites it.
+
+### 2.28 Hooks without workflows
+
+- **FR-150** — `install <gate> --workflows off`, for a gate that installs a workflow, records the choice in `.githooks/judge-push` as `workflows='off'` and installs every file of each installed gate but its workflow in `.github/workflows/`. The choice holds for every gate of the project, and a reinstall without `--workflows` keeps it. `--workflows on` records `workflows='on'`, and install writes each installed gate's workflow again; with no choice recorded, workflows are on. Any value but `on` or `off` is the usage error `fill_malformed`, and `--workflows` is placed as FR-87 says, with a gate that installs a workflow running it.
+- **FR-151** — With workflows off, a gate's workflow file that carries an `agent-gate` marker is `unwanted`, and install removes it; one matching no release of that workflow is first copied aside as FR-16 says, and listed with its backup. A file at that path with no marker is the project's own, and install neither lists nor touches it.
+- **FR-152** — With workflows off, `doctor` checks no gate's workflow file, so a missing one is no failure; it warns about an `unwanted` one with install as its fix, and does not report the project's own steps (FR-107). Its workflows check passes naming `on` or `off`, or, with none recorded, saying each gate installs its workflow.
+- **FR-153** — With workflows off, `install no-comments` installs `no-comments-shell` for the hooks, and `no-comments-yaml` only when the tracked files hold YAML.
 
 ## 3. Non-functional requirements
 
@@ -249,7 +256,7 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 
 ## 4. Out of scope
 
-- Configuring a gate: a gate has no options beyond the format command (FR-85) and the commit prefixes (FR-114), and its state is the installed files and the project's own `.no-comments-keep` (FR-68); configurable rules belong to the project's own linter.
+- Configuring a gate: a gate has no options beyond the format command (FR-85), the commit prefixes (FR-114) and whether the gates install their workflows (FR-150), and its state is the installed files and the project's own `.no-comments-keep` (FR-68); configurable rules belong to the project's own linter.
 - Finding a project's format command, and what its formatting is: the project's formatter owns that, and install is given its command (FR-85).
 - Driving a project's comment count to zero; the project sweeps with `scan.cjs --all`, and the gates stop the count growing (FR-34).
 - Blocking an edit, an installed gate file's included: the plugin formats the edit and reports the comments it added (FR-103, FR-119), and the gates refuse at commit.
@@ -334,7 +341,9 @@ A coding agent excuses a workaround in a comment, writes a commit message nobody
 - **AC-65** — Push a commit adding an unpinned action from a clone: refused with the reply, the remote unchanged; the workflow's step over the same range exits 1, annotating the finding at its file and line on stdout with the reply on stderr; a pinned commit pushes. (FR-110, FR-111, FR-139, FR-143)
 - **AC-66** — `scan.cjs --all` over a tracked unpinned action: the reply says the tracked files hold it. `scan.cjs --file <path>` exits 2 with the usage; the hook and `judge-push` without `node` on `PATH` exit 3, naming the fix. (FR-139, FR-144)
 - **AC-67** — With `pinned-actions` installed over a tracked unpinned action, `doctor` warns with the count and the sweep as its fix; pinned, it passes; with the installed scanner edited, it warns that nothing was counted. (FR-145)
-- **AC-68** — Run `install commit-subject` over a hand-edited `commits.yml`, then `install --full`, then unset `core.hooksPath` and run `doctor` and `doctor --full`: the first install leads with each file state's count, zeros included, lists each file with its state and the one backup apart, and prints no `null` in a list; `--full` lists every file with its backup, `null` where there is none, and no separate backups; `doctor` leads with 9 `ok`, 0 `warn` and 1 `fail`, lists only the failing check with its fix, printing no `null`, and lists no check once `core.hooksPath` is set again; `doctor --full` lists every check with its fix, `null` where it passes. (FR-2, FR-20, FR-27, FR-148)
+- **AC-68** — Run `install commit-subject` over a hand-edited `commits.yml`, then `install --full`, then unset `core.hooksPath` and run `doctor` and `doctor --full`: the first install leads with each file state's count, zeros included, lists each file with its state and the one backup apart, and prints no `null` in a list; `--full` lists every file with its backup, `null` where there is none, and no separate backups; `doctor` leads with 10 `ok`, 0 `warn` and 1 `fail`, lists only the failing check with its fix, printing no `null`, and lists no check once `core.hooksPath` is set again; `doctor --full` lists every check with its fix, `null` where it passes. (FR-2, FR-20, FR-27, FR-148)
+- **AC-69** — `install commit-subject --workflows off` where the project tracks TypeScript: every file but `commits.yml` written, no workflow, `judge-push` recording `off`, and `doctor` exiting 0 with no workflow check and a workflows check naming `off`; `install` alone, then `install no-secrets` and `install no-comments`: every file `installed`, still no workflow, and no `no-comments-yaml`. With a project's own executable pre-push step, `doctor` exits 0 and reports no step check. Then `install --workflows on`: `judge-push` `reconfigured`, recording `on`, and the commits, no-secrets and no-comments workflows `missing` and written. (FR-20, FR-87, FR-149, FR-150, FR-152, FR-153)
+- **AC-70** — Over `commit-subject` and `no-secrets` installed with their workflows, the no-secrets workflow hand-edited, `install --workflows off`: both workflows `unwanted` and removed, the edited one copied aside first and listed with its backup. A released `commits.yml` written back: `doctor` warns it is `unwanted` with install as its fix, and `install` removes it. The project's own `commits.yml` with no marker: install neither lists nor touches it, and `doctor` does not report it. `--workflows maybe` or `OFF`: `fill_malformed`; `--workflows` with only `format` named, with no gate named or installed, twice, or with no value: `flag_misplaced`; each writing nothing. (FR-16, FR-30, FR-87, FR-150, FR-151, FR-152)
 
 ## 6. Deliverables
 

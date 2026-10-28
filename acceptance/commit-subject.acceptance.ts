@@ -274,7 +274,7 @@ test("AC-43 keeps the prefixes a reinstall is not given, rewrites a new list, an
     gates: ["commit-subject"],
     files: each("installed", COMMIT_SUBJECT_FILES),
     prepare: "absent",
-    fills: { command: null, prefixes: "feat,fix" },
+    fills: { command: null, prefixes: "feat,fix", workflows: null },
   });
   expect(installed(dir, ["commit-subject", "--prefixes", "feat,spec"])).toMatchObject({
     files: [

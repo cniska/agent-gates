@@ -22,7 +22,7 @@ When a session starts, the plugin tells the agent which gates the checkout insta
 
 Before each `Bash` command, the plugin judges each git command against the repo that command targets, after any `cd` before it and its own `git -C`. In a repo whose `.githooks` hooks carry agent-gates' markers, it denies a git command that skips the gates: `git commit` or `git push` with `--no-verify`, `git commit` with `-n`, and `core.hooksPath` set by `-c` or `git config`, or unset, to anything but `.githooks`.
 
-- The denial names the gates the command skips, so the agent fixes what the refusing gate names instead. CI refuses what they refuse anyway, so the block saves the round trip.
+- The denial names the gates the command skips, so the agent fixes what the refusing gate names instead.
 - A command into a repo without the gates, such as a fresh scratch repo, passes.
 - Text inside a quoted string, such as a commit message, or the body of a heredoc `cat`, `tee` or `git` reads with nothing piped after it, is not read as a command.
 - Edits to installed gate files are never blocked, since install writes them.

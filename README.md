@@ -1,6 +1,6 @@
 # agent-gates
 
-Gate your agents' work and save them round trips. A coding agent excuses a workaround in a comment, writes a commit message nobody can scan, commits unformatted code, pastes a key into a file, or pulls a GitHub action by a tag that can move, and a reviewer reading the diff tends to accept it. agent-gates installs git hooks that refuse such a commit locally, for every contributor, and GitHub workflows that refuse a bad subject, an added comment, an added secret or an unpinned action again in CI. It judges the commit only, and leaves how an agent works, and what it records, to other tools.
+Gate your agents' work and save them round trips. A coding agent excuses a workaround in a comment, writes a commit message nobody can scan, commits unformatted code, pastes a key into a file, or pulls a GitHub action by a tag that can move, and a reviewer reading the diff tends to accept it. agent-gates installs git hooks that refuse such a commit locally, for every contributor, and GitHub workflows that refuse a bad subject, an added comment, an added secret or an unpinned action again in CI, or the hooks alone where CI minutes cost money. It judges the commit only, and leaves how an agent works, and what it records, to other tools.
 
 - `agent-gates install` writes the gates into the project, which commits them, so contributors and CI are gated without installing agent-gates.
 - `agent-gates doctor` judges their health.
@@ -51,6 +51,8 @@ agent-gates doctor
 
 Each `install` takes one gate and also updates every gate already installed. `no-comments` installs the gate for each language the project's tracked files hold. `format` needs the project's own format command.
 
+In a private repository, where every GitHub Actions minute is billed and a workflow only repeats what the hooks already judged before the push, install the hooks alone by adding `--workflows off` to any gate that has a workflow, such as `agent-gates install commit-subject --workflows off`. The project records the choice, later installs keep it and remove the gates' workflows already there, and `agent-gates install --workflows on` brings them back. A public repository keeps its workflows: its minutes are free, and they also judge contributors who never installed the hooks.
+
 Then, once per machine, install the Claude Code plugin:
 
 ```bash
@@ -77,7 +79,7 @@ The plugin acts only in a checkout with the gates installed.
 | `no-secrets` | An added secret: a key, token or private key one of gitleaks' rules matches, or a literal value assigned to a `*_TOKEN` or `*_SECRET` name |
 | `pinned-actions` | A workflow or `action.yml` whose `uses:` names an action, reusable workflow or `docker://` image by anything but a full commit SHA or image digest; a `./` or `$/` path to the repository's own action passes |
 
-Each gate refuses on commit, and `commit-subject`, `no-comments`, `no-secrets` and `pinned-actions` also on push and again in CI. `format` never runs in CI: it formats, so it runs where code is written, and the project's own check refuses unformatted code there. Each `no-comments` gate also refuses every added doc comment, suppression, formatter hint, tool setting and test expectation; only a first-line interpreter line and the comments a project lists in [`.no-comments-keep`](docs/no-comments.md#kept-comments) are kept.
+Each gate refuses on commit, and `commit-subject`, `no-comments`, `no-secrets` and `pinned-actions` also on push and, unless the project turns its workflows off, again in CI. `format` never runs in CI: it formats, so it runs where code is written, and the project's own check refuses unformatted code there. Each `no-comments` gate also refuses every added doc comment, suppression, formatter hint, tool setting and test expectation; only a first-line interpreter line and the comments a project lists in [`.no-comments-keep`](docs/no-comments.md#kept-comments) are kept.
 
 ## Claude Code plugin
 

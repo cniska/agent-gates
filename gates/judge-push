@@ -1,6 +1,8 @@
 #!/bin/sh
-# agent-gate:githooks:3
+# agent-gate:githooks:4
 set -eu
+
+workflows=''
 
 hooks=$(dirname "$0")
 message=$(mktemp)

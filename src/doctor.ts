@@ -14,6 +14,7 @@ import {
   resolvedFills,
   type StepsState,
   stepsState,
+  workflowsChosen,
 } from "./gates";
 import {
   ADAPTER_FILES,
@@ -86,6 +87,13 @@ function fileHealth(planned: PlannedFile): Health {
     case "reconfigured":
       invariant(false, "doctor gives no command, so no file is reconfigured");
       break;
+    case "unwanted":
+      return {
+        name,
+        state: "warn",
+        detail: "a gate's workflow while the project's workflows are off, so CI still runs it",
+        fix: REINSTALL,
+      };
     case "refused":
       return refusedHealth(name, planned.refusal);
     default:
@@ -360,7 +368,7 @@ function judged(root: string): Health[] {
     hooksPathHealth(hooksPathState(root)),
     prepareHealth(prepareState(root)),
     ...fillsHealth(planned, resolved),
-    ...stepsHealth(stepsState(root, planned)),
+    ...(workflowsChosen(resolved) === "on" ? stepsHealth(stepsState(root, planned)) : []),
     ...languagesHealth(root, languages),
     ...backlogHealth(root, languages, planned),
     ...secretsHealth(root, gates, planned),

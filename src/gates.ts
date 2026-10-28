@@ -6,6 +6,7 @@ import {
   readdirSync,
   readFileSync,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -37,7 +38,9 @@ import {
   PRE_COMMIT_STEPS,
   PRE_PUSH_STEPS,
   STEP_DIRS,
+  WORKFLOWS,
   WORKFLOWS_DIR,
+  type Workflows,
   type WritableState,
 } from "./gates-contract";
 import { filledIn, fillTemplateOf, withFill } from "./gates-fill";
@@ -127,9 +130,14 @@ export type ResolvedFill =
 
 export type ResolvedFills = Readonly<Record<Fill, ResolvedFill>>;
 
+type UnwantedFile = PlannedAt & { readonly state: "unwanted"; readonly released: boolean };
+
 export type PlannedFile =
   | WritableFile
+  | UnwantedFile
   | (PlannedAt & { readonly state: "refused"; readonly refusal: Refusal });
+
+type CountedState = WritableState | "unwanted";
 
 export type StepsState = { readonly steps: readonly string[]; readonly unchecked: readonly string[] };
 
@@ -140,9 +148,10 @@ export type HooksPathState =
 
 export type InstalledFile =
   | { readonly target: string; readonly state: Exclude<WritableState, "changed"> }
-  | { readonly target: string; readonly state: "changed"; readonly backup: string };
+  | { readonly target: string; readonly state: "changed"; readonly backup: string }
+  | { readonly target: string; readonly state: "unwanted"; readonly backup: string | null };
 
-type FileCounts = { readonly [State in WritableState]: number };
+type FileCounts = { readonly [State in CountedState]: number };
 
 type GatesInstalled = {
   readonly counts: FileCounts;
@@ -210,6 +219,17 @@ export function resolvedFills(root: string, given: Fills): ResolvedFills {
   });
 }
 
+function workflowsOf(value: string): Workflows {
+  const choice = WORKFLOWS.find((known) => known === value);
+  invariant(choice !== undefined, `the workflows fill holds ${value}, which its pattern refuses`);
+  return choice;
+}
+
+export function workflowsChosen(resolved: ResolvedFills): Workflows {
+  const fill = resolved.workflows;
+  return fill.kind === "set" ? workflowsOf(fill.value) : "on";
+}
+
 function fillValues(resolved: ResolvedFills): Fills {
   return eachFill((fill) => {
     const at = resolved[fill];
@@ -247,13 +267,29 @@ function plannedFile(root: string, file: GateFile, resolved: ResolvedFills): Pla
   return { ...at, state, source: render.source };
 }
 
+function isWorkflow(file: GateFile): boolean {
+  return file.target.startsWith(`${WORKFLOWS_DIR}/`);
+}
+
+function unwantedFile(root: string, file: GateFile): UnwantedFile[] {
+  const path = join(root, file.target);
+  const found = foundAt(path);
+  if (found === null || markerOf(found.text) === null) return [];
+  const hash = sha256(found.text);
+  const released = file.versions.some((version) => version.sha256 === hash);
+  return [{ target: file.target, file, path, state: "unwanted", released }];
+}
+
 export function plannedFiles(
   root: string,
   gates: readonly GateName[],
   resolved: ResolvedFills,
 ): PlannedFile[] {
   const files = new Map(gates.flatMap((gate) => GATES[gate]).map((file) => [file.target, file]));
-  return [...files.values()].map((file) => plannedFile(root, file, resolved));
+  const off = workflowsChosen(resolved) === "off";
+  return [...files.values()].flatMap((file) =>
+    off && isWorkflow(file) ? unwantedFile(root, file) : [plannedFile(root, file, resolved)],
+  );
 }
 
 export function installedGates(root: string): GateName[] {
@@ -338,8 +374,19 @@ function applied(root: string, planned: WritableFile): InstalledFile {
   }
 }
 
+function removed(root: string, { target, path, released }: UnwantedFile): InstalledFile {
+  const backup = released
+    ? null
+    : relative(
+        root,
+        writing(path, () => copyAside(path)),
+      );
+  writing(path, () => unlinkSync(path));
+  return { target, state: "unwanted", backup };
+}
+
 function fileCounts(files: readonly InstalledFile[]): FileCounts {
-  const count = (state: WritableState) => files.filter((file) => file.state === state).length;
+  const count = (state: CountedState) => files.filter((file) => file.state === state).length;
   return {
     installed: count("installed"),
     missing: count("missing"),
@@ -348,6 +395,7 @@ function fileCounts(files: readonly InstalledFile[]): FileCounts {
     ahead: count("ahead"),
     "not-executable": count("not-executable"),
     reconfigured: count("reconfigured"),
+    unwanted: count("unwanted"),
   };
 }
 
@@ -367,23 +415,45 @@ function keepsComments(gates: readonly GateName[]): boolean {
   return LANGUAGE_NAMES.some((language) => gates.includes(noCommentsGate(language)));
 }
 
-const GATE_FILE_LANGUAGES: readonly Language[] = ["shell", "yaml"];
+const HOOK_LANGUAGES: readonly Language[] = ["shell"];
 
-export function trackedLanguageGates(root: string): NoCommentsGate[] {
+const WORKFLOW_LANGUAGES: readonly Language[] = ["yaml"];
+
+function trackedLanguageGates(root: string, workflows: Workflows): NoCommentsGate[] {
   const tracked = trackedLanguages(trackedPerLanguage(root));
   if (tracked.length === 0) throw gatesRefusal("no_language_tracked", { root });
-  return LANGUAGE_NAMES.filter(
-    (language) => GATE_FILE_LANGUAGES.includes(language) || tracked.includes(language),
-  ).map(noCommentsGate);
+  const gateFiles = workflows === "on" ? [...HOOK_LANGUAGES, ...WORKFLOW_LANGUAGES] : HOOK_LANGUAGES;
+  return LANGUAGE_NAMES.filter((language) => gateFiles.includes(language) || tracked.includes(language)).map(
+    noCommentsGate,
+  );
 }
 
-export function installGates(root: string, named: readonly GateName[], given: Fills): GatesInstalled {
+export type Named =
+  | { readonly kind: "none" }
+  | { readonly kind: "gates"; readonly gates: readonly GateName[] }
+  | { readonly kind: "each-tracked-language" };
+
+function namedGates(root: string, named: Named, workflows: Workflows): readonly GateName[] {
+  switch (named.kind) {
+    case "none":
+      return [];
+    case "gates":
+      return named.gates;
+    case "each-tracked-language":
+      return trackedLanguageGates(root, workflows);
+    default:
+      return unreachable(named);
+  }
+}
+
+export function installGates(root: string, chosen: Named, given: Fills): GatesInstalled {
+  const resolved = resolvedFills(root, given);
+  const named = namedGates(root, chosen, workflowsChosen(resolved));
   const installed = installedGates(root);
   const gates = GATE_NAMES.filter((gate) => named.includes(gate) || installed.includes(gate));
   if (gates.length === 0) throw gatesRefusal("no_gates_chosen", { root });
   const hooksPath = hooksPathState(root);
   if (hooksPath.kind === "occupied") throw hooksPath.refusal;
-  const resolved = resolvedFills(root, given);
   const toWrite = plannedFiles(root, gates, resolved).map((planned) => {
     if (planned.state === "refused") throw planned.refusal;
     return planned;
@@ -391,7 +461,9 @@ export function installGates(root: string, named: readonly GateName[], given: Fi
   const prepare = prepareState(root);
   if (prepare.kind === "occupied" || prepare.kind === "unparseable") throw prepare.refusal;
   const keep = keepsComments(gates) ? keepPlan(root) : null;
-  const files = toWrite.map((planned) => applied(root, planned));
+  const files = toWrite.map((planned) =>
+    planned.state === "unwanted" ? removed(root, planned) : applied(root, planned),
+  );
   if (keep !== null) {
     if (keep.state !== "installed") {
       const { path, text } = keep;

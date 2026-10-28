@@ -211,7 +211,7 @@ describe("the doctor", () => {
     execFileSync("git", ["-C", dir, "add", "-A"]);
     const check = () => gatesDoctor(dir).checks.find(({ name }) => name === "pinned-actions backlog");
     expect(check()).toBeUndefined();
-    installGates(dir, ["pinned-actions"], NO_FILLS);
+    installGates(dir, { kind: "gates", gates: ["pinned-actions"] }, NO_FILLS);
     expect(check()).toEqual({
       name: "pinned-actions backlog",
       state: "warn",
