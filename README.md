@@ -51,7 +51,7 @@ agent-gates doctor
 
 Each `install` takes one gate and also updates every gate already installed. `no-comments` installs the gate for each language the project's tracked files hold. `format` needs the project's own format command.
 
-In a private repository, where every GitHub Actions minute is billed and a workflow only repeats what the hooks already judged before the push, install the hooks alone by adding `--workflows off` to any gate that has a workflow, such as `agent-gates install commit-subject --workflows off`. The project records the choice, later installs keep it and remove the gates' workflows already there, and `agent-gates install --workflows on` brings them back. A public repository keeps its workflows: its minutes are free, and they also judge contributors who never installed the hooks.
+In a private repository, where every GitHub Actions minute is billed and a workflow only repeats what the hooks already judged before the push, install installs the hooks alone: with no choice made, it asks GitHub through [`gh`](https://cli.github.com) whether `origin` is private, and says which it found. A public repository keeps its workflows: its minutes are free, and they also judge contributors who never installed the hooks. When install cannot tell, it keeps the workflows. Add `--workflows off` or `--workflows on` to any gate that has a workflow to choose yourself, such as `agent-gates install commit-subject --workflows off`. The project records the choice, later installs keep it and remove the gates' workflows already there, and `agent-gates install --workflows on` brings them back ([hooks without workflows](docs/gates.md#hooks-without-workflows)).
 
 Then, once per machine, install the Claude Code plugin:
 

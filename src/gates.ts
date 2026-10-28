@@ -32,6 +32,7 @@ import {
   fillTarget,
   GATES,
   type GateFile,
+  gatesFilling,
   HOOKS_DIR,
   INSTALL_GATES,
   nameTheFill,
@@ -46,6 +47,7 @@ import {
 import { filledIn, fillTemplateOf, withFill } from "./gates-fill";
 import { gateSources } from "./gates-sources" with { type: "macro" };
 import { configValue, setConfig } from "./git";
+import type { Visibility } from "./github";
 import { KEEP_FILE, withInstallLines } from "./no-comments-keep";
 import { LANGUAGE_NAMES, type Language } from "./no-comments-languages";
 import { trackedLanguages, trackedPerLanguage } from "./no-comments-tracked";
@@ -159,6 +161,7 @@ type GatesInstalled = {
   readonly files: readonly InstalledFile[];
   readonly prepare: Exclude<PrepareState["kind"], "occupied" | "unparseable">;
   readonly fills: Fills;
+  readonly workflows: WorkflowsTaken | null;
 };
 
 const EXECUTE_BITS = 0o111;
@@ -446,14 +449,72 @@ function namedGates(root: string, named: Named, workflows: Workflows): readonly 
   }
 }
 
-export function installGates(root: string, chosen: Named, given: Fills): GatesInstalled {
-  const resolved = resolvedFills(root, given);
-  const named = namedGates(root, chosen, workflowsChosen(resolved));
+type WorkflowsTaken =
+  | { readonly choice: Workflows; readonly reason: "flag" | "recorded"; readonly detail: null }
+  | { readonly choice: "off"; readonly reason: "private"; readonly detail: null }
+  | { readonly choice: "on"; readonly reason: "public"; readonly detail: null }
+  | { readonly choice: "on"; readonly reason: "unreadable"; readonly detail: string };
+
+const WORKFLOWS_OFF: ResolvedFill = { kind: "set", value: "off" };
+
+function gatesOf(
+  root: string,
+  chosen: Named,
+  installed: readonly GateName[],
+  workflows: Workflows,
+): GateName[] {
+  const named = namedGates(root, chosen, workflows);
+  return GATE_NAMES.filter((gate) => named.includes(gate) || installed.includes(gate));
+}
+
+function fillsWorkflows(gate: GateName): boolean {
+  return gatesFilling("workflows").includes(gate);
+}
+
+function visibilityTaken(visibility: Visibility): WorkflowsTaken {
+  switch (visibility.kind) {
+    case "private":
+      return { choice: "off", reason: "private", detail: null };
+    case "public":
+      return { choice: "on", reason: "public", detail: null };
+    case "unreadable":
+      return { choice: "on", reason: "unreadable", detail: visibility.detail };
+    default:
+      return unreachable(visibility);
+  }
+}
+
+function workflowsTaken(given: Fills, recorded: ResolvedFills, visibility: () => Visibility): WorkflowsTaken {
+  if (given.workflows !== null) return { choice: workflowsOf(given.workflows), reason: "flag", detail: null };
+  const fill = recorded.workflows;
+  switch (fill.kind) {
+    case "set":
+      return { choice: workflowsOf(fill.value), reason: "recorded", detail: null };
+    case "unreadable":
+      throw fill.refusal;
+    case "unset":
+      return visibilityTaken(visibility());
+    default:
+      return unreachable(fill);
+  }
+}
+
+export function installGates(
+  root: string,
+  chosen: Named,
+  given: Fills,
+  visibility: () => Visibility,
+): GatesInstalled {
+  const recorded = resolvedFills(root, given);
   const installed = installedGates(root);
-  const gates = GATE_NAMES.filter((gate) => named.includes(gate) || installed.includes(gate));
-  if (gates.length === 0) throw gatesRefusal("no_gates_chosen", { root });
+  const named = gatesOf(root, chosen, installed, workflowsChosen(recorded));
+  if (named.length === 0) throw gatesRefusal("no_gates_chosen", { root });
   const hooksPath = hooksPathState(root);
   if (hooksPath.kind === "occupied") throw hooksPath.refusal;
+  const workflows = named.some(fillsWorkflows) ? workflowsTaken(given, recorded, visibility) : null;
+  const choice = workflows?.choice ?? workflowsChosen(recorded);
+  const resolved = choice === "off" ? { ...recorded, workflows: WORKFLOWS_OFF } : recorded;
+  const gates = gatesOf(root, chosen, installed, choice);
   const toWrite = plannedFiles(root, gates, resolved).map((planned) => {
     if (planned.state === "refused") throw planned.refusal;
     return planned;
@@ -474,5 +535,6 @@ export function installGates(root: string, chosen: Named, given: Fills): GatesIn
   if (prepare.kind === "missing" || prepare.kind === "behind")
     writing(prepare.path, () => writeFileSync(prepare.path, prepare.wired));
   if (hooksPath.kind === "unset") setConfig(root, "core.hooksPath", HOOKS_DIR);
-  return { counts: fileCounts(files), gates, files, prepare: prepare.kind, fills: fillValues(resolved) };
+  const fills = fillValues(resolved);
+  return { counts: fileCounts(files), gates, files, prepare: prepare.kind, fills, workflows };
 }

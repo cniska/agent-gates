@@ -50,6 +50,20 @@ const scratchDirs: string[] = [];
 
 let home: string | null = null;
 
+const GH_STUB = [
+  "#!/bin/sh",
+  'if [ "$#" -ne 7 ] || [ "$1 $2 $4 $5 $6 $7" != "repo view --json isPrivate --jq .isPrivate" ]; then',
+  '  echo "unexpected gh call: $*" >&2',
+  "  exit 2",
+  "fi",
+  'case "$3" in',
+  "  https://github.com/acme/private.git) echo true ;;",
+  "  https://github.com/acme/public.git) echo false ;;",
+  '  *) echo "HTTP 404: Not Found (https://api.github.com/graphql)" >&2; exit 1 ;;',
+  "esac",
+  "",
+].join("\n");
+
 export function scratchDir(): string {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "agent-gates-acceptance-")));
   scratchDirs.push(dir);
@@ -65,13 +79,16 @@ function gitHome(): string {
   if (home !== null) return home;
   home = scratchDir();
   writeFileSync(join(home, ".gitconfig"), IDENTITY);
+  mkdirSync(join(home, "bin"));
+  writeFileSync(join(home, "bin", "gh"), GH_STUB);
+  chmodSync(join(home, "bin", "gh"), 0o755);
   return home;
 }
 
 function hermetic(env: Env): Env {
   const at = gitHome();
   return {
-    PATH: process.env.PATH ?? "",
+    PATH: `${join(at, "bin")}:${process.env.PATH ?? ""}`,
     HOME: at,
     GIT_CONFIG_GLOBAL: join(at, ".gitconfig"),
     GIT_CONFIG_NOSYSTEM: "1",
@@ -173,9 +190,22 @@ export type InstallResult = {
   readonly files: readonly FileResult[];
   readonly prepare: string;
   readonly fills?: Fills;
+  readonly workflows?: WorkflowsTaken | null;
+};
+
+export type WorkflowsTaken = {
+  readonly choice: string;
+  readonly reason: string;
+  readonly detail: string | null;
 };
 
 const NO_FILLS: Fills = { command: null, prefixes: null, workflows: null };
+
+export const NO_ORIGIN: WorkflowsTaken = {
+  choice: "on",
+  reason: "unreadable",
+  detail: "the checkout has no origin remote",
+};
 
 const FILE_STATES = [
   "installed",
@@ -221,7 +251,12 @@ export function installed(dir: string, args: readonly string[]): unknown {
 }
 
 export function installs(dir: string, args: readonly string[], result: InstallResult): void {
-  expect(installed(dir, args)).toEqual({ counts: fileCounts(result.files), fills: NO_FILLS, ...result });
+  expect(installed(dir, args)).toEqual({
+    counts: fileCounts(result.files),
+    fills: NO_FILLS,
+    workflows: NO_ORIGIN,
+    ...result,
+  });
 }
 
 export function refuses(dir: string, args: readonly string[], error: object): void {

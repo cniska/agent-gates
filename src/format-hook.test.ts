@@ -6,7 +6,14 @@ import { CodedError } from "./coded-error";
 import { gatesDoctor } from "./doctor";
 import { installGates } from "./gates";
 import { NO_FILLS } from "./gates-contract";
-import { commit, commitPastHooks, refusalOf, removeScratchDirs, repo } from "./repo.test-support";
+import {
+  commit,
+  commitPastHooks,
+  NOT_ON_GITHUB,
+  refusalOf,
+  removeScratchDirs,
+  repo,
+} from "./repo.test-support";
 
 const UPPERCASE = 'for f in *.txt; do tr a-z A-Z < "$f" > "$f.tmp" && mv "$f.tmp" "$f"; done\n';
 
@@ -18,7 +25,7 @@ afterEach(removeScratchDirs);
 
 function formatted(files: Record<string, string> = {}): string {
   const dir = repo({ "fmt.sh": UPPERCASE, ...files });
-  installGates(dir, { kind: "gates", gates: ["format"] }, FORMAT);
+  installGates(dir, { kind: "gates", gates: ["format"] }, FORMAT, NOT_ON_GITHUB);
   commitPastHooks(dir, "feat: start");
   return dir;
 }
@@ -61,7 +68,9 @@ function notOk(dir: string) {
 describe("install format", () => {
   test("refuses without --command, naming it with an example, and writes nothing", () => {
     const dir = repo({ Makefile: "format:\n\ttrue\n", "package.json": '{ "scripts": { "format": "x" } }\n' });
-    expect(resolveOf(() => installGates(dir, { kind: "gates", gates: ["format"] }, NO_FILLS))).toEqual({
+    expect(
+      resolveOf(() => installGates(dir, { kind: "gates", gates: ["format"] }, NO_FILLS, NOT_ON_GITHUB)),
+    ).toEqual({
       code: "fill_missing",
       resolve: 'agent-gates install format --command "<command>", such as --command "npm run lint:fix"',
     });
@@ -70,7 +79,7 @@ describe("install format", () => {
 
   test("writes the command into the hook and reports it, installing no workflow, and doctor passes", () => {
     const dir = repo();
-    const installed = installGates(dir, { kind: "gates", gates: ["format"] }, FORMAT);
+    const installed = installGates(dir, { kind: "gates", gates: ["format"] }, FORMAT, NOT_ON_GITHUB);
     expect(installed.fills).toEqual({ command: "sh fmt.sh", prefixes: null, workflows: null });
     expect(installed.files.map(({ target }) => target)).toEqual([
       HOOK,
@@ -90,14 +99,15 @@ describe("install format", () => {
 
   test("reaches a working gate in one more command where the task has another name, changing no project file", () => {
     const dir = repo({ "fmt.sh": UPPERCASE, Makefile: "fmt:\n\t@sh fmt.sh\n" });
-    expect(refusalOf(() => installGates(dir, { kind: "gates", gates: ["format"] }, NO_FILLS))).toBe(
-      "fill_missing",
-    );
+    expect(
+      refusalOf(() => installGates(dir, { kind: "gates", gates: ["format"] }, NO_FILLS, NOT_ON_GITHUB)),
+    ).toBe("fill_missing");
     const before = git(dir, ["status", "--porcelain", "--untracked-files=all"]);
     installGates(
       dir,
       { kind: "gates", gates: ["format"] },
       { command: "make fmt", prefixes: null, workflows: null },
+      NOT_ON_GITHUB,
     );
     expect(
       git(dir, ["status", "--porcelain", "--untracked-files=all", "--", ":!.githooks", ":!.github"]),
@@ -115,19 +125,23 @@ describe("install format", () => {
       dir,
       { kind: "gates", gates: ["format"] },
       { command: `printf '%s' "it's"`, prefixes: null, workflows: null },
+      NOT_ON_GITHUB,
     );
-    expect(installGates(dir, { kind: "none" }, NO_FILLS).fills).toEqual({
+    expect(installGates(dir, { kind: "none" }, NO_FILLS, NOT_ON_GITHUB).fills).toEqual({
       command: `printf '%s' "it's"`,
       prefixes: null,
       workflows: null,
     });
     expect(
-      installGates(dir, { kind: "none" }, NO_FILLS).files.every(({ state }) => state === "installed"),
+      installGates(dir, { kind: "none" }, NO_FILLS, NOT_ON_GITHUB).files.every(
+        ({ state }) => state === "installed",
+      ),
     ).toBe(true);
     const again = installGates(
       dir,
       { kind: "none" },
       { command: "cargo fmt", prefixes: null, workflows: null },
+      NOT_ON_GITHUB,
     );
     expect(again.fills).toEqual({ command: "cargo fmt", prefixes: null, workflows: null });
     expect(again.files[0]).toEqual({ target: HOOK, state: "reconfigured" });
@@ -136,9 +150,9 @@ describe("install format", () => {
 
   test("sets aside a hand-edited hook, reading past its command line", () => {
     const dir = repo();
-    installGates(dir, { kind: "gates", gates: ["format"] }, FORMAT);
+    installGates(dir, { kind: "gates", gates: ["format"] }, FORMAT, NOT_ON_GITHUB);
     writeFileSync(join(dir, HOOK), `${read(dir, HOOK)}exit 0\n`);
-    expect(installGates(dir, { kind: "none" }, NO_FILLS).files[0]?.state).toBe("changed");
+    expect(installGates(dir, { kind: "none" }, NO_FILLS, NOT_ON_GITHUB).files[0]?.state).toBe("changed");
   });
 
   test("doctor fails a command whose program is not on PATH, and a hook whose command is gone", () => {
@@ -147,6 +161,7 @@ describe("install format", () => {
       dir,
       { kind: "gates", gates: ["format"] },
       { command: "no-such-formatter --write", prefixes: null, workflows: null },
+      NOT_ON_GITHUB,
     );
     expect(doctorCheck(dir, "format command")).toEqual({
       name: "format command",
@@ -231,6 +246,7 @@ describe("the format hook", () => {
       dir,
       { kind: "gates", gates: ["format"] },
       { command: "sh broken.sh", prefixes: null, workflows: null },
+      NOT_ON_GITHUB,
     );
     commitPastHooks(dir, "feat: start");
     writeFileSync(join(dir, "a.txt"), "a\n");

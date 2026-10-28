@@ -6,7 +6,7 @@ import { NO_FILLS } from "./gates-contract";
 import { unpinnedIn } from "./pinned-actions-judge";
 import { type Use, usesIn } from "./pinned-actions-read";
 import { annotations, countsOf, reply } from "./pinned-actions-report";
-import { commitPastHooks, repo, writeFiles } from "./repo.test-support";
+import { commitPastHooks, NOT_ON_GITHUB, repo, writeFiles } from "./repo.test-support";
 
 const SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1";
 
@@ -211,7 +211,7 @@ describe("the doctor", () => {
     execFileSync("git", ["-C", dir, "add", "-A"]);
     const check = () => gatesDoctor(dir).checks.find(({ name }) => name === "pinned-actions backlog");
     expect(check()).toBeUndefined();
-    installGates(dir, { kind: "gates", gates: ["pinned-actions"] }, NO_FILLS);
+    installGates(dir, { kind: "gates", gates: ["pinned-actions"] }, NO_FILLS, NOT_ON_GITHUB);
     expect(check()).toEqual({
       name: "pinned-actions backlog",
       state: "warn",

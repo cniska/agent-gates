@@ -80,7 +80,7 @@ export const FILLS: Readonly<Record<Fill, FillSpec>> = {
     check: "workflows",
     pattern: { matches: new RegExp(`^(${WORKFLOWS.join("|")})$`), form: WORKFLOWS.join(" or ") },
     program: null,
-    unset: { kind: "defaulted", detail: "none installed, so each gate installs its workflow" },
+    unset: { kind: "defaulted", detail: "none installed, so install asks GitHub whether origin is private" },
   },
 };
 

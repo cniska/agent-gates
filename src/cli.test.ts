@@ -81,6 +81,7 @@ describe("the cli", () => {
         backups: [{ target: ".github/workflows/commits.yml", backup }],
         prepare: "absent",
         fills: { command: null, prefixes: null, workflows: null },
+        workflows: { choice: "on", reason: "unreadable", detail: "the checkout has no origin remote" },
       },
     });
     writeFileSync(join(changed, ".github/workflows/commits.yml"), "name: Commits\n");

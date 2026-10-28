@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { chmodSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
+  agentGates,
   COMMIT_SUBJECT_FILES,
   check,
   checkout,
@@ -11,8 +12,11 @@ import {
   install,
   installed,
   installs,
+  NO_ORIGIN,
+  pathOf,
   readText,
   removeScratchDirs,
+  toonOf,
   usageCode,
   writeFiles,
 } from "./cli";
@@ -53,6 +57,7 @@ test("AC-69 installs the hooks without their workflows, keeps the choice, and tu
     files: each("missing", HOOKS_ONLY),
     prepare: "absent",
     fills: { command: null, prefixes: null, workflows: "off" },
+    workflows: { choice: "off", reason: "flag", detail: null },
   });
   expect(workflowsIn(dir)).toEqual([]);
   expect(readText(dir, JUDGE_PUSH)).toContain("\nworkflows='off'\n");
@@ -66,6 +71,7 @@ test("AC-69 installs the hooks without their workflows, keeps the choice, and tu
     files: each("installed", HOOKS_ONLY),
     prepare: "absent",
     fills: { command: null, prefixes: null, workflows: "off" },
+    workflows: { choice: "off", reason: "recorded", detail: null },
   });
   install(dir, ["no-secrets"]);
   install(dir, ["no-comments"]);
@@ -144,4 +150,74 @@ test("AC-70 removes the gates' workflows a project turns off, keeping an edited 
   ])
     expect(usageCode(bare, args)).toEqual([args, 2, "flag_misplaced"]);
   expect(existsSync(join(bare, ".githooks"))).toBe(false);
+});
+
+function onGitHub(repo: string): string {
+  const dir = checkout({ "a.ts": "export const a = 1;\n" });
+  git(dir, ["remote", "add", "origin", `https://github.com/acme/${repo}.git`]);
+  return dir;
+}
+
+test("AC-71 a private repository installs the hooks alone by default, a public or unreadable one keeps its workflows, and a flag wins", () => {
+  const secret = onGitHub("private");
+  installs(secret, ["commit-subject"], {
+    gates: ["commit-subject"],
+    files: each("missing", HOOKS_ONLY),
+    prepare: "absent",
+    fills: { command: null, prefixes: null, workflows: "off" },
+    workflows: { choice: "off", reason: "private", detail: null },
+  });
+  expect(workflowsIn(secret)).toEqual([]);
+  expect(readText(secret, JUDGE_PUSH)).toContain("\nworkflows='off'\n");
+  expect(installed(secret, [])).toMatchObject({
+    fills: { workflows: "off" },
+    workflows: { choice: "off", reason: "recorded", detail: null },
+  });
+
+  const open = onGitHub("public");
+  installs(open, ["commit-subject"], {
+    gates: ["commit-subject"],
+    files: each("missing", COMMIT_SUBJECT_FILES),
+    prepare: "absent",
+    workflows: { choice: "on", reason: "public", detail: null },
+  });
+  expect(workflowsIn(open)).toEqual(["commits.yml"]);
+  expect(readText(open, JUDGE_PUSH)).toContain("\nworkflows=''\n");
+
+  const gone = onGitHub("gone");
+  expect(installed(gone, ["commit-subject"])).toMatchObject({
+    fills: { workflows: null },
+    workflows: {
+      choice: "on",
+      reason: "unreadable",
+      detail:
+        "gh repo view https://github.com/acme/gone.git exited 1: HTTP 404: Not Found (https://api.github.com/graphql)",
+    },
+  });
+  expect(workflowsIn(gone)).toEqual(["commits.yml"]);
+  expect(installed(checkout(), ["commit-subject"])).toMatchObject({ workflows: NO_ORIGIN });
+  const noGh = onGitHub("private");
+  const ran = agentGates(noGh, ["install", "commit-subject"], { PATH: pathOf(["git"]) });
+  expect([ran.status, ran.stderr]).toEqual([0, ""]);
+  expect(toonOf(ran.stdout)).toMatchObject({
+    result: {
+      workflows: {
+        choice: "on",
+        reason: "unreadable",
+        detail: expect.stringMatching(/^gh could not run: /),
+      },
+    },
+  });
+  expect(workflowsIn(noGh)).toEqual(["commits.yml"]);
+
+  const chosen = onGitHub("private");
+  expect(installed(chosen, ["commit-subject", "--workflows", "on"])).toMatchObject({
+    fills: { workflows: "on" },
+    workflows: { choice: "on", reason: "flag", detail: null },
+  });
+  expect(installed(chosen, [])).toMatchObject({
+    fills: { workflows: "on" },
+    workflows: { choice: "on", reason: "recorded", detail: null },
+  });
+  expect(workflowsIn(chosen)).toEqual(["commits.yml"]);
 });

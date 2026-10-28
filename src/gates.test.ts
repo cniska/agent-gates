@@ -10,7 +10,8 @@ import { isGateName } from "./gate-parts";
 import { installGates } from "./gates";
 import { FILL_NAMES, fillTarget, GATES, gatesFilling, NO_FILLS } from "./gates-contract";
 import { SOURCE_DIR } from "./gates-sources";
-import { commit, refusalOf, removeScratchDirs, repo, scratchDir } from "./repo.test-support";
+import type { Visibility } from "./github";
+import { commit, NOT_ON_GITHUB, refusalOf, removeScratchDirs, repo, scratchDir } from "./repo.test-support";
 
 const GITATTRIBUTES_V1 = "# agent-gate:githooks:1\n* linguist-generated\n";
 const WIRED_PREPARE = "! git rev-parse --git-dir >/dev/null 2>&1 || git config core.hooksPath .githooks";
@@ -152,7 +153,7 @@ describe("this repo", () => {
 describe("install", () => {
   test("writes the gate, wires the hooks and reports the plan it acted on", () => {
     const dir = repo();
-    expect(installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS)).toEqual({
+    expect(installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB)).toEqual({
       counts: {
         installed: 0,
         missing: 6,
@@ -174,6 +175,7 @@ describe("install", () => {
       ],
       prepare: "absent",
       fills: { command: null, prefixes: null, workflows: null },
+      workflows: { choice: "on", reason: "unreadable", detail: "the checkout has no origin remote" },
     });
     expect(hooksPath(dir)).toBe(".githooks");
     expect(modeOf(dir, ".githooks/commit-msg")).toBe(0o755);
@@ -201,18 +203,22 @@ describe("install", () => {
           state: "ok",
           detail: "none installed, so the gate allows its default set",
         },
-        { name: "workflows", state: "ok", detail: "none installed, so each gate installs its workflow" },
+        {
+          name: "workflows",
+          state: "ok",
+          detail: "none installed, so install asks GitHub whether origin is private",
+        },
       ],
       counts: { ok: 11, warn: 0, fail: 0 },
     });
-    expect(new Set(Object.values(statesOf(installGates(dir, { kind: "none" }, NO_FILLS))))).toEqual(
-      new Set(["installed"]),
-    );
+    expect(
+      new Set(Object.values(statesOf(installGates(dir, { kind: "none" }, NO_FILLS, NOT_ON_GITHUB)))),
+    ).toEqual(new Set(["installed"]));
   });
 
   test("the installed hook refuses a bad subject and lets a good one through", () => {
     const dir = repo();
-    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS);
+    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB);
     expect(commit(dir, { subject: "Add the gates" })).toEqual({
       status: 1,
       stderr:
@@ -223,7 +229,12 @@ describe("install", () => {
 
   test("marks only the bundles linguist-generated, and every hook file LF", () => {
     const dir = repo();
-    installGates(dir, { kind: "gates", gates: ["commit-subject", "no-comments-shell"] }, NO_FILLS);
+    installGates(
+      dir,
+      { kind: "gates", gates: ["commit-subject", "no-comments-shell"] },
+      NO_FILLS,
+      NOT_ON_GITHUB,
+    );
     const paths = [
       ".githooks/commit-msg",
       ".githooks/pre-commit.d/no-comments",
@@ -245,23 +256,23 @@ describe("install", () => {
 
   test("reads the installed gates back from their markers", () => {
     const dir = repo();
-    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS);
-    expect(installGates(dir, { kind: "none" }, NO_FILLS).gates).toEqual(["commit-subject"]);
+    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB);
+    expect(installGates(dir, { kind: "none" }, NO_FILLS, NOT_ON_GITHUB).gates).toEqual(["commit-subject"]);
   });
 
   test("adds the prepare script in place, keeping every key's order and the indent", () => {
     const spaced = repo({
       "package.json": '{\n  "name": "p",\n  "scripts": { "build": "true" },\n  "type": "module"\n}\n',
     });
-    expect(installGates(spaced, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS).prepare).toBe(
-      "missing",
-    );
+    expect(
+      installGates(spaced, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB).prepare,
+    ).toBe("missing");
     expect(read(spaced, "package.json")).toBe(
       `{\n  "name": "p",\n  "scripts": {\n    "build": "true",\n    "prepare": ${JSON.stringify(WIRED_PREPARE)}\n  },\n  "type": "module"\n}\n`,
     );
     expect(checks(spaced).prepare).toBe("ok");
     const tabbed = repo({ "package.json": '{\n\t"scripts": { "check": "true" }\n}\n' });
-    installGates(tabbed, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS);
+    installGates(tabbed, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB);
     expect(read(tabbed, "package.json")).toBe(
       `{\n\t"scripts": {\n\t\t"check": "true",\n\t\t"prepare": ${JSON.stringify(WIRED_PREPARE)}\n\t}\n}\n`,
     );
@@ -273,13 +284,13 @@ describe("install", () => {
         '{\n  "scripts": {\n    "prepare": "git config core.hooksPath .githooks",\n    "b": "x"\n  }\n}\n',
     });
     expect(checks(dir)).toEqual({ gates: "warn" });
-    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS);
+    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB);
     writeFileSync(
       join(dir, "package.json"),
       '{\n  "scripts": {\n    "prepare": "git config core.hooksPath .githooks",\n    "b": "x"\n  }\n}\n',
     );
     expect(checks(dir).prepare).toBe("warn");
-    expect(installGates(dir, { kind: "none" }, NO_FILLS).prepare).toBe("behind");
+    expect(installGates(dir, { kind: "none" }, NO_FILLS, NOT_ON_GITHUB).prepare).toBe("behind");
     expect(read(dir, "package.json")).toBe(
       `{\n  "scripts": {\n    "prepare": ${JSON.stringify(WIRED_PREPARE)},\n    "b": "x"\n  }\n}\n`,
     );
@@ -302,7 +313,7 @@ describe("install", () => {
 describe("file states", () => {
   test("judges missing, behind and changed files, and install acts on each", () => {
     const dir = repo();
-    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS);
+    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB);
     rmSync(join(dir, ".githooks/commit-msg"));
     writeFileSync(join(dir, ".githooks/.gitattributes"), GITATTRIBUTES_V1);
     writeFileSync(
@@ -322,7 +333,7 @@ describe("file states", () => {
       "commit prefixes": "ok",
       workflows: "ok",
     });
-    expect(installGates(dir, { kind: "none" }, NO_FILLS).files).toEqual([
+    expect(installGates(dir, { kind: "none" }, NO_FILLS, NOT_ON_GITHUB).files).toEqual([
       { target: ".githooks/commit-msg", state: "missing" },
       {
         target: ".github/workflows/commits.yml",
@@ -341,9 +352,9 @@ describe("file states", () => {
 
   test("sets aside a hand-edited file at an earlier version rather than overwriting it", () => {
     const dir = repo();
-    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS);
+    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB);
     writeFileSync(join(dir, ".githooks/.gitattributes"), `${GITATTRIBUTES_V1}*.sh text\n`);
-    expect(installGates(dir, { kind: "none" }, NO_FILLS).files[2]).toEqual({
+    expect(installGates(dir, { kind: "none" }, NO_FILLS, NOT_ON_GITHUB).files[2]).toEqual({
       target: ".githooks/.gitattributes",
       state: "changed",
       backup: ".githooks/.gitattributes.agent-gates-backup",
@@ -352,11 +363,11 @@ describe("file states", () => {
 
   test("restores a hook that lost its executable bit, without a backup", () => {
     const dir = repo();
-    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS);
+    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB);
     chmodSync(join(dir, ".githooks/commit-msg"), 0o644);
     expect(gatesDoctor(dir)).toMatchObject({ counts: { fail: 1 } });
     expect(checks(dir)[".githooks/commit-msg"]).toBe("fail");
-    expect(installGates(dir, { kind: "none" }, NO_FILLS).files[0]).toEqual({
+    expect(installGates(dir, { kind: "none" }, NO_FILLS, NOT_ON_GITHUB).files[0]).toEqual({
       target: ".githooks/commit-msg",
       state: "not-executable",
     });
@@ -365,20 +376,22 @@ describe("file states", () => {
 
   test("leaves a file ahead of this version alone", () => {
     const dir = repo();
-    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS);
+    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB);
     const ahead = read(dir, ".githooks/commit-msg").replace(
       /agent-gate:commit-subject:\d+/,
       "agent-gate:commit-subject:999",
     );
     writeFileSync(join(dir, ".githooks/commit-msg"), ahead);
     expect(checks(dir)[".githooks/commit-msg"]).toBe("warn");
-    expect(installGates(dir, { kind: "none" }, NO_FILLS).files[0]?.state).toBe("ahead");
+    expect(installGates(dir, { kind: "none" }, NO_FILLS, NOT_ON_GITHUB).files[0]?.state).toBe("ahead");
     expect(read(dir, ".githooks/commit-msg")).toBe(ahead);
   });
 
   test("a file without a marker is changed and set aside", () => {
     const dir = repo({ ".github/workflows/commits.yml": "name: Commits\n" });
-    expect(installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS).files[1]).toEqual({
+    expect(
+      installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB).files[1],
+    ).toEqual({
       target: ".github/workflows/commits.yml",
       state: "changed",
       backup: ".github/workflows/commits.yml.agent-gates-backup",
@@ -392,18 +405,18 @@ describe("hooks path", () => {
     for (const spelling of ["./.githooks", ".githooks/"]) {
       const dir = repo();
       execFileSync("git", ["-C", dir, "config", "core.hooksPath", spelling]);
-      installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS);
+      installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB);
       expect([spelling, checks(dir).hooksPath, hooksPath(dir)]).toEqual([spelling, "ok", spelling]);
     }
     const absolute = repo();
     execFileSync("git", ["-C", absolute, "config", "core.hooksPath", join(absolute, ".githooks")]);
-    installGates(absolute, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS);
+    installGates(absolute, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB);
     expect(checks(absolute).hooksPath).toBe("ok");
   });
 
   test("fails the doctor when hooks are not wired", () => {
     const dir = repo();
-    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS);
+    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB);
     execFileSync("git", ["-C", dir, "config", "--unset", "core.hooksPath"]);
     expect(gatesDoctor(dir).checks.find(({ name }) => name === "hooksPath")).toEqual({
       name: "hooksPath",
@@ -432,7 +445,7 @@ describe("doctor", () => {
 
   test("reports the refusal install would raise, as the fix", () => {
     const dir = repo();
-    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS);
+    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB);
     execFileSync("git", ["-C", dir, "config", "core.hooksPath", ".husky"]);
     writeFileSync(join(dir, "package.json"), "{ not json");
     const report = gatesDoctor(dir);
@@ -449,7 +462,9 @@ describe("doctor", () => {
 describe("refusals", () => {
   test("refuses with no gate installed or named, and writes nothing", () => {
     const dir = repo();
-    expect(refusalOf(() => installGates(dir, { kind: "none" }, NO_FILLS))).toBe("no_gates_chosen");
+    expect(refusalOf(() => installGates(dir, { kind: "none" }, NO_FILLS, NOT_ON_GITHUB))).toBe(
+      "no_gates_chosen",
+    );
     expect(existsSync(join(dir, ".githooks"))).toBe(false);
   });
 
@@ -457,13 +472,17 @@ describe("refusals", () => {
     const hooked = repo();
     execFileSync("git", ["-C", hooked, "config", "core.hooksPath", ".husky"]);
     expect(
-      refusalOf(() => installGates(hooked, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS)),
+      refusalOf(() =>
+        installGates(hooked, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB),
+      ),
     ).toBe("hooks_path_occupied");
     expect(existsSync(join(hooked, ".githooks"))).toBe(false);
 
     const prepared = repo({ "package.json": '{ "scripts": { "prepare": "husky" } }\n' });
     expect(
-      refusalOf(() => installGates(prepared, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS)),
+      refusalOf(() =>
+        installGates(prepared, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB),
+      ),
     ).toBe("prepare_occupied");
     expect(existsSync(join(prepared, ".githooks"))).toBe(false);
     expect(hooksPath(prepared)).toBe("");
@@ -476,9 +495,11 @@ describe("refusals", () => {
       "#!/bin/sh\n# x-gate:commit-subject:9\nexit 0\n",
     ]) {
       const dir = repo({ ".githooks/commit-msg": own });
-      expect(refusalOf(() => installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS))).toBe(
-        "hook_occupied",
-      );
+      expect(
+        refusalOf(() =>
+          installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB),
+        ),
+      ).toBe("hook_occupied");
       expect(read(dir, ".githooks/commit-msg")).toBe(own);
       expect(existsSync(join(dir, ".githooks/.gitattributes"))).toBe(false);
       expect(existsSync(join(dir, ".githooks/commit-msg.agent-gates-backup"))).toBe(false);
@@ -488,7 +509,7 @@ describe("refusals", () => {
 
   test("doctor fails a project's own commit-msg hook with the move out as the fix", () => {
     const dir = repo();
-    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS);
+    installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB);
     writeFileSync(join(dir, ".githooks/commit-msg"), "#!/bin/sh\nexit 0\n");
     expect(gatesDoctor(dir).checks.find(({ name }) => name === ".githooks/commit-msg")).toEqual({
       name: ".githooks/commit-msg",
@@ -500,11 +521,94 @@ describe("refusals", () => {
 
   test("sets aside a project's own file that git does not run, rather than refusing", () => {
     const dir = repo({ ".github/workflows/commits.yml": "name: ours\n" });
-    expect(statesOf(installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS))).toMatchObject(
-      {
-        ".github/workflows/commits.yml": "changed",
-      },
-    );
+    expect(
+      statesOf(installGates(dir, { kind: "gates", gates: ["commit-subject"] }, NO_FILLS, NOT_ON_GITHUB)),
+    ).toMatchObject({
+      ".github/workflows/commits.yml": "changed",
+    });
     expect(read(dir, ".github/workflows/commits.yml.agent-gates-backup")).toBe("name: ours\n");
+  });
+});
+
+describe("the workflows default", () => {
+  const PRIVATE = (): Visibility => ({ kind: "private" });
+  const PUBLIC = (): Visibility => ({ kind: "public" });
+  const NOT_READ = (): Visibility => {
+    throw new Error("install read the visibility");
+  };
+  const COMMIT_SUBJECT = { kind: "gates", gates: ["commit-subject"] } as const;
+
+  test("a private repository with no choice gets the hooks alone, recorded for later installs", () => {
+    const dir = repo();
+    const off = installGates(dir, COMMIT_SUBJECT, NO_FILLS, PRIVATE);
+    expect(off.workflows).toEqual({ choice: "off", reason: "private", detail: null });
+    expect(off.fills.workflows).toBe("off");
+    expect(existsSync(join(dir, ".github/workflows/commits.yml"))).toBe(false);
+    expect(read(dir, ".githooks/judge-push")).toContain("\nworkflows='off'\n");
+    const again = installGates(dir, { kind: "none" }, NO_FILLS, NOT_READ);
+    expect(again.workflows).toEqual({ choice: "off", reason: "recorded", detail: null });
+  });
+
+  test("a public repository keeps its workflows and records nothing, so the next install reads again", () => {
+    const dir = repo();
+    const on = installGates(dir, COMMIT_SUBJECT, NO_FILLS, PUBLIC);
+    expect(on.workflows).toEqual({ choice: "on", reason: "public", detail: null });
+    expect(on.fills.workflows).toBeNull();
+    expect(existsSync(join(dir, ".github/workflows/commits.yml"))).toBe(true);
+    const turned = installGates(dir, { kind: "none" }, NO_FILLS, PRIVATE);
+    expect(turned.workflows).toEqual({ choice: "off", reason: "private", detail: null });
+    expect(statesOf(turned)[".github/workflows/commits.yml"]).toBe("unwanted");
+  });
+
+  test("an unreadable visibility keeps the workflows and says why", () => {
+    const dir = repo();
+    const unread = (): Visibility => ({ kind: "unreadable", detail: "gh could not run" });
+    const on = installGates(dir, COMMIT_SUBJECT, NO_FILLS, unread);
+    expect(on.workflows).toEqual({ choice: "on", reason: "unreadable", detail: "gh could not run" });
+    expect(on.fills.workflows).toBeNull();
+    expect(existsSync(join(dir, ".github/workflows/commits.yml"))).toBe(true);
+  });
+
+  test("an explicit choice wins over a private repository, and is kept", () => {
+    const dir = repo();
+    const on = installGates(dir, COMMIT_SUBJECT, { ...NO_FILLS, workflows: "on" }, NOT_READ);
+    expect(on.workflows).toEqual({ choice: "on", reason: "flag", detail: null });
+    expect(existsSync(join(dir, ".github/workflows/commits.yml"))).toBe(true);
+    const kept = installGates(dir, { kind: "none" }, NO_FILLS, NOT_READ);
+    expect(kept.workflows).toEqual({ choice: "on", reason: "recorded", detail: null });
+    expect(existsSync(join(dir, ".github/workflows/commits.yml"))).toBe(true);
+  });
+
+  test("a malformed recorded choice is refused rather than read over, writing nothing", () => {
+    const dir = repo();
+    installGates(dir, COMMIT_SUBJECT, { ...NO_FILLS, workflows: "on" }, NOT_READ);
+    const judge = read(dir, ".githooks/judge-push").replace("\nworkflows='on'\n", "\nworkflows='maybe'\n");
+    writeFileSync(join(dir, ".githooks/judge-push"), judge);
+    expect(refusalOf(() => installGates(dir, { kind: "none" }, NO_FILLS, PRIVATE))).toBe("fill_unreadable");
+    expect(read(dir, ".githooks/judge-push")).toBe(judge);
+    expect(existsSync(join(dir, ".github/workflows/commits.yml"))).toBe(true);
+  });
+
+  test("a set of gates with no workflow reads nothing and names no default", () => {
+    const dir = repo();
+    const format = installGates(
+      dir,
+      { kind: "gates", gates: ["format"] },
+      { ...NO_FILLS, command: "true" },
+      NOT_READ,
+    );
+    expect(format.workflows).toBeNull();
+  });
+
+  test("no-comments in a private repository installs no yaml gate for a workflow it leaves out", () => {
+    const dir = repo({ "a.ts": "export const a = 1;\n" });
+    execFileSync("git", ["-C", dir, "add", "-A"]);
+    const off = installGates(dir, { kind: "each-tracked-language" }, NO_FILLS, PRIVATE);
+    expect(off.gates).toEqual(["no-comments-javascript", "no-comments-shell"]);
+  });
+
+  test("refuses with no gate before reading the visibility", () => {
+    const dir = repo();
+    expect(refusalOf(() => installGates(dir, { kind: "none" }, NO_FILLS, NOT_READ))).toBe("no_gates_chosen");
   });
 });

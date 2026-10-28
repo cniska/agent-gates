@@ -15,6 +15,7 @@ import {
   gatesFilling,
 } from "./gates-contract";
 import { checkoutRoot } from "./git";
+import { repoVisibility } from "./github";
 import { LANGUAGE_NAMES } from "./no-comments-languages";
 
 const OPTIONS = eachFill(() => ({ type: "string", multiple: true }) as const);
@@ -103,9 +104,13 @@ export const installCommand: Command = {
     const root = checkoutRoot(process.cwd());
     const admitted = () => admitting(named, root);
     const given: Fills = eachFill((fill) => fillOf(values, fill, admitted, this.usage));
-    const { counts, gates, files, prepare, fills } = installGates(root, named, given);
-    if (full) return { value: { counts, gates, files: files.map(fullFile), prepare, fills }, exitCode: 0 };
+    const { counts, gates, files, prepare, fills, workflows } = installGates(root, named, given, () =>
+      repoVisibility(root),
+    );
+    if (full)
+      return { value: { counts, gates, files: files.map(fullFile), prepare, fills, workflows }, exitCode: 0 };
     const listed = files.map(({ target, state }) => ({ target, state }));
-    return { value: { counts, gates, files: listed, backups: backups(files), prepare, fills }, exitCode: 0 };
+    const value = { counts, gates, files: listed, backups: backups(files), prepare, fills, workflows };
+    return { value, exitCode: 0 };
   },
 };

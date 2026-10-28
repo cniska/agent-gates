@@ -30,6 +30,7 @@ Only an entry, such as `cli.ts`, reads the environment; it passes what a module 
 | `scanner` | What every scanner shares: reading the staged, pushed or whole change out of git, the call (`--format github`, `--all`, a base and a head), its usage error, the reply's capping and GitHub annotations, and running a scanner's main to the process's streams and exit code |
 | `package-manifest` | The `prepare` script in a project's `package.json` |
 | `git` | Run git and read its output |
+| `github` | Read from GitHub, through `gh`, whether the checkout's `origin` is a private repository |
 | `file-backup` | Copy a file aside before install replaces it |
 | `coded-error`, `assert` | Errors with a code and kind; `unreachable` and `invariant` |
 

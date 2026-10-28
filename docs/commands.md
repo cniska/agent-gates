@@ -6,7 +6,7 @@ Each command prints [TOON](https://toonformat.dev): the command, `ok`, then its 
 
 | Command | Does |
 | --- | --- |
-| `agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>] [--workflows <on\|off>] [--full]` | Install the named gate, update the installed ones, and report each file's state before acting, the format command, the commit prefixes and the workflows choice |
+| `agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>] [--workflows <on\|off>] [--full]` | Install the named gate, update the installed ones, and report each file's state before acting, the format command, the commit prefixes, the workflows choice, and which workflows choice it took and why ([hooks without workflows](gates.md#hooks-without-workflows)) |
 | `agent-gates --version` | Print the version alone on one line, the one output that is not TOON |
 | `agent-gates doctor [--full]` | Check each gate file, `core.hooksPath`, the `prepare` script and the format command, and check the commit prefixes and the workflows choice; report each tracked language without its no-comments gate, each installed language with no files left to read, each of the project's own steps in `.githooks/pre-commit.d` or `pre-push.d` that no workflow runs while workflows are on, the comment count, the count of secrets `.no-secrets-allow` does not name and the count of unpinned actions; exit 1 on a failure |
 
