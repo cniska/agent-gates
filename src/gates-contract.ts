@@ -141,6 +141,7 @@ const JUDGE_PUSH: GateFile = {
     { version: 3, sha256: "6819abb178ae0eac92b0a492576b131418a9f4b96c452f0e32af640685c48b5b" },
     { version: 4, sha256: "621a3a83208a6af763be1961cbc90eab31098d6ce5909e3502db03c644d6c17b" },
     { version: 5, sha256: "6afdba0752f32e02a60f12ae308703c06ddee93a9ac603305eb2425d0b280a62" },
+    { version: 6, sha256: "be1225108ba25b15e4b0f6f02b2ce2d05ef0edfb9a349684949d427c4ca639bc" },
   ],
 };
 
@@ -185,6 +186,7 @@ export const SCANNER_FILE: GateFile = {
     { version: 32, sha256: "38f76e204fe11404d9962b64f2757e157f5e836edf008e180ff8049415ae95cf" },
     { version: 33, sha256: "a5b1bc5e720a98ccf0437f66a8ff1c9449482c33610e6b96ed07e8665818d10c" },
     { version: 34, sha256: "671d5f37152d3296f0f629dd46a5194d549c828a94258a1cb893290b395711ca" },
+    { version: 35, sha256: "2a2f438ce16d9dcb3411af13b39aa3ec5d6e9d77475826e625076339d43c631e" },
   ],
 };
 
@@ -198,6 +200,7 @@ const NO_COMMENTS_SHARED: readonly GateFile[] = [
     versions: [
       { version: 1, sha256: "138a8e75142f58bc1a09418964b8a9cbd7944fc516920d307e58e00dd2a5290c" },
       { version: 2, sha256: "f182a3518696f42433f24c131376f0851cb976982af89cf52e4e11aaacf98d55" },
+      { version: 3, sha256: "5db63a5cd78b2c9ffc21558ba4f81444ca1165e19f7a0cf45bdc0eb1011797c3" },
     ],
   },
   {
@@ -435,6 +438,7 @@ export const NO_SECRETS_SCANNER: GateFile = {
     { version: 4, sha256: "a8e9be960ba35554da395f106cc356454510e2b536d77470e2fda46d3f8c0100" },
     { version: 5, sha256: "0118ab377106775331e60f491d4e4c6fe47b4ffc081550a42ccf2ad8a4bd040d" },
     { version: 6, sha256: "c5d0beac1c045bfea931d5f82445dc6abcf6cbba47e717f70591ebbea7307e6e" },
+    { version: 7, sha256: "127995ce43447fc3a2fbe7726105da6e9ac5889e0aa81dc4e80af412cbd83e94" },
   ],
 };
 
@@ -448,7 +452,10 @@ const NO_SECRETS_FILES: readonly GateFile[] = [
     target: `${PRE_COMMIT_STEPS}/no-secrets`,
     executable: true,
     fills: null,
-    versions: [{ version: 1, sha256: "81a38b031c8ca267d651e1f647e25c9cc72d685c6b8a6e0f6af9a61214a877c1" }],
+    versions: [
+      { version: 1, sha256: "81a38b031c8ca267d651e1f647e25c9cc72d685c6b8a6e0f6af9a61214a877c1" },
+      { version: 2, sha256: "5744866417306a538c83533b24443d25033d22d49793504a24ba55653175d325" },
+    ],
   },
   {
     part: "no-secrets",
@@ -483,6 +490,7 @@ export const PINNED_ACTIONS_SCANNER: GateFile = {
     { version: 1, sha256: "0e1789e5a0383091b8353e7b67a0693d61a315e2b6988fa97ba092a7c4ccc87f" },
     { version: 2, sha256: "2d2648f885ea233df9a4d549bd3dbecf474ec4ef34fbe248f9915d4fb4fb99b9" },
     { version: 3, sha256: "055725bda7988b1d46841a5e95c5975754ed8cbfa148521fc30195efda6708e1" },
+    { version: 4, sha256: "4e712aac288350543418b44ccf0ffc1eafcdc16b46c6b3a26119c54fdaac5861" },
   ],
 };
 
@@ -496,7 +504,10 @@ const PINNED_ACTIONS_FILES: readonly GateFile[] = [
     target: `${PRE_COMMIT_STEPS}/pinned-actions`,
     executable: true,
     fills: null,
-    versions: [{ version: 1, sha256: "81c6e230b347d7f0957796fd69861897694843509cf861d76102225a00ed776a" }],
+    versions: [
+      { version: 1, sha256: "81c6e230b347d7f0957796fd69861897694843509cf861d76102225a00ed776a" },
+      { version: 2, sha256: "3f24e3561fc8a066db3a3a4be881467711745eaed6e85f1adb34459c5f67fe62" },
+    ],
   },
   {
     part: "pinned-actions",

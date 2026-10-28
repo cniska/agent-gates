@@ -22,6 +22,7 @@ import {
   FILL_NAMES,
   FILLS,
   type Fill,
+  GATES,
   type GateFile,
   HOOKS_DIR,
   INSTALL_GATES,
@@ -44,7 +45,7 @@ import { countsOf as secretCountsOf } from "./no-secrets-report";
 import { type PrepareState, prepareState } from "./package-manifest";
 import { unpinnedIn } from "./pinned-actions-judge";
 import { countsOf as unpinnedCountsOf } from "./pinned-actions-report";
-import { SWEEP_ALL } from "./scanner-call";
+import { isSupportedNode, NODE_FIX, NODE_MINIMUM, SWEEP_ALL } from "./scanner-call";
 import { judgedTextOf } from "./scanner-change";
 
 export type Health =
@@ -153,6 +154,31 @@ function fillsHealth(planned: readonly PlannedFile[], resolved: ResolvedFills): 
   return FILL_NAMES.filter((fill) => planned.some(({ file }) => file.fills === fill)).flatMap((fill) =>
     fillHealth(fill, resolved[fill]),
   );
+}
+
+const NODE_CHECK = "node";
+
+const NODE_SCANNERS: readonly GateFile[] = [SCANNER_FILE, NO_SECRETS_SCANNER, PINNED_ACTIONS_SCANNER];
+
+function nodeHealth(gates: readonly GateName[]): Health[] {
+  const running = gates.filter((gate) => GATES[gate].some((file) => NODE_SCANNERS.includes(file)));
+  if (running.length === 0) return [];
+  const judgeNothing = `so ${running.join(", ")} ${running.length === 1 ? "judges" : "judge"} nothing`;
+  if (!onPath("node"))
+    return [
+      { name: NODE_CHECK, state: "fail", detail: `node is not on PATH, ${judgeNothing}`, fix: NODE_FIX },
+    ];
+  const version = spawnSync("node", ["--version"], { encoding: "utf8" }).stdout.trim();
+  if (isSupportedNode(version))
+    return [{ name: NODE_CHECK, state: "ok", detail: `node ${version} is on PATH` }];
+  return [
+    {
+      name: NODE_CHECK,
+      state: "fail",
+      detail: `node --version prints ${version}, not ${NODE_MINIMUM} or later, ${judgeNothing}`,
+      fix: NODE_FIX,
+    },
+  ];
 }
 
 const LANGUAGES_CHECK = "no-comments languages";
@@ -368,6 +394,7 @@ function judged(root: string): Health[] {
     prepareHealth(prepareState(root)),
     ...fillsHealth(planned, resolved),
     ...(workflowsChosen(resolved) === "on" ? stepsHealth(stepsState(root, planned)) : []),
+    ...nodeHealth(gates),
     ...languagesHealth(root, languages),
     ...backlogHealth(root, languages, planned),
     ...secretsHealth(root, gates, planned),

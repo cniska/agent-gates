@@ -141,6 +141,7 @@ describe("this repo", () => {
       "commit prefixes",
       "workflows",
       "hook steps",
+      "node",
       "no-comments languages",
       "no-comments backlog",
       "no-secrets backlog",

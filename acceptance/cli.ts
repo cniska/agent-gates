@@ -156,16 +156,16 @@ export function packageVersion(): string {
   return version;
 }
 
-export function doctor(dir: string): Judged {
-  const ran = agentGates(dir, ["doctor", "--full"]);
+export function doctor(dir: string, env: Env = {}): Judged {
+  const ran = agentGates(dir, ["doctor", "--full"], env);
   if (ran.stderr !== "") throw new Error(`doctor wrote to stderr: ${ran.stderr}`);
   const checks = field(field(toonOf(ran.stdout), "result"), "checks");
   if (!Array.isArray(checks)) throw new Error(`doctor printed no checks: ${ran.stdout}`);
   return { status: ran.status, checks };
 }
 
-export function check(dir: string, name: string): Check | undefined {
-  return doctor(dir).checks.find((found) => found.name === name);
+export function check(dir: string, name: string, env: Env = {}): Check | undefined {
+  return doctor(dir, env).checks.find((found) => found.name === name);
 }
 
 export function install(dir: string, args: readonly string[]): void {
@@ -327,6 +327,30 @@ function firstOnPath(tool: string, searched: string): string {
 export function pathOf(tools: readonly string[], searched = process.env.PATH ?? ""): string {
   const bin = scratchDir();
   for (const tool of tools) symlinkSync(firstOnPath(tool, searched), join(bin, tool));
+  return bin;
+}
+
+export function pathWithNode18(tools: readonly string[]): string {
+  const bin = pathOf(tools);
+  const lacksNode20 = join(scratchDir(), "lacks-node-20.cjs");
+  writeFileSync(
+    lacksNode20,
+    lines([
+      "delete Array.prototype.toSorted;",
+      'Object.defineProperty(process, "version", { value: "v18.20.4" });',
+      'Object.defineProperty(process, "versions", { value: { ...process.versions, node: "18.20.4" } });',
+    ]),
+  );
+  const node = join(bin, "node");
+  writeFileSync(
+    node,
+    lines([
+      "#!/bin/sh",
+      'if [ "$*" = --version ]; then echo v18.20.4; exit 0; fi',
+      `exec '${firstOnPath("node", process.env.PATH ?? "")}' --require '${lacksNode20}' "$@"`,
+    ]),
+  );
+  chmodSync(node, 0o755);
   return bin;
 }
 

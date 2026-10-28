@@ -10,6 +10,7 @@ import {
   install,
   lines,
   pathOf,
+  pathWithNode18,
   readText,
   removeScratchDirs,
   scratchDir,
@@ -132,6 +133,15 @@ test("AC-37 leaves only a note when it cannot judge the edit", () => {
     ...QUIET,
     stderr:
       "cniska-gates: .githooks/no-comments/scan.cjs has no --file before agent-gate:no-comments:29, so the edit's comments were not judged; agent-gates install updates it\n",
+  });
+});
+
+test("AC-73 leaves only a note when node is older than 20", () => {
+  const dir = gated(["no-comments-javascript"], { "a.ts": "export const a = 1;\n" });
+  writeFiles(dir, { "a.ts": "export const a = 2; // why\n" });
+  expect(edited(dir, join(dir, "a.ts"), { PATH: pathWithNode18(["sh", "bash", "git", "jq"]) })).toEqual({
+    ...QUIET,
+    stderr: note("node --version prints v18.20.4, not 20 or later"),
   });
 });
 

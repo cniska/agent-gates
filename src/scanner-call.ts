@@ -1,5 +1,5 @@
 import { unreachable } from "./assert";
-import { EXIT_STATUS, recordOf, usageErrors } from "./coded-error";
+import { EXIT_STATUS, faults, recordOf, usageErrors } from "./coded-error";
 import type { Judged } from "./scanner-change";
 import { REPLY_BYTES } from "./scanner-report";
 
@@ -47,6 +47,24 @@ const scanUsageError = usageErrors<{
   },
 });
 
+export const NODE_MINIMUM = 20;
+
+const NODE_MAJOR = /^v(\d+)\./;
+
+export const NODE_FIX = `install Node.js ${NODE_MINIMUM} or later`;
+
+export function isSupportedNode(version: string): boolean {
+  const major = NODE_MAJOR.exec(version)?.[1];
+  return major !== undefined && Number(major) >= NODE_MINIMUM;
+}
+
+const scanFault = faults<{ readonly node_unsupported: { readonly version: string } }>({
+  node_unsupported: {
+    message: ({ version }) => `node ${version} is older than ${NODE_MINIMUM}, so nothing was judged`,
+    resolve: () => NODE_FIX,
+  },
+});
+
 export function usageError(forms: readonly Form[], got: readonly string[]) {
   return scanUsageError("wrong_arguments", { forms, got });
 }
@@ -80,6 +98,7 @@ export function scopeOf(judged: Judged): Scope {
 
 export function run(gate: string, main: () => Run): void {
   try {
+    if (!isSupportedNode(process.version)) throw scanFault("node_unsupported", { version: process.version });
     const { format, reply, annotations, refused } = main();
     switch (format) {
       case "text":

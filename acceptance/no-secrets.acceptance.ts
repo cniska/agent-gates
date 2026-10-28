@@ -278,12 +278,14 @@ test("AC-58 sweeps the tracked files, and exits 2 or 3 when it cannot judge", ()
   expect(shell(dir, ".githooks/pre-commit.d/no-secrets", { PATH: withoutNode })).toEqual({
     status: 3,
     stdout: "",
-    stderr: "no-secrets: node is not on PATH, so the commit's secrets cannot be judged; install Node.js\n",
+    stderr:
+      "no-secrets: node is not on PATH, so the commit's secrets cannot be judged; install Node.js 20 or later\n",
   });
   const withoutNodeForPush = pathOf(["git", "sh", "dirname", "mktemp", "rm"]);
   expect(shell(dir, "sh .githooks/judge-push no-secrets a b c d", { PATH: withoutNodeForPush })).toEqual({
     status: 3,
     stdout: "",
-    stderr: "no-secrets: node is not on PATH, so the push's secrets cannot be judged; install Node.js\n",
+    stderr:
+      "no-secrets: node is not on PATH, so the push's secrets cannot be judged; install Node.js 20 or later\n",
   });
 });

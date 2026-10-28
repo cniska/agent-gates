@@ -280,13 +280,14 @@ test("AC-66 sweeps the tracked files, and exits 2 or 3 when it cannot judge", ()
     status: 3,
     stdout: "",
     stderr:
-      "pinned-actions: node is not on PATH, so the commit's actions cannot be judged; install Node.js\n",
+      "pinned-actions: node is not on PATH, so the commit's actions cannot be judged; install Node.js 20 or later\n",
   });
   const withoutNodeForPush = pathOf(["git", "sh", "dirname", "mktemp", "rm"]);
   expect(shell(dir, "sh .githooks/judge-push pinned-actions a b c d", { PATH: withoutNodeForPush })).toEqual({
     status: 3,
     stdout: "",
-    stderr: "pinned-actions: node is not on PATH, so the push's actions cannot be judged; install Node.js\n",
+    stderr:
+      "pinned-actions: node is not on PATH, so the push's actions cannot be judged; install Node.js 20 or later\n",
   });
 });
 

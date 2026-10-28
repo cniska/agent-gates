@@ -1535,7 +1535,7 @@ describe("the pre-commit hook", () => {
     });
     expect([run.status, run.stderr]).toEqual([
       3,
-      "no-comments: node is not on PATH, so the commit's comments cannot be judged; install Node.js\n",
+      "no-comments: node is not on PATH, so the commit's comments cannot be judged; install Node.js 20 or later\n",
     ]);
   });
 });

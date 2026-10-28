@@ -64,10 +64,18 @@ scan_step() {
     note "$SCANNER has no --file before $MARKER_TAG:no-comments:$FILE_SCAN_SINCE, so the edit's comments were not judged; agent-gates install updates it"
     return 0
   fi
-  if ! node --version >/dev/null 2>&1; then
+  local version
+  if ! version="$(node --version 2>/dev/null)"; then
     note "node is not on PATH, so the edit's comments were not judged"
     return 0
   fi
+  case "$version" in
+    v[2-9][0-9].* | v[1-9][0-9][0-9]*) ;;
+    *)
+      note "node --version prints $version, not 20 or later, so the edit's comments were not judged"
+      return 0
+      ;;
+  esac
   local reply status
   reply="$(cd "$root" && node "$SCANNER" --file "$file" 2>&1 >/dev/null)"
   status=$?

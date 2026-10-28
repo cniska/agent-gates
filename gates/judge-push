@@ -1,5 +1,5 @@
 #!/bin/sh
-# agent-gate:githooks:5
+# agent-gate:githooks:6
 set -eu
 
 workflows=''
@@ -23,7 +23,7 @@ judge_subjects() {
 
 judge_scan() {
   if ! command -v node >/dev/null 2>&1; then
-    echo "$1: node is not on PATH, so $2 cannot be judged; install Node.js" >&2
+    echo "$1: node is not on PATH, so $2 cannot be judged; install Node.js 20 or later" >&2
     exit 3
   fi
   if [ "$report" = github ]; then

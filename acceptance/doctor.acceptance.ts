@@ -7,14 +7,18 @@ import {
   type Check,
   check,
   checkout,
+  doctor,
   each,
   fingerprint,
   git,
   hooksPath,
   install,
   installs,
+  pathOf,
+  pathWithNode18,
   refuses,
   removeScratchDirs,
+  shell,
   toonOf,
   writeFiles,
 } from "./cli";
@@ -49,6 +53,10 @@ function passing(name: string, detail: string): Check {
   return { name, state: "ok", detail, fix: null };
 }
 
+function systemNode(): string {
+  return shell(checkout(), "node --version").stdout.trim();
+}
+
 test("AC-11 reports no gate, then every check passing", () => {
   const dir = checkout();
   doctorReports(dir, [{ name: "gates", state: "warn", detail: "no gate is installed", fix: INSTALL_USAGE }]);
@@ -81,6 +89,7 @@ test("AC-11 reports no gate, then every check passing", () => {
     passing("prepare", NO_PACKAGE_JSON),
     passing("commit prefixes", "none installed, so the gate allows its default set"),
     passing("workflows", "none installed, so install writes the gates' workflows"),
+    passing("node", `node ${systemNode()} is on PATH`),
     passing("no-comments languages", "javascript, shell, yaml, as the tracked files need"),
     passing("no-comments backlog", "the tracked files hold no comment"),
   ]);
@@ -99,6 +108,7 @@ test("AC-12 warns of tracked languages without a gate and gates without a langua
     passing("hooksPath", "core.hooksPath is .githooks"),
     passing("prepare", NO_PACKAGE_JSON),
     passing("workflows", "none installed, so install writes the gates' workflows"),
+    passing("node", `node ${systemNode()} is on PATH`),
     {
       name: "no-comments languages",
       state: "warn",
@@ -262,4 +272,33 @@ test("AC-59 counts the secrets tracked files hold that the allow file does not n
       "not counted while this differs from this agent-gates, since the count runs it: .githooks/no-secrets/scan.cjs",
     fix: "agent-gates install",
   });
+});
+
+test("AC-74 fails its node check while node is missing or older than 20, and has none without a gate that runs node", () => {
+  const dir = checkout();
+  install(dir, ["no-secrets"]);
+  git(dir, ["add", "-A"]);
+  const node18 = doctor(dir, { PATH: pathWithNode18(["git", "sh"]) });
+  expect(node18.status).toBe(1);
+  expect(node18.checks.find(({ name }) => name === "node")).toEqual({
+    name: "node",
+    state: "fail",
+    detail: "node --version prints v18.20.4, not 20 or later, so no-secrets judges nothing",
+    fix: "install Node.js 20 or later",
+  });
+
+  const withoutNode = doctor(dir, { PATH: pathOf(["git", "sh"]) });
+  expect(withoutNode.status).toBe(1);
+  expect(withoutNode.checks.find(({ name }) => name === "node")).toEqual({
+    name: "node",
+    state: "fail",
+    detail: "node is not on PATH, so no-secrets judges nothing",
+    fix: "install Node.js 20 or later",
+  });
+
+  expect(check(dir, "node")).toEqual(passing("node", `node ${systemNode()} is on PATH`));
+
+  const unscanned = checkout();
+  install(unscanned, ["commit-subject"]);
+  expect(check(unscanned, "node")).toBeUndefined();
 });

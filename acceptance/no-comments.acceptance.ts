@@ -334,7 +334,8 @@ test("AC-25 sweeps the tracked files, and exits 2 or 3 when it cannot judge", ()
   expect(shell(dir, ".githooks/pre-commit.d/no-comments", { PATH: withoutNode })).toEqual({
     status: 3,
     stdout: "",
-    stderr: "no-comments: node is not on PATH, so the commit's comments cannot be judged; install Node.js\n",
+    stderr:
+      "no-comments: node is not on PATH, so the commit's comments cannot be judged; install Node.js 20 or later\n",
   });
 
   writeFiles(dir, { ".githooks/no-comments/javascript.cjs": "module.exports = {};\n" });
