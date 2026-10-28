@@ -140,6 +140,7 @@ const JUDGE_PUSH: GateFile = {
     { version: 2, sha256: "620f7d269ad6f3659d8f8ed8c83bdd639141b50a627ab4e6341467318b6f73dd" },
     { version: 3, sha256: "6819abb178ae0eac92b0a492576b131418a9f4b96c452f0e32af640685c48b5b" },
     { version: 4, sha256: "621a3a83208a6af763be1961cbc90eab31098d6ce5909e3502db03c644d6c17b" },
+    { version: 5, sha256: "6afdba0752f32e02a60f12ae308703c06ddee93a9ac603305eb2425d0b280a62" },
   ],
 };
 

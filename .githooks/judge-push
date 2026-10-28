@@ -1,8 +1,9 @@
 #!/bin/sh
-# agent-gate:githooks:4
+# agent-gate:githooks:5
 set -eu
 
 workflows=''
+export workflows
 
 hooks=$(dirname "$0")
 message=$(mktemp)

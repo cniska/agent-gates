@@ -1,5 +1,6 @@
 {
   "$schema": "node_modules/knip/schema.json",
   "entry": ["src/cli.ts", "src/no-comments-main.ts", "src/no-secrets-main.ts", "src/pinned-actions-main.ts"],
-  "project": ["src/**/*.ts", "acceptance/**/*.ts", "scripts/**/*.ts"]
+  "project": ["src/**/*.ts", "acceptance/**/*.ts", "scripts/**/*.ts"],
+  "ignoreBinaries": ["shellcheck"]
 }
