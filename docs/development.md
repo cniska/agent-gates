@@ -20,15 +20,15 @@ bin/agent-gates doctor
 
 ## Checks
 
-- `bun run check` runs lint, typecheck, knip (an export, file or dependency nothing uses) and tests, and `.githooks/pre-commit.d/check` runs it before each commit.
+- `bun run check` runs lint (oxlint, `oxfmt --check`, and [actionlint](https://github.com/rhysd/actionlint) over the workflows at the version `mise.toml` pins), typecheck, knip (an export, file or dependency nothing uses) and tests, and `.githooks/pre-commit.d/check` runs it before each commit.
 - `bun run acceptance` proves the criteria in [`SPEC.md`](../SPEC.md) through the CLI, the files it installs, and the release's binary, `install.sh` and npm packages alone, as the spec's D-4 says; each test in `acceptance/` is named for the criteria it proves, and `src/spec.test.ts`, in the check, fails when the tests and the criteria do not cite each other. It gives each test 20 seconds instead of Bun's 5, since a test runs git, the hooks and the scanners many times over and the default trips on a loaded machine or runner.
-- `bun run format` formats `src/`, `acceptance/` and `scripts/` with Biome, and the format gate runs it with the linter off before each commit and stages what it changes in the staged files, as [Format](gates.md#format) says.
+- `bun run format` formats the TypeScript in `src/`, `acceptance/` and `scripts/` with oxfmt, and the format gate runs it before each commit and stages what it changes in the staged files, as [Format](gates.md#format) says.
 - `npm/agent-gates` is the npm package's launcher, a POSIX shell script `scripts/build-npm.ts` fills with the release builds; `scripts/launcher.test.ts`, in the check, runs it over the layouts `npm` and `bun` install, with no runtime on `PATH`.
 - `scripts/build-compiled.sh <outfile>` compiles the CLI into one executable with every gate file inside it, the binary a release ships.
 - `scripts/smoke.sh <executable> <version>` is the release's smoke test: the executable prints the version, installs `commit-subject` into a scratch repository and passes `doctor` there; the release runs it on each build and on each registry install.
 - `scripts/release.sh patch|minor|major` bumps the version and tags it; `.github/workflows/release.yml` builds the tag into an attested GitHub release, published only once every file is attached, the npm packages with provenance and a Homebrew repin, as [Releasing](releasing.md) says.
-- `bun run gates:bundle` bundles `gates/no-comments/*.cjs`, `gates/no-secrets/scan.cjs` and `gates/pinned-actions/scan.cjs` from `src/`; the tests also run the bundled scanners under Node.
-- `.github/workflows/check.yml` runs [actionlint](https://github.com/rhysd/actionlint) over the workflows, at the version `mise.toml` pins, then the check and the acceptance suite on each push and pull request, and `commits.yml`, `no-comments.yml`, `no-secrets.yml` and `pinned-actions.yml` run the gates. `src/hooks-shellcheck.test.ts`, in the check, runs the `shellcheck` that `mise.toml` pins over every hook install writes, and fails on a warning.
+- `bun run gates:bundle` bundles `gates/no-comments/*.cjs`, `gates/no-secrets/scan.cjs` and `gates/pinned-actions/scan.cjs` from `src/`; the tests also run the bundled scanners under Node, and `src/gate-bundles.test.ts` runs this repo's oxlint over them, which their `eslint-disable` header keeps clean.
+- `.github/workflows/check.yml` runs the check and the acceptance suite on each push and pull request, and `commits.yml`, `no-comments.yml`, `no-secrets.yml` and `pinned-actions.yml` run the gates. `src/hooks-shellcheck.test.ts`, in the check, runs the `shellcheck` that `mise.toml` pins over every hook install writes, and fails on a warning.
 
 ## Layout
 

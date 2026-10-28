@@ -74,7 +74,7 @@ function adversarialLines(keyword: string, length: number): readonly string[] {
 
 function scanTime(pattern: RegExp, text: string): number {
   const started = performance.now();
-  [...text.matchAll(pattern)];
+  Array.from(text.matchAll(pattern));
   return performance.now() - started;
 }
 

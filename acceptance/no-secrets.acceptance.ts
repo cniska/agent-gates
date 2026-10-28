@@ -172,9 +172,7 @@ test("AC-55 refuses a commit adding a secret, naming its file, line and rule wit
     commitFiles(dir, {
       "src/aws.ts": 'const region = "eu-north-1";\n',
       "deploy/key.yml": "key: from-the-vault\n",
-      ".env": ["FOO_TOKEN=$FOO", "BAR_TOKEN=", "BAZ_SECRET=<your token>", `QUX_SECRET=${"$"}{QUX}`].join(
-        "\n",
-      ),
+      ".env": ["FOO_TOKEN=$FOO", "BAR_TOKEN=", "BAZ_SECRET=<your token>", "QUX_SECRET=${QUX}"].join("\n"),
       "docs/setup.md":
         "A literal `FOO_TOKEN=<value>` is refused; `BAR_SECRET=<your token>` is a placeholder.\n",
       "binary.bin": `\u0000\u0001${AWS_KEY}\n`,

@@ -29,6 +29,8 @@ Installed files:
 
 Install also points `core.hooksPath` at `.githooks` in the current clone, and `.githooks/.gitattributes` gives every file under `.githooks` LF endings and marks only the `.cjs` bundles `linguist-generated`, so the hook scripts are judged and reviewed like any other code. Installing a `no-comments-<language>` gate appends install's lines to `.no-comments-keep` ([kept comments](no-comments.md#kept-comments)). With a `package.json`, install adds the same wiring to its `prepare` script, so a fresh clone wires itself. Without one, each contributor runs `git config core.hooksPath .githooks` once. With workflows on, CI checks every push either way.
 
+Each bundle opens with `biome-ignore-all` and `eslint-disable` headers, so Biome, ESLint and oxlint leave it alone. oxfmt has no such header, so a project that runs oxfmt keeps `.githooks/` out of the paths it formats, such as `oxfmt src`.
+
 ## How the hooks run
 
 - **Pre-commit:** `.githooks/pre-commit` runs the `format` step first, then each other executable in `.githooks/pre-commit.d/` in name order, and stops at the first failure. Your own pre-commit step belongs there, and judges the formatted change.

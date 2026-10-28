@@ -57,7 +57,10 @@ export async function bundled(): Promise<Record<string, string>> {
       minify: true,
       banner: [...LINTERS_LEAVE_IT_ALONE, markerFor(file), ...(notice === null ? [] : [notice])].join("\n"),
     });
-    invariant(output.success, `bundling ${entry} succeeds: ${output.logs.join("\n")}`);
+    invariant(
+      output.success,
+      `bundling ${entry} succeeds: ${output.logs.map((log) => log.message).join("\n")}`,
+    );
     const [artifact] = output.outputs;
     invariant(artifact !== undefined && output.outputs.length === 1, `bundling ${entry} writes one file`);
     built[file.source] = await artifact.text();
