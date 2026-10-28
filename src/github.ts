@@ -6,9 +6,11 @@ export type Visibility =
   | { readonly kind: "public" }
   | { readonly kind: "unreadable"; readonly detail: string };
 
-const REMOTE = "origin";
+export type GhCall = { readonly program: string; readonly timeoutMs: number };
 
-const GH_TIMEOUT_MS = 10_000;
+export const GH: GhCall = { program: "gh", timeoutMs: 10_000 };
+
+const REMOTE = "origin";
 
 const TIMED_OUT = "ETIMEDOUT";
 
@@ -33,24 +35,25 @@ function originUrl(root: string): string | null {
   return gitOutput(root, ["remote", "get-url", REMOTE]).toString().trim();
 }
 
-function failure(error: Error): string {
-  if ("code" in error && error.code === TIMED_OUT)
-    return `gh did not answer within ${GH_TIMEOUT_MS / 1000} s`;
+function failure(error: Error, gh: GhCall): string {
+  if ("code" in error && error.code === TIMED_OUT) return `gh did not answer within ${gh.timeoutMs} ms`;
   return `gh could not run: ${error.message}`;
 }
 
-export function repoVisibility(root: string): Visibility {
+export function repoVisibility(root: string, gh: GhCall): Visibility {
   const url = originUrl(root);
   if (url === null) return unreadable(`the checkout has no ${REMOTE} remote`);
-  const run = spawnSync("gh", ["repo", "view", url, ...GH_ARGS], {
+  const run = spawnSync(gh.program, ["repo", "view", url, ...GH_ARGS], {
     cwd: root,
     stdio: ["ignore", "pipe", "pipe"],
-    timeout: GH_TIMEOUT_MS,
+    timeout: gh.timeoutMs,
   });
-  if (run.error !== undefined) return unreadable(failure(run.error));
+  if (run.error !== undefined) return unreadable(failure(run.error, gh));
   const answer = ANSWERS.get(run.stdout.toString().trim());
   if (run.status === 0 && answer !== undefined) return answer;
-  const said = firstLine(run.stderr.toString()) || firstLine(run.stdout.toString());
+  const said = (firstLine(run.stderr.toString()) || firstLine(run.stdout.toString())).replaceAll(url, REMOTE);
   const ended = run.status === null ? `was killed by ${run.signal}` : `exited ${run.status}`;
-  return unreadable(`gh repo view ${url} ${ended}: ${said}`);
+  return unreadable(
+    said === "" ? `gh repo view of ${REMOTE} ${ended}` : `gh repo view of ${REMOTE} ${ended}: ${said}`,
+  );
 }

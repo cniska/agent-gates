@@ -190,8 +190,7 @@ test("AC-71 a private repository installs the hooks alone by default, a public o
     workflows: {
       choice: "on",
       reason: "unreadable",
-      detail:
-        "gh repo view https://github.com/acme/gone.git exited 1: HTTP 404: Not Found (https://api.github.com/graphql)",
+      detail: "gh repo view of origin exited 1: HTTP 404: Not Found (https://api.github.com/graphql)",
     },
   });
   expect(workflowsIn(gone)).toEqual(["commits.yml"]);
