@@ -92,9 +92,17 @@ function hermetic(env: Env): Env {
   };
 }
 
-export function run(command: string, args: readonly string[], cwd: string, env: Env = {}, input = ""): Ran {
-  const ran = spawnSync(command, args, { cwd, env: hermetic(env), encoding: "utf8", input });
+function spawned(command: string, args: readonly string[], cwd: string, env: Env, input: string): Ran {
+  const ran = spawnSync(command, args, { cwd, env, encoding: "utf8", input });
   return { status: ran.status, stdout: ran.stdout, stderr: ran.stderr };
+}
+
+export function run(command: string, args: readonly string[], cwd: string, env: Env = {}, input = ""): Ran {
+  return spawned(command, args, cwd, { ...hermetic(env), AGENT_GATES_NO_UPDATE_CHECK: "1" }, input);
+}
+
+export function runCheckingUpdates(command: string, args: readonly string[], cwd: string, env: Env): Ran {
+  return spawned(command, args, cwd, hermetic(env), "");
 }
 
 export function agentGates(cwd: string, args: readonly string[], env: Env = {}): Ran {

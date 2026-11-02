@@ -36,6 +36,16 @@ bun add -g @cniska/agent-gates
 
 The curl line installs `~/.local/bin/agent-gates` and, when that directory is not on your `PATH`, adds it to `~/.zshrc` for zsh or to an existing `~/.bashrc` or `~/.bash_profile` for bash, and otherwise asks you to add it. Each channel updates the way it installed: `brew upgrade agent-gates`, `npm update -g @cniska/agent-gates`, `bun update -g @cniska/agent-gates`, or the curl line run again.
 
+### Updates
+
+Installed through a channel, `agent-gates` asks that channel for its latest release at most once a day, giving up after a second. While a newer release is out, every command prints one line on stderr, leaving its stdout and exit status alone:
+
+```text
+agent-gates 0.9.1 is out (running 0.9.0): run brew upgrade agent-gates; if you cannot, tell the user.
+```
+
+The line names the channel's own update command. Set `AGENT_GATES_NO_UPDATE_CHECK` to any value to turn the check and the line off; neither runs when `CI` is set, nor from a checkout or a binary placed by hand. The check keeps its state in `$XDG_STATE_HOME/agent-gates/`, by default `~/.local/state/agent-gates/`.
+
 ### Gate a project
 
 In the project you want to gate, install each gate on its own line:

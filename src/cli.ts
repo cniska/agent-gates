@@ -3,7 +3,8 @@ import { version } from "../package.json";
 import { checkArity, usageError } from "./cli-args";
 import { COMMANDS } from "./cli-commands";
 import type { Command } from "./cli-contract";
-import { exitWithError, exitWithResult, exitWithVersion } from "./cli-output";
+import { exitWithError, exitWithResult, exitWithVersion, printNotice } from "./cli-output";
+import { UPDATE_CHECK_TIMEOUT_MS, updateNotice } from "./update";
 
 const VERSION_FLAG = "--version";
 
@@ -12,6 +13,17 @@ const VERSION_USAGE = `agent-gates ${VERSION_FLAG}`;
 const FLAGS = [{ name: VERSION_FLAG, usage: VERSION_USAGE, summary: "print the version alone on one line" }];
 
 const [asked, ...args] = process.argv.slice(2);
+
+const notice = await updateNotice({
+  env: process.env,
+  executable: process.execPath,
+  running: version,
+  now: Date.now(),
+  fetch,
+  timeoutMs: UPDATE_CHECK_TIMEOUT_MS,
+});
+
+if (notice !== null) printNotice(notice);
 
 if (asked === undefined)
   exitWithResult(

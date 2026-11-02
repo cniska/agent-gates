@@ -31,6 +31,7 @@ Only an entry, such as `cli.ts`, reads the environment; it passes what a module 
 | `package-manifest` | The `prepare` script in a project's `package.json` |
 | `git` | Run git and read its output |
 | `file-backup` | Copy a file aside before install replaces it |
+| `update` | Tell the agent when a newer release is out: how agent-gates was installed, its channel's latest version, checked at most once a day, and the notice that names the upgrade |
 | `coded-error`, `assert` | Errors with a code and kind; `unreachable` and `invariant` |
 
 ## Where to start

@@ -2,12 +2,12 @@
 
 The `agent-gates` commands, what each prints, and the states `install` and `doctor` report for each gate file.
 
-Each command prints [TOON](https://toonformat.dev): the command, `ok`, then its result, or its error with `kind`, `code`, `message`, `meta` and `resolve`. `install` and `doctor` lead their result with how many files or checks are in each state, zeros included, and a list of records prints as a table. By default a list holds no `null`: `install` lists the backups it made apart from the files, and `doctor` lists only the checks that warn or fail, each with its fix; `--full` gives each file its backup and lists every check with its fix, `null` where there is none. An error goes to stderr and exits 2 for `usage`, 1 for a `refusal` you can resolve, and 3 for a `fault`.
+Each command prints [TOON](https://toonformat.dev): the command, `ok`, then its result, or its error with `kind`, `code`, `message`, `meta` and `resolve`. `install` and `doctor` lead their result with how many files or checks are in each state, zeros included, and a list of records prints as a table. By default a list holds no `null`: `install` lists the backups it made apart from the files, and `doctor` lists only the checks that warn or fail, each with its fix; `--full` gives each file its backup and lists every check with its fix, `null` where there is none. An error goes to stderr and exits 2 for `usage`, 1 for a `refusal` you can resolve, and 3 for a `fault`. Before its own output, a command may print the one-line [update notice](../README.md#updates) on stderr.
 
 | Command | Does |
 | --- | --- |
 | `agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>] [--workflows <on\|off>] [--full]` | Install the named gate, update the installed ones, and report each file's state before acting, the format command, the commit prefixes, the workflows choice, and which workflows choice it took and why ([hooks without workflows](gates.md#hooks-without-workflows)) |
-| `agent-gates --version` | Print the version alone on one line, the one output that is not TOON |
+| `agent-gates --version` | Print the version alone on one line, the one output that is not TOON, apart from the [update notice](../README.md#updates) |
 | `agent-gates doctor [--full]` | Check each gate file, `core.hooksPath`, the `prepare` script and the format command, and check the commit prefixes, the workflows choice and, while a gate that runs `node` is installed, that `node` 20 or later is on `PATH`; report each tracked language without its no-comments gate, each installed language with no files left to read, each of the project's own steps in `.githooks/pre-commit.d` or `pre-push.d` that no workflow runs while workflows are on, the comment count, the count of secrets `.no-secrets-allow` does not name and the count of unpinned actions; exit 1 on a failure |
 
 ## Gate file states

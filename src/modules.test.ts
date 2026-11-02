@@ -28,6 +28,7 @@ const PUBLIC_FILES: Readonly<Record<string, readonly string[]>> = {
   "package-manifest": ["package-manifest"],
   "pinned-actions": ["pinned-actions-judge", "pinned-actions-report"],
   scanner: ["scanner-call", "scanner-change", "scanner-report"],
+  update: ["update"],
 };
 
 const TEST_SUPPORT = ".test-support";

@@ -16,6 +16,10 @@ export function exitWithVersion(version: string): never {
   return process.exit(0);
 }
 
+export function printNotice(line: string): void {
+  writeSync(STDERR, `${line}\n`);
+}
+
 export function exitWithError(command: string, error: unknown): never {
   const record = recordOf(error);
   writeSync(STDERR, `${encode({ command, ok: false, error: record })}\n`);
