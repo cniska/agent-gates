@@ -429,7 +429,7 @@ describe("doctor", () => {
           name: "gates",
           state: "warn",
           detail: "no gate is installed",
-          fix: "agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments-yaml, no-comments-swift, no-secrets, pinned-actions, no-comments (each language the tracked files hold)",
+          fix: "agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments-yaml, no-comments-swift, no-comments-lua, no-secrets, pinned-actions, no-comments (each language the tracked files hold)",
         },
       ],
       counts: { ok: 0, warn: 1, fail: 0 },

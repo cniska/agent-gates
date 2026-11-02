@@ -23,6 +23,7 @@ import {
   KEEP_FILE,
   KEPT_DART,
   KEPT_JAVASCRIPT,
+  KEPT_LUA,
   KEPT_PYTHON,
   KEPT_RUST,
   KEPT_SQL,
@@ -42,6 +43,7 @@ const ALL_NONE = [
   KEPT_PYTHON,
   KEPT_YAML,
   KEPT_SWIFT,
+  KEPT_LUA,
 ];
 
 const KEEP = lines([
@@ -55,6 +57,8 @@ const KEEP = lines([
   "python # agent-gate:[a-z-]+:[0-9]+",
   "yaml # agent-gate:[a-z-]+:[0-9]+",
   "swift // agent-gate:[a-z-]+:[0-9]+",
+  "lua -- agent-gate:[a-z-]+:[0-9]+",
+  "lua ---@[a-z]+ .*",
 ]);
 
 const KEPT_BY_KEEP = [
@@ -66,6 +70,7 @@ const KEPT_BY_KEEP = [
   "kept in Python: `# agent-gate:[a-z-]+:[0-9]+`",
   "kept in YAML: `# agent-gate:[a-z-]+:[0-9]+`",
   "kept in Swift: `// agent-gate:[a-z-]+:[0-9]+`",
+  "kept in Lua: `-- agent-gate:[a-z-]+:[0-9]+`, `---@[a-z]+ .*`",
 ];
 
 const KEPT_FILES = {
@@ -78,6 +83,7 @@ const KEPT_FILES = {
   "k.py": "#!/usr/bin/env python3\n# agent-gate:no-comments:1\nx = 1\n",
   "k.yml": "# agent-gate:no-comments:1\na: 1\n",
   "k.swift": "#!/usr/bin/env swift\n// agent-gate:no-comments:1\nprint(1)\n",
+  "k.lua": "#!/usr/bin/env lua\n-- agent-gate:no-comments:1\n---@param a integer\nlocal function f(a) end\n",
 };
 
 test("AC-26 keeps a comment only through a .no-comments-keep pattern of its language", () => {
@@ -112,6 +118,13 @@ test("AC-26 keeps a comment only through a .no-comments-keep pattern of its lang
         "// swiftlint:disable:next force_cast",
         "let a = 1",
       ]),
+      "r.lua": lines([
+        "--- @param a integer",
+        "-- agent-gate:no-comments:1 kept",
+        "--[[ agent-gate:no-comments:1 ]]",
+        "---@diagnostic disable-next-line: lowercase-global",
+        "g = 1",
+      ]),
       "r.yml":
         "# yaml-language-server: $schema=a.json\n# agent-gate:no-comments:1 kept\nb: 2 # prettier-ignore\n",
     }),
@@ -121,6 +134,14 @@ test("AC-26 keeps a comment only through a .no-comments-keep pattern of its lang
         [
           "r.dart",
           ["1  #!/usr/bin/env dart \\c", "2  /// The entry.", "3  // ignore: unused_local_variable"],
+        ],
+        [
+          "r.lua",
+          [
+            "1  --- @param a integer",
+            "2  -- agent-gate:no-comments:1 kept",
+            "3  --[[ agent-gate:no-comments:1 ]]",
+          ],
         ],
         ["r.py", ["1  # -*- coding: utf-8 -*-", "2  # type: ignore", "3  # noqa: E501"]],
         ["r.rs", ["1  /// The entry.", "2  //! The crate.", "3  // agent-gate:no-comments:1 kept"]],
@@ -167,6 +188,7 @@ test("AC-26 keeps a comment only through a .no-comments-keep pattern of its lang
     refusedWith(
       commentReply(ALL_NONE, [
         ["k.dart", ["2  // agent-gate:no-comments:1"]],
+        ["k.lua", ["2  -- agent-gate:no-comments:1", "3  ---@param a integer"]],
         ["k.py", ["2  # agent-gate:no-comments:1"]],
         ["k.rs", ["2  // agent-gate:no-comments:1"]],
         ["k.sh", ["2  # agent-gate:no-comments:1"]],
@@ -215,6 +237,15 @@ test("AC-27 reads comments where each language's tokenizer does", () => {
         "let v = /a\\/\\//",
         "let w = 6 / 3 / 2",
       ]),
+      "t.lua": lines([
+        'local s = "-- not a comment"',
+        "local t = 'it\\'s -- nor this'",
+        "local u = [[-- nor this]]",
+        "local v = [==[",
+        "  ]] -- still text",
+        "]==]",
+        "local w = a[b[1]] - -1",
+      ]),
     }),
   ).toEqual(PASSED);
 
@@ -225,12 +256,14 @@ test("AC-27 reads comments where each language's tokenizer does", () => {
       "f.py": 'def f():\n    """Answer."""\n    return 1\n',
       "f.yml": 'q: "a # not"\nrun: |\n  echo # not\nlist:\n  # in a sequence\n  - a # after\n',
       "f.swift": 'let t = "\\(s.count /* in the interpolation */ + 1) // not"\n',
+      "f.lua": "local a = 1 --[==[ a long\n]] comment ]==] local b = 2\n",
     }),
   ).toEqual(
     refusedWith(
       commentReply(
-        [KEPT_SQL, KEPT_RUST, KEPT_PYTHON, KEPT_YAML_BY_INSTALL, KEPT_SWIFT],
+        [KEPT_SQL, KEPT_RUST, KEPT_PYTHON, KEPT_YAML_BY_INSTALL, KEPT_SWIFT, KEPT_LUA],
         [
+          ["f.lua", ["1  --[==[ a long"]],
           ["f.py", ['2  """Answer."""']],
           ["f.rs", ['1  #[cfg_attr(test, doc = "Tested.")]']],
           ["f.sql", ["2  -- inside"]],

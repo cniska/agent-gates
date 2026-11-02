@@ -2,6 +2,7 @@ import type { Adapter } from "./no-comments-adapter";
 import * as dart from "./no-comments-dart";
 import * as javascript from "./no-comments-javascript";
 import type { Language } from "./no-comments-languages";
+import * as lua from "./no-comments-lua";
 import * as python from "./no-comments-python";
 import * as rust from "./no-comments-rust";
 import * as shell from "./no-comments-shell";
@@ -18,4 +19,5 @@ export const ADAPTERS: Readonly<Record<Language, Adapter>> = {
   python,
   yaml,
   swift,
+  lua,
 };

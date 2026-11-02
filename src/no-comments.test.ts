@@ -46,6 +46,8 @@ const pythonComments = ADAPTERS.python.comments;
 
 const swiftComments = ADAPTERS.swift.comments;
 
+const luaComments = ADAPTERS.lua.comments;
+
 function read(found: readonly Comment[]): Reading {
   return { kind: "read", comments: found };
 }
@@ -150,6 +152,9 @@ describe("the language table", () => {
     expect(languageOf("src/main.rs", "")).toBe("rust");
     expect(languageOf("Sources/App/main.swift", "")).toBe("swift");
     expect(languageOf("bin/tool", "#!/usr/bin/env swift")).toBe("swift");
+    expect(languageOf("addon/Core.lua", "")).toBe("lua");
+    expect(languageOf("bin/tool", "#!/usr/bin/env lua")).toBe("lua");
+    expect(languageOf("bin/tool", "#!/usr/bin/lua5.1")).toBe("lua");
     expect(languageOf("scripts/a.sh", "")).toBe("shell");
     expect(languageOf("scripts/a.bash", "")).toBe("shell");
     for (const shebang of ["#!/bin/sh", "#!/usr/bin/env bash", "#!/bin/dash", "#!/bin/zsh -f"])
@@ -1192,6 +1197,73 @@ describe("the swift adapter", () => {
   });
 });
 
+describe("the lua adapter", () => {
+  test("refuses line and long comments of every level, naming each line and text", () => {
+    const text = [
+      "---@param a integer",
+      "local function f(a) return a end -- trailing",
+      "--[[ one",
+      "  line ]] local b = 1",
+      "--[==[",
+      "  ]] still inside",
+      "]==]",
+      "--[=x not long",
+      "--[ nor this",
+    ].join("\n");
+    expect(luaComments("a.lua", text)).toEqual(
+      read([
+        { line: 1, text: "---@param a integer" },
+        { line: 2, text: "-- trailing" },
+        { line: 3, text: "--[[ one\n  line ]]" },
+        { line: 5, text: "--[==[\n  ]] still inside\n]==]" },
+        { line: 8, text: "--[=x not long" },
+        { line: 9, text: "--[ nor this" },
+      ]),
+    );
+  });
+
+  test("leaves comment markers inside every string form alone", () => {
+    const text = [
+      'local a = "-- not a comment"',
+      "local b = 'it\\'s -- still text'",
+      'local c = "a \\\\" -- real',
+      'local d = "line \\',
+      '-- continued"',
+      "local e = [[-- long]]",
+      "local f = [=[ ]] -- still ]=]",
+      "local g = t[u[1]] - -1",
+    ].join("\n");
+    expect(luaComments("a.lua", text)).toEqual(read([{ line: 3, text: "-- real" }]));
+    expect(luaComments("a.lua", 'local a = "line \\\r\n-- continued" -- real\r\n')).toEqual(
+      read([{ line: 2, text: "-- real\r" }]),
+    );
+  });
+
+  test("skips a first line starting with #, as Lua does, judging it unless it is the interpreter line", () => {
+    expect(luaComments("a.lua", "#!/usr/bin/env lua\nprint(1) -- y\n")).toEqual(
+      read([{ line: 2, text: "-- y" }]),
+    );
+    expect(luaComments("a.lua", "# a note -- x\nprint(1)\n")).toEqual(
+      read([{ line: 1, text: "# a note -- x" }]),
+    );
+    expect(luaComments("a.lua", "print(#t)\n#!/usr/bin/env lua\n")).toEqual(read([]));
+  });
+
+  test("names the line where a string, long string or long comment that never closes opens", () => {
+    for (const [open, reason] of [
+      ['local a = "open\nb"\n', "Unterminated string"],
+      ["local a = 'open\\'\n", "Unterminated string"],
+      ['local a = "open', "Unterminated string"],
+      ["local a = [[open\n]=]\n", "Unterminated long string"],
+      ["local a = [==[open\n]=]\n", "Unterminated long string"],
+      ["--[[ open\n", "Unterminated comment"],
+      ["--[=[ open ]]\n", "Unterminated comment"],
+      ["local a = [=open\n", 'Unexpected "[="'],
+    ] as const)
+      expect([open, luaComments("a.lua", `local z = 1\n${open}`)]).toEqual([open, unparsed(2, reason)]);
+  });
+});
+
 describe("the no-comments doc", () => {
   test("shows keep lines that each keep the comment beside them, install's lines among them", () => {
     const doc = readFileSync(join(import.meta.dir, "../docs/no-comments.md"), "utf8");
@@ -1386,7 +1458,7 @@ describe("the pre-commit hook", () => {
     expect(commit(dir)).toEqual({
       status: 1,
       stderr:
-        "no-comments: .no-comments-keep line 3 names no language the gates read: cobol # y; write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python, yaml, swift), one space and a regex that compiles, blank lines aside\n",
+        "no-comments: .no-comments-keep line 3 names no language the gates read: cobol # y; write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python, yaml, swift, lua), one space and a regex that compiles, blank lines aside\n",
     });
   });
 
@@ -1954,7 +2026,7 @@ describe("install and doctor", () => {
       name: "no-comments backlog",
       state: "fail",
       detail: ".no-comments-keep line 4 holds a regex that does not compile: javascript (",
-      fix: "write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python, yaml, swift), one space and a regex that compiles, blank lines aside",
+      fix: "write each line of .no-comments-keep as a language (javascript, dart, sql, shell, rust, python, yaml, swift, lua), one space and a regex that compiles, blank lines aside",
     });
   });
 

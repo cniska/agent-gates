@@ -16,6 +16,7 @@ const PATHS: Readonly<Record<Language, string>> = {
   python: "a.py",
   yaml: "a.yml",
   swift: "a.swift",
+  lua: "a.lua",
 };
 
 const CODE: Readonly<Record<Language, string>> = {
@@ -27,6 +28,7 @@ const CODE: Readonly<Record<Language, string>> = {
   python: "x = 1\n",
   yaml: "a: 1\n",
   swift: "let a = 1\n",
+  lua: "local a = 1\n",
 };
 
 function at(language: Language, comment: string): Lookalike {
@@ -48,6 +50,7 @@ const KEEP = keepOf(
     "dart // x-gate:[0-9]+",
     "rust // x-gate:[0-9]+",
     "swift // x-gate:[0-9]+",
+    "lua ---@[a-z]+ .*",
     "yaml # agent-gate:[a-z-]+:[0-9]+",
     "yaml # v?[0-9]+(\\.[0-9]+)*(-[0-9A-Za-z.]+)?",
     "",
@@ -64,6 +67,7 @@ const INTERPRETER_LINES: readonly Lookalike[] = [
   at("shell", "#!/opt/a#b/bin/sh -e"),
   at("yaml", "#!/usr/bin/env yq"),
   at("swift", "#!/usr/bin/env swift"),
+  at("lua", "#!/usr/bin/env lua"),
 ];
 
 const ORDINARY_SHEBANGS: readonly Lookalike[] = [
@@ -81,6 +85,7 @@ const ORDINARY_SHEBANGS: readonly Lookalike[] = [
   at("python", " #!/usr/bin/env python3"),
   at("yaml", "#!/usr/bin/env yq # because reasons"),
   at("swift", "#!/usr/bin/env -S swift -O # because reasons"),
+  at("lua", "#!/usr/bin/env -S lua -W # because reasons"),
   { language: "yaml", path: "a.yml", text: "a: 1\n#!/usr/bin/env yq\n" },
 ];
 
@@ -101,6 +106,7 @@ const KEPT_BY_PATTERN: readonly Lookalike[] = [
   at("dart", "// x-gate:1"),
   at("rust", "// x-gate:1"),
   at("swift", "// x-gate:1"),
+  at("lua", "---@param a integer"),
   at("yaml", "# agent-gate:no-comments:5"),
   {
     language: "yaml",
@@ -128,6 +134,8 @@ const NEAR_MISSES: readonly Lookalike[] = [
   at("dart", "/// x-gate:1"),
   at("rust", "//! x-gate:1"),
   at("swift", "/// x-gate:1"),
+  at("lua", "--- @param a integer"),
+  at("lua", "--[[ ---@param a integer ]]"),
   at("yaml", "# v4 why"),
   at("yaml", "# version 4"),
   at("yaml", "# v4."),
@@ -156,6 +164,7 @@ const REFUSED_WITHOUT_KEEP: readonly Lookalike[] = [
   at("yaml", "# prettier-ignore"),
   at("swift", "// swiftlint:disable:next force_cast"),
   at("swift", "// swift-format-ignore"),
+  at("lua", "---@diagnostic disable-next-line: lowercase-global"),
   at("shell", "# SPDX-License-Identifier: (GPL-2.0-or-later WITH Linux-syscall-note) OR MIT"),
 ];
 

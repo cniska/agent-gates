@@ -9,10 +9,10 @@ const CLI = resolve(import.meta.dir, "cli.ts");
 const dir = repo();
 
 const INSTALL_USAGE =
-  "agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>] [--workflows <on|off>] [--full], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments-yaml, no-comments-swift, no-secrets, pinned-actions, no-comments (each language the tracked files hold)";
+  "agent-gates install [<gate>] [--command <format command>] [--prefixes <a,b,c>] [--workflows <on|off>] [--full], choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments-yaml, no-comments-swift, no-comments-lua, no-secrets, pinned-actions, no-comments (each language the tracked files hold)";
 
 const INSTALL_GATES =
-  "agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments-yaml, no-comments-swift, no-secrets, pinned-actions, no-comments (each language the tracked files hold)";
+  "agent-gates install <gate>, once per gate, choosing from commit-subject, format, no-comments-javascript, no-comments-dart, no-comments-sql, no-comments-shell, no-comments-rust, no-comments-python, no-comments-yaml, no-comments-swift, no-comments-lua, no-secrets, pinned-actions, no-comments (each language the tracked files hold)";
 
 const NO_FILE_STATES = {
   installed: 0,

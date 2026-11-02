@@ -29,6 +29,7 @@ import {
   FIX_SYNTAX,
   javascriptRefusal,
   KEPT_JAVASCRIPT,
+  KEPT_LUA,
   KEPT_PYTHON,
   KEPT_SWIFT,
   REMOVE,
@@ -132,9 +133,12 @@ test("AC-20 refuses a comment the change edited, split, joined, duplicated, copi
 });
 
 test("AC-21 skips what is not code, and routes a file by its extension or shebang", () => {
-  const dir = gated(["no-comments-javascript", "no-comments-python", "no-comments-swift"], {
-    ".gitattributes": "generated.ts linguist-generated\nvendor/** linguist-vendored\n",
-  });
+  const dir = gated(
+    ["no-comments-javascript", "no-comments-python", "no-comments-swift", "no-comments-lua"],
+    {
+      ".gitattributes": "generated.ts linguist-generated\nvendor/** linguist-vendored\n",
+    },
+  );
   symlinkSync("// a link", join(dir, "link.ts"));
   expect(
     commitFiles(dir, {
@@ -153,12 +157,14 @@ test("AC-21 skips what is not code, and routes a file by its extension or sheban
       "bin/python-tool": "#!/usr/bin/python3.12\n# python\n",
       "bin/uv-tool": "#!/usr/bin/env uv run --script\n# uv\n",
       "bin/swift-tool": "#!/usr/bin/env swift\n// swift\nprint(1)\n",
+      "bin/lua-tool": "#!/usr/bin/env lua5.1\n-- lua\nprint(1)\n",
     }),
   ).toEqual(
     refusedWith(
       commentReply(
-        [KEPT_JAVASCRIPT, KEPT_PYTHON, KEPT_SWIFT],
+        [KEPT_JAVASCRIPT, KEPT_PYTHON, KEPT_SWIFT, KEPT_LUA],
         [
+          ["bin/lua-tool", ["2  -- lua"]],
           ["bin/node-tool", ["2  // node"]],
           ["bin/python-tool", ["2  # python"]],
           ["bin/swift-tool", ["2  // swift"]],
@@ -199,6 +205,9 @@ test("AC-22 refuses a file that does not parse, at the line where it stops", () 
     ["b.swift", "let a = 1\n/* never /* nested */\n", 2, "Unterminated comment"],
     ["c.swift", "let a = 1\nlet r = #/abc\n", 2, "Unterminated regex"],
     ["d.swift", "func f() {\n  print(1))\n}\n", 2, 'Unexpected ")"'],
+    ["a.lua", "local a = 1\nlocal s = 'abc\n", 2, "Unterminated string"],
+    ["b.lua", "local a = 1\nlocal s = [==[abc]]\n", 2, "Unterminated long string"],
+    ["c.lua", "local a = 1\n--[[ never\n", 2, "Unterminated comment"],
   ] as const) {
     expect(commitFiles(restart(dir), { [path]: text })).toEqual(unparsedRefusal(path, line, reason));
   }

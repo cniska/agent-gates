@@ -9,6 +9,7 @@ export const LANGUAGE_NAMES = [
   "python",
   "yaml",
   "swift",
+  "lua",
 ] as const;
 
 export type Language = (typeof LANGUAGE_NAMES)[number];
@@ -36,6 +37,7 @@ export const LANGUAGES: Readonly<Record<Language, LanguageEntry>> = {
   },
   yaml: { shown: "YAML", extensions: [".yml", ".yaml"], interpreters: [] },
   swift: { shown: "Swift", extensions: [".swift"], interpreters: ["swift"] },
+  lua: { shown: "Lua", extensions: [".lua"], interpreters: ["lua"] },
 };
 
 export function languageOf(path: string, firstLine: string): Language | null {
